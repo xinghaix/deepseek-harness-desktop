@@ -1,0 +1,49 @@
+version: '3'
+
+vars:
+  TARGET_OS: '{{.GOOS | default OS}}'
+  TARGET_ARCH: '{{.GOARCH | default ARCH}}'
+
+tasks:
+  build:
+    summary: Build the DSH Desktop binary for the selected platform
+    cmds:
+      - task: '{{.TARGET_OS}}:build'
+
+  test:
+    summary: Run the dependency-free process and UI contract tests
+    cmds:
+      - go test -race ./...
+
+  linux:build:
+    summary: Build the Linux desktop binary
+    cmds:
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop .
+    vars:
+      BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
+    env:
+      GOOS: linux
+      GOARCH: '{{.TARGET_ARCH}}'
+      CGO_ENABLED: '1'
+
+  darwin:build:
+    summary: Build the macOS desktop binary
+    cmds:
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop .
+    vars:
+      BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
+    env:
+      GOOS: darwin
+      GOARCH: '{{.TARGET_ARCH}}'
+      CGO_ENABLED: '1'
+
+  windows:build:
+    summary: Build the Windows desktop binary
+    cmds:
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop.exe .
+    vars:
+      BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
+    env:
+      GOOS: windows
+      GOARCH: '{{.TARGET_ARCH}}'
+      CGO_ENABLED: '0'
