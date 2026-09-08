@@ -65,7 +65,10 @@ jobs:
           sudo apt-get install -y gcc pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: Build
-        run: task ${{ matrix.task }}
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          task ${{ matrix.task }} VERSION="$ver"
 
       - name: Package
         shell: bash

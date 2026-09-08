@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"deepseek-harness-desktop/internal/desktop"
+	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -23,6 +24,7 @@ var assets embed.FS
 type DSH struct{ *desktop.Service }
 
 func main() {
+	update.CleanupLeftovers()
 	web, err := fs.Sub(assets, "assets/web")
 	if err != nil {
 		log.Fatal(err)

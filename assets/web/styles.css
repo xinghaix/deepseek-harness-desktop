@@ -187,6 +187,10 @@ code { color: #323c4c; font-size: 11px; }
 .log-panel { margin-top: 18px; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .panel-caption { color: var(--muted); font-size: 11px; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.update-progress { height: 6px; overflow: hidden; margin-top: 12px; border-radius: 999px; background: var(--panel-soft); }
+.update-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--blue), #a6c1ff); }
+.update-notes { min-height: 0; max-height: 140px; margin-top: 12px; padding: 10px; border-color: var(--line); background: var(--panel-soft); color: var(--muted); }
 pre { min-height: 180px; max-height: 320px; overflow: auto; margin: 13px 0 0; border: 1px solid #273244; border-radius: 9px; padding: 12px; background: #101722; color: #ccd4e0; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 .footer-note { color: var(--muted); margin-top: 20px; font-size: 11px; line-height: 1.6; }
 .loading-view { min-height: calc(100vh - 72px); display: grid; place-items: center; padding: 30px; }

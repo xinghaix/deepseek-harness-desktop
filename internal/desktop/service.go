@@ -3,13 +3,16 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"deepseek-harness-desktop/internal/dsh"
+	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -17,11 +20,18 @@ import (
 type Service struct {
 	*dsh.Manager
 	windowMu sync.Mutex
+	updater  *update.Updater
 }
 
 func New() *Service {
-	s := &Service{Manager: dsh.New()}
+	s := &Service{Manager: dsh.New(), updater: update.New()}
 	s.SetOpenManagement(s.OpenManagement)
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_, _ = s.updater.Check(ctx)
+	}()
 	return s
 }
 

@@ -27,7 +27,7 @@ func TestManagementUIContract(t *testing.T) {
 		"选择文件", "恢复默认路径", "选择文件夹", "重新检测 CLI",
 		"启动并打开 DSH Chat", "停止 DSH", "在桌面 WebView 打开 Chat", "打开 DSH Home",
 		"打开工作目录", "打开 settings.yaml", "可选：安装桌面管理桥接插件",
-		"DSH 启动失败", "复制错误信息", "查看原始错误",
+		"DSH 启动失败", "复制错误信息", "查看原始错误", "桌面端更新", "检查更新",
 	} {
 		if !strings.Contains(html, label) {
 			t.Fatalf("missing accepted UI copy %q", label)
@@ -45,7 +45,7 @@ func TestManagementUIContract(t *testing.T) {
 		"Defaults", "DiscoverCLI", "InstallGuide", "BridgeGuide", "CheckCLI",
 		"Start", "RestartWithOptions", "Stop", "Status", "OpenDSH", "ChooseExecutable",
 		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
-		"OpenWorkspace", "OpenSettings",
+		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)

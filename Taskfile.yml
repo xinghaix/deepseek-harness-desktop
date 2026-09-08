@@ -5,6 +5,7 @@ vars:
   TARGET_ARCH: '{{.GOARCH | default ARCH}}'
   DIST: dist
   APP: deepseek-harness-desktop
+  VERSION: '{{.VERSION | default "0.1.0"}}'
 
 tasks:
   icons:
@@ -27,7 +28,7 @@ tasks:
     summary: Build the Linux Deepseek Harness Desktop binary
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
       - sh scripts/sign.sh {{.DIST}}/{{.APP}}
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
@@ -40,13 +41,14 @@ tasks:
     summary: Build the macOS Deepseek Harness Desktop binary and app bundle
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
       - rm -rf {{.DIST}}/{{.APP}}.app
       - mkdir -p {{.DIST}}/{{.APP}}.app/Contents/{MacOS,Resources/plugins}
       - go run ./tools/icons
       - cp {{.DIST}}/{{.APP}} {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
       - cp assets/darwin/icons.icns {{.DIST}}/{{.APP}}.app/Contents/Resources/icons.icns
       - cp assets/darwin/Info.plist {{.DIST}}/{{.APP}}.app/Contents/Info.plist
+      - python3 -c "from pathlib import Path; import sys; p=Path(sys.argv[1]); v=sys.argv[2]; p.write_text(p.read_text().replace('0.1.0', v))" {{.DIST}}/{{.APP}}.app/Contents/Info.plist {{.VERSION}}
       - cp -R plugins/deepseek-harness-desktop-bridge {{.DIST}}/{{.APP}}.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
       - chmod 755 {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
       - sh scripts/sign.sh {{.DIST}}/{{.APP}}.app
@@ -62,7 +64,7 @@ tasks:
     summary: Build the Windows Deepseek Harness Desktop binary
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
+      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
       - cmd: sh scripts/sign.sh {{.DIST}}/{{.APP}}.exe
         platforms: [linux, darwin]
       - cmd: powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 {{.DIST}}/{{.APP}}.exe

@@ -48,6 +48,8 @@ task build
 - Windows：用当前用户存储里的自签代码签名证书做 Authenticode（`scripts/sign-windows.ps1`）
 - Linux：写出 `.sha256` 校验和；系统没有等价的代码签名 API
 
+已安装的应用可在配置页「桌面端更新」中检查 GitHub Release、校验 SHA256 后安装并重启。只支持本仓库的 Release，没有其它更新源。
+
 这不是 Apple Developer ID / Microsoft EV 签名，也未经公证。从网上下载后，macOS 仍可能需要右键「打开」，Windows 仍可能被 SmartScreen 拦截。
 
 指定目标架构时：

@@ -113,7 +113,40 @@ function renderStatus(status) {
   $("step-chat").dataset.active = state === "running" ? "true" : "false";
   $("step-chat").dataset.done = state === "running" ? "true" : "false";
 }
-async function refresh() { try { renderStatus(await api("Status")); } catch (error) { setMessage(errorText(error), true); } }
+async function refresh() { try { renderStatus(await api("Status")); } catch (error) { setMessage(errorText(error), true); } void refreshDesktopUpdate(); }
+function renderDesktopUpdate(u) {
+  if (!u) return;
+  const current = u.currentVersion || "";
+  $("app-caption").textContent = current ? `DSH 的桌面伴侣 · v${current}` : "DSH 的桌面伴侣";
+  $("update-version").textContent = current ? `v${current}` : "—";
+  const bar = $("update-progress-bar");
+  const progress = Math.max(0, Math.min(100, Math.round((u.progress || 0) * 100)));
+  bar.style.width = `${progress}%`;
+  $("update-progress").hidden = u.state !== "downloading";
+  const notes = (u.notes || "").trim();
+  $("update-notes").hidden = !notes || (u.state !== "available" && u.state !== "ready" && u.state !== "downloading");
+  $("update-notes").textContent = notes;
+  $("open-release").hidden = !u.releaseURL;
+  const canInstall = u.state === "available" || u.state === "ready";
+  $("install-update").hidden = !canInstall;
+  $("install-update").disabled = busy || u.state === "downloading" || u.state === "applying";
+  $("check-update").disabled = busy || u.state === "checking" || u.state === "downloading" || u.state === "applying";
+  const labels = {
+    idle: "将从 GitHub Release 检查桌面端更新。",
+    checking: "正在检查 GitHub Release…",
+    upToDate: `已是最新版本 v${current}。`,
+    unavailable: u.error || "还没有 GitHub Release。",
+    available: `发现新版本 v${u.latestVersion}，来自 GitHub Release。`,
+    downloading: `正在下载 v${u.latestVersion}… ${progress}%`,
+    ready: `v${u.latestVersion} 已下载并完成校验，可以安装并重启。`,
+    applying: "正在替换应用并准备重启…",
+    failed: u.error || "更新失败",
+  };
+  $("update-message").textContent = labels[u.state] || u.error || "";
+}
+async function refreshDesktopUpdate() {
+  try { renderDesktopUpdate(await api("UpdateStatus")); } catch (_) {}
+}
 async function run(action, success) {
   busy = true; updateButtons();
   try { const result = await action(); if (success) success(result); }
@@ -252,6 +285,9 @@ $("open-workspace").onclick = () => run(() => api("OpenWorkspace", options()));
 $("open-settings").onclick = () => run(() => api("OpenSettings", options()));
 $("reconfigure").onclick = () => { localStorage.removeItem(onboardingKey); closeAfterChat = false; clearErrorCard(); showOnboarding(); setMessage("可以调整路径后重新检测 CLI。"); };
 $("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; void loadGuides(); $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
+$("check-update").onclick = () => run(() => api("CheckUpdate"));
+$("install-update").onclick = () => run(() => api("InstallUpdate"), () => setMessage("正在安装桌面端更新并重启…"));
+$("open-release").onclick = () => run(() => api("OpenReleasePage"));
 ["executable", "port"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); }));
 $("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); });
 async function load() {
@@ -286,4 +322,6 @@ async function load() {
   await refresh();
 }
 window.addEventListener("DOMContentLoaded", load, { once: true });
+void api("AppVersion").then((v) => { if (v) $("app-caption").textContent = `DSH 的桌面伴侣 · v${v}`; }).catch(() => {});
+void api("CheckUpdate").then(renderDesktopUpdate).catch(() => {});
 setInterval(refresh, 700);
