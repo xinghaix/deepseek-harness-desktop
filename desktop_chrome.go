@@ -150,7 +150,6 @@ const desktopNativeWindowInsetCSS = `
 .dsh-window-content {
   box-sizing: border-box !important;
   --dsh-window-collapsed-rail-width: 84px;
-  --dsh-window-collapsed-brand-offset: 16px;
 }
 .dsh-window-content.dsh-window-management,
 body > .app-shell {
@@ -159,7 +158,8 @@ body > .app-shell {
 .dsh-window-sidebar,
 #root [data-slot="sidebar"] > :first-child {
   box-sizing: border-box !important;
-  padding-top: var(--dsh-window-top-inset, 36px) !important;
+  /* DSH SidebarRoot 的展开态原生 top padding 是 6px；只叠加窗口安全区。 */
+  padding-top: calc(var(--dsh-window-top-inset, 36px) + 6px) !important;
 }
 #root [data-sidebar-collapsed][data-details-collapsed],
 #root [data-sidebar-collapsed].dsh-window-wide-rail {
@@ -169,7 +169,8 @@ body > .app-shell {
   grid-template-columns: var(--dsh-window-collapsed-rail-width, 84px) minmax(0, 1fr) 0px !important;
 }
 #root [data-sidebar-collapsed] [data-slot="sidebar"] > :first-child {
-  padding-top: calc(var(--dsh-window-top-inset, 36px) + var(--dsh-window-collapsed-brand-offset, 16px)) !important;
+  /* 折叠态原生 top padding 是 18px，保留与展开态相同的首元素基线。 */
+  padding-top: calc(var(--dsh-window-top-inset, 36px) + 18px) !important;
   padding-left: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
   padding-right: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
 }

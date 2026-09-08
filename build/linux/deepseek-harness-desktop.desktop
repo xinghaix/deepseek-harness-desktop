@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Deepseek Harness Desktop
+Comment=在桌面 WebView 中运行 DSH Chat
+Exec=deepseek-harness-desktop
+Icon=deepseek-harness-desktop
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

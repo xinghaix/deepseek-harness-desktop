@@ -50,6 +50,18 @@ GOOS=linux GOARCH=amd64 wails3 build
 
 Linux 构建需要 GTK 4 / WebKitGTK 6，macOS 构建需要 Xcode，Windows 构建使用 WebView2。未在目标系统实际构建或运行的组合，不宣称已验收。
 
+### 图标资源
+
+`assets/dsh-app-icon.svg` 是统一的 1024×1024 方形主素材，已去掉外层 border；鲸鱼在所有输出中使用同一组 optical bounding box。Windows 的 ICO、Linux 的 hicolor SVG/16–512px PNG 使用主素材；macOS 使用 `assets/dsh-app-icon-macos.png` 和对应 ICNS，在同一几何上额外保留 10% 透明边距，以匹配 Dock 中其他应用的视觉重量。旧的 `dsh-favicon.svg/png` 保留为兼容路径，并与主素材保持一致。
+
+在目标平台的原生 Go 环境中执行下面的命令即可重新生成全部图标；macOS 的 ICNS 使用可移植的 ICNS 编码器生成，不依赖手工维护二进制文件：
+
+```bash
+go run ./tools/icons
+```
+
+Linux 安装包可使用 `build/linux/deepseek-harness-desktop.desktop`，并将 `build/linux/icons/hicolor` 安装到系统的 icon theme 目录。
+
 ## 数据与进程边界
 
 桌面端只向子进程显式传入 `DSH_HOME`，并在该目录下预留固定的桌面端专属目录 `DSH_HOME/.deepseek-harness-desktop`；首次启动时按 0700 权限创建，但它不作为 DSH 的当前目录。Chat 的 workspace 仍是独立、可配置的 DSH `cwd`，默认沿用系统用户目录，也可以选择项目目录或桌面端专属目录。桌面端通过单实例应用锁、跨进程 DSH 锁、生命周期串行化和进程标记，确保同一用户下同一时刻只有一个由桌面端拥有的 DSH；重复打开配置或 Chat 只复用已有窗口，不重复刷新或启动 CLI。异常退出时会清理自己拥有的整个进程树；在进程树未确认退出前禁止再次启动。Windows 使用 Job Object 的关闭即回收策略，并以 `taskkill /T` 作为兼容性兜底；Unix 使用独立进程组。桌面端不会递归扫描任一 workspace，不会读取或重写凭据，也不会生成第二份 YAML。`settings.yaml` 入口只打开用户已经存在的文件。端口被占用时直接失败，不接管或停止其他进程。

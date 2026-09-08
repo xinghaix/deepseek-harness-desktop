@@ -5,6 +5,11 @@ vars:
   TARGET_ARCH: '{{.GOARCH | default ARCH}}'
 
 tasks:
+  icons:
+    summary: 生成统一 SVG、PNG、ICNS、ICO 和 Linux 图标主题资源
+    cmds:
+      - go run ./tools/icons
+
   build:
     summary: Build the Deepseek Harness Desktop binary for the selected platform
     cmds:
@@ -32,7 +37,7 @@ tasks:
       - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop .
       - rm -rf bin/deepseek-harness-desktop.app
       - mkdir -p build/darwin build/windows bin/deepseek-harness-desktop.app/Contents/{MacOS,Resources}
-      - wails3 generate icons -input build/appicon.png -macfilename build/darwin/icons.icns -windowsfilename build/windows/icon.ico
+      - go run ./tools/icons
       - cp bin/deepseek-harness-desktop bin/deepseek-harness-desktop.app/Contents/MacOS/deepseek-harness-desktop
       - cp build/darwin/icons.icns bin/deepseek-harness-desktop.app/Contents/Resources/icons.icns
       - cp build/darwin/Info.plist bin/deepseek-harness-desktop.app/Contents/Info.plist
