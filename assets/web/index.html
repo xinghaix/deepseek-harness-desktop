@@ -143,6 +143,14 @@
   </section>
 </main>
 
+<div id="discard-config" class="discard-overlay" hidden>
+  <div class="discard-card" role="dialog" aria-labelledby="discard-title" aria-modal="true">
+    <h2 id="discard-title">配置已修改</h2>
+    <p>不保存这些修改并回到 Chat？未保存的路径不会应用到 dsh web。</p>
+    <div class="button-row"><button class="secondary" id="discard-cancel" type="button">继续编辑</button><button class="primary" id="discard-confirm" type="button">不保存并关闭</button></div>
+  </div>
+</div>
+
 <script src="/wails/runtime.js" type="module"></script>
 <script src="/app.js"></script>
 </body>

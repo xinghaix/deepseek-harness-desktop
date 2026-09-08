@@ -248,4 +248,9 @@ pre { min-height: 180px; max-height: 320px; overflow: auto; margin: 13px 0 0; bo
   .step-copy { display: none; }
   input[type="number"] { max-width: none; }
 }
+.discard-overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: rgba(15, 18, 24, .42); }
+.discard-overlay[hidden] { display: none; }
+.discard-card { width: min(420px, 100%); border: 1px solid var(--line); border-radius: 16px; padding: 22px 20px 18px; background: var(--panel); box-shadow: 0 18px 40px rgba(20, 24, 32, .18); }
+.discard-card h2 { margin: 0 0 8px; font-size: 18px; }
+.discard-card p { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
   

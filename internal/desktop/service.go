@@ -27,6 +27,7 @@ type Service struct {
 	configHooked  bool
 	chatHooked    bool
 	openedChatURL string
+	configDirty   bool
 }
 
 func New() *Service {
@@ -175,9 +176,7 @@ func presentConfigModal(chat, config application.Window) {
 	config.SetAlwaysOnTop(true)
 	config.SetSize(720, 680)
 	config.SetMinSize(640, 520)
-	chat.SetEnabled(false)
 	chat.ExecJS(dimChatJS)
-	chat.AttachModal(config)
 	config.Show()
 	config.Center()
 	config.Focus()
@@ -186,13 +185,13 @@ func presentConfigModal(chat, config application.Window) {
 func (d *Service) dismissConfigModal(app *application.App, chat application.Window) {
 	if chat != nil {
 		chat.ExecJS(undimChatJS)
-		chat.SetEnabled(true)
 	}
 	config, ok := app.Window.GetByName("main")
 	if !ok {
 		return
 	}
 	d.configHooked = false
+	d.configDirty = false
 	config.SetAlwaysOnTop(false)
 	config.Close()
 }
@@ -202,7 +201,12 @@ func (d *Service) hookConfigWindow(window application.Window) {
 		return
 	}
 	d.configHooked = true
-	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if d.configDirty {
+			event.Cancel()
+			window.ExecJS(showDiscardConfigJS)
+			return
+		}
 		d.configHooked = false
 		app, err := desktopApp()
 		if err != nil {
@@ -210,10 +214,54 @@ func (d *Service) hookConfigWindow(window application.Window) {
 		}
 		if chat, ok := app.Window.GetByName("dsh"); ok {
 			chat.ExecJS(undimChatJS)
-			chat.SetEnabled(true)
 			chat.Focus()
 		}
 	})
+}
+
+func (d *Service) SetConfigDirty(dirty bool) {
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
+	d.configDirty = dirty
+}
+
+func (d *Service) TryDismissConfig() error {
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
+	app, err := desktopApp()
+	if err != nil {
+		return err
+	}
+	if d.configDirty {
+		if config, ok := app.Window.GetByName("main"); ok {
+			config.Focus()
+		}
+		return nil
+	}
+	chat, _ := app.Window.GetByName("dsh")
+	d.dismissConfigModal(app, chat)
+	if chat != nil {
+		chat.Show()
+		chat.Focus()
+	}
+	return nil
+}
+
+func (d *Service) DismissConfig() error {
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
+	app, err := desktopApp()
+	if err != nil {
+		return err
+	}
+	d.configDirty = false
+	chat, _ := app.Window.GetByName("dsh")
+	d.dismissConfigModal(app, chat)
+	if chat != nil {
+		chat.Show()
+		chat.Focus()
+	}
+	return nil
 }
 
 func (d *Service) hookChatWindow(app *application.App, window application.Window) {
@@ -222,6 +270,7 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	}
 	d.chatHooked = true
 	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+		d.configDirty = false
 		if config, ok := app.Window.GetByName("main"); ok {
 			config.Close()
 		}

@@ -46,6 +46,7 @@ func TestManagementUIContract(t *testing.T) {
 		"Start", "Stop", "Status", "OpenDSH", "ChooseExecutable",
 		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
+		"SetConfigDirty", "DismissConfig",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)
@@ -62,6 +63,12 @@ func TestManagementUIContract(t *testing.T) {
 	}
 	if !strings.Contains(html, "关闭并回到 Chat") || !strings.Contains(html, `id="close-config"`) {
 		t.Fatal("config is a secondary page that must close before returning to Chat")
+	}
+	if !strings.Contains(html, `id="discard-config"`) || !strings.Contains(html, "不保存并关闭") || !strings.Contains(html, "isConfigDirty") {
+		t.Fatal("dirty config must confirm before closing")
+	}
+	if !strings.Contains(html, "TryDismissConfig") {
+		t.Fatal("clicking outside a clean config modal must try to dismiss it")
 	}
 	if !strings.Contains(html, `api("ReloadChat"`) {
 		t.Fatal("runtime config changes must reopen Chat instead of restarting the desktop app")
