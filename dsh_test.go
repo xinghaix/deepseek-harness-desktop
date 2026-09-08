@@ -174,10 +174,17 @@ func TestDSH(t *testing.T) {
 		if defaults.Port != 0 {
 			t.Fatalf("default port = %d, want 0", defaults.Port)
 		}
+		if defaults.UseActionPill {
+			t.Fatal("default layout mode must use the native collapsed rail")
+		}
 		o := options(t)
+		o.UseActionPill = true
 		normalized, err := normalizeOptions(o)
 		if err != nil || !filepath.IsAbs(normalized.Home) {
 			t.Fatalf("%+v: %v", normalized, err)
+		}
+		if !normalized.UseActionPill {
+			t.Fatal("layout mode preference was not preserved during normalization")
 		}
 		if normalized.Workspace != o.Workspace {
 			t.Fatalf("workspace = %q, want %q", normalized.Workspace, o.Workspace)

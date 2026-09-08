@@ -30,31 +30,34 @@ const desktopStateDirEnv = "DSH_DESKTOP_STATE_DIR"
 // DSH 只管理自己接管的进程树，并通过全局锁和进程标记保证同一用户下
 // 同时只有一个桌面端拥有的 DSH；Unix 使用进程组，Windows 使用 Job Object。
 type DSH struct {
-	mu                  sync.Mutex
-	lifecycleMu         sync.Mutex
-	windowMu            sync.Mutex
-	cmd                 *exec.Cmd
-	done                chan struct{}
-	cancel              context.CancelFunc
-	state               string
-	options             Options
-	launchOptions       Options
-	output              *cliOutput
-	url, lastError      string
-	chatWindowURL       string
-	managementWindowURL string
-	owner               *ownedProcess
-	processLock         *ownedProcessLock
-	bridge              *desktopBridge
-	closed              bool
+	mu                         sync.Mutex
+	lifecycleMu                sync.Mutex
+	windowMu                   sync.Mutex
+	cmd                        *exec.Cmd
+	done                       chan struct{}
+	cancel                     context.CancelFunc
+	state                      string
+	options                    Options
+	launchOptions              Options
+	output                     *cliOutput
+	url, lastError             string
+	chatWindowURL              string
+	chatWindowUseActionPill    bool
+	chatWindowNavigationHooked bool
+	managementWindowURL        string
+	owner                      *ownedProcess
+	processLock                *ownedProcessLock
+	bridge                     *desktopBridge
+	closed                     bool
 }
 
 type Options struct {
-	Executable string `json:"executable"`
-	Home       string `json:"home"`
-	DesktopDir string `json:"desktopDir"`
-	Workspace  string `json:"workspace"`
-	Port       int    `json:"port"`
+	Executable    string `json:"executable"`
+	Home          string `json:"home"`
+	DesktopDir    string `json:"desktopDir"`
+	Workspace     string `json:"workspace"`
+	Port          int    `json:"port"`
+	UseActionPill bool   `json:"useActionPill"`
 }
 
 type Status struct {
@@ -83,11 +86,12 @@ func defaultOptions() (Options, error) {
 	}
 	dshHome, err = absolutePath(dshHome)
 	return Options{
-		Executable: "dsh",
-		Home:       dshHome,
-		DesktopDir: desktopDataDirPath(dshHome),
-		Workspace:  home,
-		Port:       0,
+		Executable:    "dsh",
+		Home:          dshHome,
+		DesktopDir:    desktopDataDirPath(dshHome),
+		Workspace:     home,
+		Port:          0,
+		UseActionPill: false,
 	}, err
 }
 
@@ -550,6 +554,7 @@ func (d *DSH) start(o Options) error {
 	}
 	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
 	d.chatWindowURL = ""
+	d.chatWindowUseActionPill = false
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	d.cmd, d.done, d.cancel, d.state = cmd, make(chan struct{}), cancel, "starting"
 	d.owner, d.processLock = owner, processLock
@@ -625,6 +630,7 @@ func (d *DSH) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *o
 		d.state = "failed"
 	}
 	d.cmd, d.url, d.chatWindowURL = nil, "", ""
+	d.chatWindowUseActionPill = false
 	d.owner, d.processLock = nil, nil
 	close(done)
 }
@@ -787,6 +793,14 @@ func (d *DSH) Restart() error {
 	return d.restart()
 }
 
+// RestartWithOptions 使用配置页当前提交的选项重启 DSH；除布局偏好外，路径和端口也
+// 一并沿用配置页已有的校验与启动链路。桥接插件继续使用无参 Restart，保持原有行为。
+func (d *DSH) RestartWithOptions(o Options) error {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
+	return d.restartWithOptions(o)
+}
+
 func (d *DSH) restart() error {
 	d.mu.Lock()
 	if d.closed {
@@ -799,6 +813,13 @@ func (d *DSH) restart() error {
 		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
 	}
 	d.mu.Unlock()
+	return d.restartWithOptions(o)
+}
+
+func (d *DSH) restartWithOptions(o Options) error {
+	if strings.TrimSpace(o.Executable) == "" {
+		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
+	}
 	if err := d.stop(); err != nil {
 		return err
 	}

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 type CheckResult struct {
@@ -202,6 +203,10 @@ func managementWindowOptions(url string) application.WebviewWindowOptions {
 }
 
 func chatWindowOptions(url string) application.WebviewWindowOptions {
+	return chatWindowOptionsWithMode(url, false)
+}
+
+func chatWindowOptionsWithMode(url string, useActionPill bool) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
 		Name:               "dsh",
 		Title:              "Deepseek Harness Desktop - DSH",
@@ -214,25 +219,55 @@ func chatWindowOptions(url string) application.WebviewWindowOptions {
 		Windows:            application.WindowsWindow{Theme: application.SystemDefault},
 		DevToolsEnabled:    false,
 	}
-	return applyDesktopWindowChrome(options, false)
+	return applyDesktopWindowChromeWithMode(options, false, useActionPill)
 }
 
 func applyDesktopWindowChrome(options application.WebviewWindowOptions, management bool) application.WebviewWindowOptions {
+	return applyDesktopWindowChromeWithMode(options, management, false)
+}
+
+func applyDesktopWindowChromeWithMode(options application.WebviewWindowOptions, management, useActionPill bool) application.WebviewWindowOptions {
 	if runtime.GOOS == "darwin" {
-		// macOS 使用原生 traffic lights。HiddenInset 让 WebView 铺满窗口，
-		// 原生 CSS/脚本只给配置页或左侧 sidebar 留出顶部空间，避免按钮覆盖内容。
+		// macOS 使用原生 traffic lights。紧凑 unified 标题栏保留原生按钮，
+		// 同时减少顶部垂直留白；注入 CSS/脚本使用同一安全区基准，避免按钮覆盖内容。
 		options.Frameless = false
 		options.Mac.TitleBar = application.MacTitleBarHiddenInsetUnified
+		options.Mac.TitleBar.ToolbarStyle = application.MacToolbarStyleUnifiedCompact
 		options.Mac.InvisibleTitleBarHeight = desktopNativeTopInset
-		options.JS = desktopChromeScript(management, true)
+		options.JS = desktopChromeScriptWithMode(management, true, useActionPill)
 		// CSS 由 WebView 在导航完成后直接注入，和异步挂载的 React DOM
 		// 解耦；JS 仍负责给配置页和 sidebar 写入动态标记。
-		options.CSS = escapeWailsCSS(desktopNativeWindowInsetCSS)
+		options.CSS = escapeWailsCSS(desktopNativeWindowInsetCSS + desktopActionPillCSSForWindow(management))
 		return options
 	}
 	options.Frameless = true
-	options.JS = desktopChromeScript(management, false)
+	options.JS = desktopChromeScriptWithMode(management, false, useActionPill)
 	return options
+}
+
+func (d *DSH) ensureChatWindowNavigationHook(window application.Window) {
+	d.mu.Lock()
+	if d.chatWindowNavigationHooked {
+		d.mu.Unlock()
+		return
+	}
+	d.chatWindowNavigationHooked = true
+	d.mu.Unlock()
+
+	syncMode := func(*application.WindowEvent) {
+		d.mu.Lock()
+		enabled := d.options.UseActionPill
+		d.mu.Unlock()
+		window.ExecJS(desktopActionPillModeScriptForMode(enabled))
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		window.OnWindowEvent(events.Mac.WebViewDidFinishNavigation, syncMode)
+	case "windows":
+		window.OnWindowEvent(events.Windows.WebViewNavigationCompleted, syncMode)
+	case "linux":
+		window.OnWindowEvent(events.Linux.WindowLoadFinished, syncMode)
+	}
 }
 
 func (d *DSH) OpenDSH() error {
@@ -240,6 +275,9 @@ func (d *DSH) OpenDSH() error {
 	if err != nil {
 		return err
 	}
+	d.mu.Lock()
+	useActionPill := d.options.UseActionPill
+	d.mu.Unlock()
 	app, err := desktopApp()
 	if err != nil {
 		return err
@@ -248,19 +286,28 @@ func (d *DSH) OpenDSH() error {
 	defer d.windowMu.Unlock()
 	window, ok := app.Window.GetByName("dsh")
 	if !ok {
-		window = app.Window.NewWithOptions(chatWindowOptions(url))
+		window = app.Window.NewWithOptions(chatWindowOptionsWithMode(url, useActionPill))
 		d.mu.Lock()
 		d.chatWindowURL = url
+		d.chatWindowUseActionPill = useActionPill
+		d.chatWindowNavigationHooked = false
 		d.mu.Unlock()
+		d.ensureChatWindowNavigationHook(window)
 	} else {
 		d.mu.Lock()
 		needsReload := d.chatWindowURL != url
+		modeChanged := d.chatWindowUseActionPill != useActionPill
 		if needsReload {
 			d.chatWindowURL = url
 		}
+		d.chatWindowUseActionPill = useActionPill
 		d.mu.Unlock()
+		d.ensureChatWindowNavigationHook(window)
 		if needsReload {
 			window.SetURL(url)
+		}
+		if modeChanged && !needsReload {
+			window.ExecJS(desktopActionPillModeScriptForMode(useActionPill))
 		}
 	}
 	window.Show()

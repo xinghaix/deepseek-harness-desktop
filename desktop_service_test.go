@@ -4,9 +4,12 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TestRunningDSHDoesNotSpawnDetectionCLI(t *testing.T) {
@@ -68,5 +71,18 @@ func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "menu.AddRole(application.EditMenu)") {
 		t.Fatal("application menu must expose the system Edit role")
+	}
+}
+
+func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS 标题栏配置仅适用于 darwin")
+	}
+	options := chatWindowOptionsWithMode("http://127.0.0.1:12345", false)
+	if options.Mac.TitleBar.ToolbarStyle != application.MacToolbarStyleUnifiedCompact {
+		t.Fatalf("macOS Chat 应使用紧凑 unified 标题栏，得到 %v", options.Mac.TitleBar.ToolbarStyle)
+	}
+	if options.Mac.InvisibleTitleBarHeight != desktopNativeTopInset {
+		t.Fatalf("macOS 注入安全区与原生标题栏高度不一致：%d != %d", options.Mac.InvisibleTitleBarHeight, desktopNativeTopInset)
 	}
 }

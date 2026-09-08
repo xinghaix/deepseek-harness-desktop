@@ -24,11 +24,17 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {
 	script := desktopChromeScript(false, true)
-	if !strings.Contains(script, "dsh-window-sidebar") || !strings.Contains(script, "data-slot='sidebar'") || !strings.Contains(script, "firstElementChild") || !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") || !strings.Contains(script, "dsh-native-sidebar-cap") || !strings.Contains(script, "const topInset = 40") {
+	if !strings.Contains(script, "dsh-window-sidebar") || !strings.Contains(script, "data-slot='sidebar'") || !strings.Contains(script, "firstElementChild") || !strings.Contains(script, "const topInset = 36") {
 		t.Fatal("macOS 左侧 sidebar 未预留原生标题栏安全区")
 	}
-	if !strings.Contains(desktopNativeWindowInsetCSS, "#root [data-slot=\"sidebar\"] > :first-child") || !strings.Contains(desktopNativeWindowInsetCSS, "data-sidebar-collapsed") || !strings.Contains(desktopNativeWindowInsetCSS, "dsh-window-wide-rail") || !strings.Contains(desktopNativeWindowInsetCSS, "dsh-native-sidebar-cap") || !strings.Contains(desktopNativeWindowInsetCSS, "84px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-top-inset, 40px)") {
+	if !strings.Contains(desktopNativeWindowInsetCSS, "#root [data-slot=\"sidebar\"] > :first-child") || !strings.Contains(desktopNativeWindowInsetCSS, "84px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-top-inset, 36px)") {
 		t.Fatal("macOS sidebar 缺少不依赖异步脚本的 CSS 兜底选择器")
+	}
+	if !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") || !strings.Contains(script, "84px") || strings.Contains(script, "dsh-native-sidebar-cap") {
+		t.Fatal("macOS 原生折叠轨道未对齐交通灯安全区")
+	}
+	if !strings.Contains(script, "let actionPillEnabled = false") || !strings.Contains(script, "__dshDesktopActionPillSetEnabled") {
+		t.Fatal("默认模式必须保留可动态切换的隐藏胶囊控制器")
 	}
 	if strings.Contains(script, ".dsh-window-content:not(.dsh-window-management)") {
 		t.Fatal("macOS Chat 不应给整个 root 增加顶部内边距")
@@ -38,6 +44,25 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	}
 	if strings.Contains(script, "dsh-desktop-chrome__controls") {
 		t.Fatal("macOS 不应注入自绘控制按钮")
+	}
+}
+
+func TestDesktopChromeScriptActionPillMode(t *testing.T) {
+	script := desktopChromeScriptWithMode(false, true, true)
+	for _, fragment := range []string{
+		"dsh-desktop-action-pill", "data-sidebar-collapsed", "ResizeObserver",
+		"findCenter", "展开侧边栏", "新建会话", "搜索会话", "OpenManagement",
+		"let actionPillEnabled = true", "__dshDesktopActionPillSetEnabled",
+	} {
+		if !strings.Contains(script, fragment) {
+			t.Fatalf("横向操作胶囊脚本缺少 %q", fragment)
+		}
+	}
+	if !strings.Contains(script, "84px") || !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") {
+		t.Fatal("横向操作胶囊模式的原生折叠轨道未保持交通灯安全区")
+	}
+	if !strings.Contains(desktopActionPillCSS, "#dsh-desktop-action-pill[data-visible=\"true\"]") {
+		t.Fatal("横向操作胶囊缺少折叠态显示样式")
 	}
 }
 
