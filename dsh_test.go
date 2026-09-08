@@ -25,7 +25,14 @@ import (
 func TestMain(m *testing.M) {
 	mode := os.Getenv("DSHD_TEST_CHILD")
 	if mode == "" {
-		os.Exit(m.Run())
+		stateDir, err := os.MkdirTemp("", "deepseek-harness-desktop-test-state-")
+		if err != nil {
+			os.Exit(1)
+		}
+		_ = os.Setenv(desktopStateDirEnv, stateDir)
+		code := m.Run()
+		_ = os.RemoveAll(stateDir)
+		os.Exit(code)
 	}
 	if mode == "descendant" {
 		signal.Ignore(syscall.SIGTERM)
@@ -158,6 +165,12 @@ func TestDSH(t *testing.T) {
 		if defaults.Home != filepath.Join(home, ".dsh") {
 			t.Fatal(defaults.Home)
 		}
+		if defaults.DesktopDir != filepath.Join(defaults.Home, desktopDataDirName) {
+			t.Fatalf("default desktop dir = %q", defaults.DesktopDir)
+		}
+		if defaults.Workspace != home {
+			t.Fatalf("default workspace = %q, want %q", defaults.Workspace, home)
+		}
 		if defaults.Port != 0 {
 			t.Fatalf("default port = %d, want 0", defaults.Port)
 		}
@@ -166,8 +179,30 @@ func TestDSH(t *testing.T) {
 		if err != nil || !filepath.IsAbs(normalized.Home) {
 			t.Fatalf("%+v: %v", normalized, err)
 		}
-		if _, err := os.Stat(o.Home); !os.IsNotExist(err) {
-			t.Fatal("normalization created Home")
+		if normalized.Workspace != o.Workspace {
+			t.Fatalf("workspace = %q, want %q", normalized.Workspace, o.Workspace)
+		}
+		if normalized.DesktopDir != filepath.Join(o.Home, desktopDataDirName) {
+			t.Fatalf("desktop dir = %q", normalized.DesktopDir)
+		}
+		if _, err := os.Stat(normalized.DesktopDir); !os.IsNotExist(err) {
+			t.Fatalf("normalization created desktop dir: %v", err)
+		}
+		if desktopDir, err := ensureDesktopDataDir(o.Home); err != nil {
+			t.Fatal(err)
+		} else if info, err := os.Stat(desktopDir); err != nil || !info.IsDir() {
+			t.Fatalf("desktop dir was not created: %v", err)
+		} else if info.Mode().Perm() != 0700 {
+			t.Fatalf("desktop dir permissions = %o, want 700", info.Mode().Perm())
+		}
+		if err := writeOwnedProcessMarker(o.Home, os.Getpid(), o.Executable); err != nil {
+			t.Fatal(err)
+		}
+		if err := guardOwnedProcessMarker(o.Home); err == nil {
+			t.Fatal("accepted a live owned DSH process marker")
+		}
+		if err := os.Remove(ownedProcessMarkerPath(o.Home)); err != nil {
+			t.Fatal(err)
 		}
 		o.Port = 0
 		if _, err := normalizeOptions(o); err != nil {
@@ -228,6 +263,9 @@ func TestDSH(t *testing.T) {
 		if err := d.Stop(); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := os.Stat(ownedProcessMarkerPath(o.Home)); !os.IsNotExist(err) {
+			t.Fatalf("DSH process marker was not removed after stop: %v", err)
+		}
 		if d.Status().State != "stopped" {
 			t.Fatalf("%+v", d.Status())
 		}
@@ -243,6 +281,65 @@ func TestDSH(t *testing.T) {
 		}
 		if err := d.Start(o); err == nil {
 			t.Fatal("start after close")
+		}
+	})
+	t.Run("concurrent-start-has-one-owner", func(t *testing.T) {
+		t.Setenv("DSHD_TEST_CHILD", "dynamic")
+		o := options(t)
+		d := newDSH()
+		t.Cleanup(func() { _ = d.Close() })
+		const attempts = 4
+		ready := make(chan struct{})
+		errs := make(chan error, attempts)
+		for range attempts {
+			go func() {
+				<-ready
+				errs <- d.Start(o)
+			}()
+		}
+		close(ready)
+		successes := 0
+		for range attempts {
+			if err := <-errs; err == nil {
+				successes++
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("concurrent starts succeeded %d times", successes)
+		}
+		deadline := time.Now().Add(8 * time.Second)
+		for d.Status().State != "running" && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if status := d.Status(); status.State != "running" {
+			t.Fatalf("single owner did not become ready: %+v", status)
+		}
+		if err := d.Stop(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("different-homes-share-one-global-owner", func(t *testing.T) {
+		t.Setenv("DSHD_TEST_CHILD", "dynamic")
+		first := options(t)
+		second := options(t)
+		d1, d2 := newDSH(), newDSH()
+		t.Cleanup(func() { _ = d1.Close(); _ = d2.Close() })
+		if err := d1.Start(first); err != nil {
+			t.Fatal(err)
+		}
+		await(t, 8*time.Second, func() bool { return d1.Status().State == "running" })
+		if err := d2.Start(second); err == nil {
+			t.Fatal("started a second DSH with a different DSH_HOME")
+		}
+		if err := d1.Stop(); err != nil {
+			t.Fatal(err)
+		}
+		if err := d2.Start(second); err != nil {
+			t.Fatalf("started DSH after the first owner stopped: %v", err)
+		}
+		await(t, 8*time.Second, func() bool { return d2.Status().State == "running" })
+		if err := d2.Stop(); err != nil {
+			t.Fatal(err)
 		}
 	})
 	t.Run("foreign-port-and-untrusted-redirect", func(t *testing.T) {

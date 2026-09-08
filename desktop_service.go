@@ -46,17 +46,30 @@ type BridgeGuide struct {
 
 const bridgePluginDirectory = "plugins/deepseek-harness-desktop-bridge"
 
-// Defaults 返回用户现有的 DSH_HOME 和 GUI 可见工作目录。
+// Defaults 返回用户现有的 DSH_HOME、桌面端专属目录和 GUI 可见的 Chat 工作目录。
 func (d *DSH) Defaults() (Options, error) {
 	return defaultOptions()
 }
 
 // DiscoverCLI 在不改变 DSH_HOME 的前提下自动探测常见的 dsh 安装位置。
 func (d *DSH) DiscoverCLI() (DiscoveryResult, error) {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
 	defaults, err := defaultOptions()
 	if err != nil {
 		return DiscoveryResult{}, err
 	}
+	d.mu.Lock()
+	if d.cmd != nil {
+		options := d.options
+		d.mu.Unlock()
+		return DiscoveryResult{
+			Found:   true,
+			Options: options,
+			Message: "已有 DSH 实例运行；不会再次启动 dsh 检测进程",
+		}, nil
+	}
+	d.mu.Unlock()
 	result := DiscoveryResult{Options: defaults}
 	for _, candidate := range cliCandidates(defaults.Executable) {
 		o := defaults
@@ -74,6 +87,7 @@ func (d *DSH) DiscoverCLI() (DiscoveryResult, error) {
 		result.Version = version
 		result.Options = normalized
 		result.Message = "已找到并通过 dsh CLI 检测"
+		d.commitCLIOptions(normalized)
 		return result, nil
 	}
 	result.Message = "未在 GUI 的 PATH 和常见 Node 全局目录中找到 dsh"
@@ -82,23 +96,24 @@ func (d *DSH) DiscoverCLI() (DiscoveryResult, error) {
 
 // CheckCLI 校验路径并运行用户已经安装的 CLI，不修改 DSH_HOME。
 func (d *DSH) CheckCLI(o Options) (CheckResult, error) {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
 	normalized, err := normalizeOptions(o)
 	if err != nil {
 		return CheckResult{}, err
 	}
 	d.mu.Lock()
 	busy := d.cmd != nil
+	runningOptions := d.options
 	d.mu.Unlock()
 	if busy {
-		return CheckResult{}, errors.New("请先停止当前 DSH 实例")
+		return CheckResult{Version: "DSH 已运行", Options: runningOptions}, nil
 	}
 	version, err := checkCLI(normalized)
 	if err != nil {
 		return CheckResult{}, err
 	}
-	d.mu.Lock()
-	d.options, d.launchOptions = normalized, normalized
-	d.mu.Unlock()
+	d.commitCLIOptions(normalized)
 	return CheckResult{Version: version, Options: normalized}, nil
 }
 
@@ -150,7 +165,7 @@ func (d *DSH) ChooseHome() (string, error) {
 }
 
 func (d *DSH) ChooseWorkspace() (string, error) {
-	return d.chooseDirectory("选择工作目录", "请选择 DSH 启动时使用的工作目录")
+	return d.chooseDirectory("选择 Chat 工作目录", "请选择 DSH 启动时使用的 Chat 工作目录")
 }
 
 func (d *DSH) ChooseBridgePlugin() (string, error) {
@@ -204,12 +219,15 @@ func chatWindowOptions(url string) application.WebviewWindowOptions {
 
 func applyDesktopWindowChrome(options application.WebviewWindowOptions, management bool) application.WebviewWindowOptions {
 	if runtime.GOOS == "darwin" {
-		// macOS 使用原生 traffic lights，并把内容铺到透明标题栏下方，避免
-		// 用 Windows 风格的自绘按钮破坏系统窗口习惯。
+		// macOS 使用原生 traffic lights。HiddenInset 让 WebView 铺满窗口，
+		// 原生 CSS/脚本只给配置页或左侧 sidebar 留出顶部空间，避免按钮覆盖内容。
 		options.Frameless = false
 		options.Mac.TitleBar = application.MacTitleBarHiddenInsetUnified
-		options.Mac.InvisibleTitleBarHeight = 36
+		options.Mac.InvisibleTitleBarHeight = desktopNativeTopInset
 		options.JS = desktopChromeScript(management, true)
+		// CSS 由 WebView 在导航完成后直接注入，和异步挂载的 React DOM
+		// 解耦；JS 仍负责给配置页和 sidebar 写入动态标记。
+		options.CSS = escapeWailsCSS(desktopNativeWindowInsetCSS)
 		return options
 	}
 	options.Frameless = true
@@ -226,11 +244,24 @@ func (d *DSH) OpenDSH() error {
 	if err != nil {
 		return err
 	}
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
 	window, ok := app.Window.GetByName("dsh")
 	if !ok {
 		window = app.Window.NewWithOptions(chatWindowOptions(url))
+		d.mu.Lock()
+		d.chatWindowURL = url
+		d.mu.Unlock()
 	} else {
-		window.SetURL(url)
+		d.mu.Lock()
+		needsReload := d.chatWindowURL != url
+		if needsReload {
+			d.chatWindowURL = url
+		}
+		d.mu.Unlock()
+		if needsReload {
+			window.SetURL(url)
+		}
 	}
 	window.Show()
 	window.Focus()
@@ -243,11 +274,25 @@ func (d *DSH) OpenManagement() error {
 	if err != nil {
 		return err
 	}
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
+	const managementURL = "/?manage=1"
 	window, ok := app.Window.GetByName("main")
 	if !ok {
-		window = app.Window.NewWithOptions(managementWindowOptions("/?manage=1"))
+		window = app.Window.NewWithOptions(managementWindowOptions(managementURL))
+		d.mu.Lock()
+		d.managementWindowURL = managementURL
+		d.mu.Unlock()
 	} else {
-		window.SetURL("/?manage=1")
+		d.mu.Lock()
+		needsReload := d.managementWindowURL != managementURL
+		if needsReload {
+			d.managementWindowURL = managementURL
+		}
+		d.mu.Unlock()
+		if needsReload {
+			window.SetURL(managementURL)
+		}
 	}
 	window.Show()
 	window.Focus()
@@ -305,6 +350,7 @@ func normalizeLocationOptions(o Options) (Options, error) {
 	if o.Home, err = absolutePath(o.Home); err != nil {
 		return o, fmt.Errorf("DSH Home: %w", err)
 	}
+	o.DesktopDir = desktopDataDirPath(o.Home)
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
 		return o, fmt.Errorf("工作目录: %w", err)
 	}

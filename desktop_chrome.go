@@ -5,14 +5,21 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
-// desktopChromeCSS/JS 为非 macOS 无原生标题栏窗口提供轻量悬浮控制条。
-// Wails runtime 会把 --wails-draggable: drag 转换为平台原生拖动，按钮本身
-// 通过 runtime.Window 调用最小化、最大化和关闭，不依赖操作系统差异。
+const (
+	desktopNativeTopInset = 40
+	desktopCustomTopInset = 48
+)
+
+// desktopChromeCSS/JS 为非 macOS 无原生标题栏窗口提供轻量悬浮控制条，
+// 并为自绘控制条预留顶部安全区。Wails runtime 会把 --wails-draggable: drag
+// 转换为平台原生拖动，按钮本身通过 runtime.Window 调用最小化、最大化和关闭，
+// 不依赖操作系统差异。
 const desktopChromeCSS = `
-:root {
-  color-scheme: light;
+.dsh-desktop-chrome {
+  --dsh-window-top-inset: 48px;
   --dsh-chrome-text: #202531;
   --dsh-chrome-muted: #6f7785;
   --dsh-chrome-border: rgba(122, 132, 150, .18);
@@ -21,8 +28,7 @@ const desktopChromeCSS = `
   --dsh-chrome-close: #dc4d55;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+  .dsh-desktop-chrome {
     --dsh-chrome-text: #f4f6fb;
     --dsh-chrome-muted: #a7afbd;
     --dsh-chrome-border: rgba(255, 255, 255, .14);
@@ -35,7 +41,7 @@ const desktopChromeCSS = `
   position: fixed;
   z-index: 2147483647;
   inset: 0 0 auto;
-  height: 50px;
+  height: var(--dsh-window-top-inset);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
@@ -97,9 +103,144 @@ const desktopChromeCSS = `
 }
 `
 
+const desktopWindowInsetCSS = `
+.dsh-window-content {
+  box-sizing: border-box !important;
+  --dsh-window-top-inset: 40px;
+}
+.dsh-window-content:not(.dsh-window-management) {
+  height: calc(100% - var(--dsh-window-top-inset)) !important;
+  margin-top: var(--dsh-window-top-inset) !important;
+}
+.dsh-window-content.dsh-window-management {
+  padding-top: calc(30px + var(--dsh-window-top-inset, 40px)) !important;
+}
+`
+
+const desktopNativeWindowInsetCSS = `
+.dsh-window-content {
+  box-sizing: border-box !important;
+  --dsh-window-collapsed-rail-width: 84px;
+}
+.dsh-window-content.dsh-window-management,
+body > .app-shell {
+  padding-top: calc(30px + var(--dsh-window-top-inset, 40px)) !important;
+}
+.dsh-window-sidebar,
+#root [data-slot="sidebar"] > :first-child {
+  box-sizing: border-box !important;
+  padding-top: var(--dsh-window-top-inset, 40px) !important;
+}
+#root [data-sidebar-collapsed][data-details-collapsed],
+#root [data-sidebar-collapsed].dsh-window-wide-rail {
+  grid-template-columns: var(--dsh-window-collapsed-rail-width, 84px) minmax(0, 1fr) var(--dsh-window-details-width, 0px) !important;
+}
+#root [data-sidebar-collapsed][data-details-collapsed] {
+  grid-template-columns: var(--dsh-window-collapsed-rail-width, 84px) minmax(0, 1fr) 0px !important;
+}
+#root [data-sidebar-collapsed] [data-slot="sidebar"] > :first-child {
+  padding-left: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
+  padding-right: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
+}
+.dsh-native-sidebar-cap {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 2147483646;
+  top: 0;
+  left: 0;
+  width: 84px;
+  height: var(--dsh-window-top-inset, 40px);
+  background: var(--dsw-specific-sidebar-fill, var(--dsw-alias-bg-base, #f7f8fa));
+  pointer-events: none;
+}
+`
+
+// escapeWailsCSS 为 Wails beta.16 macOS 的 windowInjectCSS 转义 CSS。
+// 该版本会把 CSS 放进单引号 JavaScript 字符串，换行、反斜杠和单引号
+// 若不先转义，会导致整段 CSS 注入脚本解析失败。
+func escapeWailsCSS(css string) string {
+	return strings.NewReplacer(
+		`\`, `\\`,
+		`'`, `\'`,
+		"\r", `\r`,
+		"\n", `\n`,
+	).Replace(css)
+}
+
+const desktopNativeWindowInsetJS = `
+(() => {
+  const isManagement = %t;
+  const topInset = %d;
+  const chromeStyleId = "dsh-window-inset-style";
+  let pageContent = null;
+  let observedFrame = null;
+  let frameObserver = null;
+  if (!document.getElementById(chromeStyleId)) {
+    const style = document.createElement("style");
+    style.id = chromeStyleId;
+    style.textContent = %s;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  const applyInset = () => {
+    const content = isManagement ? document.querySelector("body > .app-shell") : document.getElementById("root");
+    if (!content) {
+      window.setTimeout(applyInset, 25);
+      return;
+    }
+    pageContent = content;
+    content.classList.add("dsh-window-content");
+    if (isManagement) content.classList.add("dsh-window-management");
+    content.style.setProperty("--dsh-window-top-inset", topInset + "px");
+    if (!isManagement) {
+      let cap = document.getElementById("dsh-native-sidebar-cap");
+      if (!cap && document.body) {
+        cap = document.createElement("div");
+        cap.id = "dsh-native-sidebar-cap";
+        cap.className = "dsh-native-sidebar-cap";
+        cap.style.height = topInset + "px";
+        document.body.appendChild(cap);
+      }
+      const sidebarSlot = content.querySelector("[data-slot='sidebar']");
+      const sidebar = sidebarSlot?.firstElementChild;
+      if (!sidebar) {
+        window.setTimeout(applyInset, 25);
+        return;
+      }
+      sidebar.classList.add("dsh-window-sidebar");
+      sidebar.style.setProperty("--dsh-window-top-inset", topInset + "px");
+
+      const overlay = content.querySelector("[data-shell-overlay]");
+      const frame = overlay ? overlay.parentElement
+        : content.querySelector("[data-sidebar-collapsed], [data-details-collapsed]");
+      if (frame && frame !== observedFrame) {
+        frameObserver?.disconnect();
+        observedFrame = frame;
+        frameObserver = new MutationObserver(syncCollapsedRail);
+        frameObserver.observe(frame, { attributes: true, attributeFilter: ["data-sidebar-collapsed", "style"] });
+      }
+      syncCollapsedRail();
+    }
+  };
+
+  function syncCollapsedRail() {
+    if (isManagement) return;
+    const frame = observedFrame;
+    if (!frame) return;
+    const collapsed = frame.hasAttribute("data-sidebar-collapsed");
+    frame.classList.toggle("dsh-window-wide-rail", collapsed);
+    if (!collapsed) return;
+    const columns = frame.style.gridTemplateColumns;
+    const detailsWidth = columns.match(/\s(\d+(?:\.\d+)?px)$/)?.[1] || "0px";
+    pageContent?.style.setProperty("--dsh-window-details-width", detailsWidth);
+  }
+  applyInset();
+})();
+`
+
 const desktopChromeJS = `
 (() => {
   const isManagement = %t;
+  const topInset = %d;
   const chromeStyleId = "dsh-desktop-chrome-style";
   if (!document.getElementById(chromeStyleId)) {
     const style = document.createElement("style");
@@ -107,6 +248,19 @@ const desktopChromeJS = `
     style.textContent = %s;
     (document.head || document.documentElement).appendChild(style);
   }
+  const applyInset = () => {
+    const content = isManagement
+      ? document.querySelector("body > .app-shell")
+      : document.getElementById("root");
+    if (!content) {
+      window.setTimeout(applyInset, 25);
+      return;
+    }
+    content.classList.add("dsh-window-content");
+    if (isManagement) content.classList.add("dsh-window-management");
+    content.style.setProperty("--dsh-window-top-inset", topInset + "px");
+  };
+  applyInset();
   const root = document.documentElement;
   root.classList.toggle("dsh-desktop-config", isManagement);
   if (document.getElementById("dsh-desktop-chrome")) return;
@@ -176,7 +330,9 @@ const desktopChromeJS = `
 
 func desktopChromeScript(management, nativeMac bool) string {
 	if nativeMac {
-		return ""
+		// macOS 的 HiddenInset 窗口让 WebView 铺满整个窗口；配置页只给自身
+		// 留出顶部空间，Chat 则把 inset 精确施加到左侧 sidebar 内容，不移动主聊天区。
+		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopNativeWindowInsetCSS))
 	}
-	return fmt.Sprintf(desktopChromeJS, management, strconv.Quote(desktopChromeCSS))
+	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopWindowInsetCSS))
 }

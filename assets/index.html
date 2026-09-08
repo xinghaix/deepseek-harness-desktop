@@ -23,6 +23,9 @@
       --success: #168653;
       --warning: #bd7912;
       --shadow: 0 24px 70px rgba(27, 37, 61, .09);
+      --scrollbar-track: #f1f3f7;
+      --scrollbar-thumb: #c2cad6;
+      --scrollbar-thumb-hover: #aab5c4;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
     @media (prefers-color-scheme: dark) {
@@ -41,6 +44,9 @@
         --success: #61d69b;
         --warning: #edbd68;
         --shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        --scrollbar-track: #1d222d;
+        --scrollbar-thumb: #4d596b;
+        --scrollbar-thumb-hover: #68758a;
       }
       body { background: radial-gradient(circle at 16% 0%, #222a37 0, var(--bg) 46%); }
       .detect-card, .bridge-card, .panel, .install-card { background: rgba(29, 34, 45, .92); }
@@ -59,6 +65,11 @@
       .step[data-done="true"] .step-number { background: #1d4938; border-color: #3c8b67; color: #79e0aa; }
     }
     * { box-sizing: border-box; }
+    * { scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-width: thin; }
+    *::-webkit-scrollbar { width: 11px; height: 11px; }
+    *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+    *::-webkit-scrollbar-thumb { border: 3px solid var(--scrollbar-track); border-radius: 999px; background: var(--scrollbar-thumb); }
+    *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
     body { margin: 0; min-width: 720px; min-height: 100vh; background: radial-gradient(circle at 16% 0%, #fff 0, var(--bg) 43%); color: var(--text); }
     button, input { font: inherit; }
     button { cursor: pointer; }
@@ -268,7 +279,7 @@
 
       <details class="advanced" id="advanced-settings">
         <summary class="advanced-summary">
-          <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title">选择 CLI、DSH Home 与端口</span><span class="advanced-summary-copy">自动检测不到时，可手动指定启动参数。</span></span></span>
+          <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title">选择 CLI、DSH Home、Chat 工作目录与端口</span><span class="advanced-summary-copy">自动检测不到时，可手动指定启动参数。</span></span></span>
         </summary>
         <div class="advanced-body">
           <div class="field">
@@ -282,8 +293,14 @@
             <p class="hint">只把这个目录作为 DSH_HOME 传给子进程，不复制、迁移或生成第二份配置。</p>
           </div>
           <div class="field">
-            <label for="workspace">工作目录</label>
+            <label for="desktop-dir">桌面端目录（固定）</label>
+            <div class="input-row"><input id="desktop-dir" autocomplete="off" spellcheck="false" readonly aria-readonly="true"></div>
+            <p class="hint">固定为 <code>DSH_HOME/.deepseek-harness-desktop</code>，仅供桌面端使用；不会把它当作 Chat workspace。</p>
+          </div>
+          <div class="field">
+            <label for="workspace">Chat 工作目录（DSH cwd）</label>
             <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button">选择文件夹</button></div>
+            <p class="hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录，或选择上面的桌面端目录以限制相对路径范围。</p>
           </div>
           <div class="field">
             <label for="port">本机端口</label>
@@ -310,7 +327,7 @@
           <div class="bridge-path"><input id="bridge-path" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-bridge" type="button">选择目录</button></div>
           <div class="bridge-status" id="bridge-status">正在准备本地插件安装提示…</div>
           <pre class="command" id="bridge-command"></pre>
-          <div class="button-row"><button class="secondary" id="copy-bridge-command" type="button">复制桥接插件命令</button></div>
+          <div class="button-row"><button class="secondary" id="copy-bridge-command" type="button">复制当前系统命令</button></div>
         </div>
       </details>
 
@@ -355,7 +372,7 @@
     <div class="dashboard-head"><div><div class="eyebrow">运行控制台</div><h1>DSH 已准备好</h1><p>从这里管理启动参数；聊天内容和 DSH 设置仍保留在官方 DSH Web UI 中。</p></div><button class="secondary" id="reconfigure" type="button">重新配置</button></div>
     <div class="dashboard-grid">
       <div>
-        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped">未启动</span><span class="version" id="version">尚未检测</span></div><p class="status-summary" id="dashboard-message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled>停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled>在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span>CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span>DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span>工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span>地址</span><strong id="metric-url">未就绪</strong></div></div></section>
+        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped">未启动</span><span class="version" id="version">尚未检测</span></div><p class="status-summary" id="dashboard-message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled>停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled>在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span>CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span>DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span>桌面端目录</span><strong id="metric-desktop-dir">—</strong></div><div class="metric"><span>Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span>地址</span><strong id="metric-url">未就绪</strong></div></div></section>
         <section class="panel log-panel"><div class="panel-heading"><h2>启动日志</h2><span class="panel-caption">最近 64 KiB</span></div><pre id="logs">暂无日志</pre></section>
       </div>
       <aside>
@@ -382,18 +399,22 @@
   let lastVersion = "";
   let autoOpenStarted = false;
   let bridgeGuide = null;
+  let guidesPromise = null;
   let closeAfterChat = !manualManagement;
   let lastErrorReport = "";
 
   function options() {
     const portText = $("port").value.trim();
-    return { executable: $("executable").value.trim(), home: $("home").value.trim(), workspace: $("workspace").value.trim(), port: portText === "" ? 0 : Number(portText) };
+    return { executable: $("executable").value.trim(), home: $("home").value.trim(), desktopDir: $("desktop-dir").value.trim(), workspace: $("workspace").value.trim(), port: portText === "" ? 0 : Number(portText) };
   }
   function errorText(error) { return error && error.message ? error.message : String(error || "操作失败"); }
   function setMessage(text, isError = false) { $("onboarding-message").textContent = text || ""; $("onboarding-message").dataset.error = isError ? "true" : "false"; $("dashboard-message").textContent = text || "准备启动 DSH…"; }
   function setHidden(id, hidden) { $(id).hidden = hidden; }
-  function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("workspace").value = o.workspace || ""; $("port").value = Number.isInteger(o.port) ? o.port : 0; }
-  function saveOptions() { try { localStorage.setItem(storageKey, JSON.stringify(options())); } catch (_) {} }
+  function desktopDirForHome(home) { const value = String(home || "").trim(); if (!value) return ""; const separator = value.includes("\\") ? "\\" : "/"; const base = value.replace(/[\\/]+$/, "") || separator; return base === separator ? `${base}.deepseek-harness-desktop` : `${base}${separator}.deepseek-harness-desktop`; }
+  function syncDesktopDir() { $("desktop-dir").value = desktopDirForHome($("home").value); }
+  function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = desktopDirForHome(o.home) || o.desktopDir || ""; $("workspace").value = o.workspace || ""; $("port").value = Number.isInteger(o.port) ? o.port : 0; }
+  function saveOptions(lastStartSucceeded = false) { try { const value = options(); value.lastStartSucceeded = Boolean(lastStartSucceeded); if (lastVersion) value.version = lastVersion; localStorage.setItem(storageKey, JSON.stringify(value)); } catch (_) {} }
+  function markStartupConfigStale() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object" && value.lastStartSucceeded) { value.lastStartSucceeded = false; localStorage.setItem(storageKey, JSON.stringify(value)); } } catch (_) {} }
   function loadSavedOptions() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object") { fillOptions(value); return value; } } catch (_) {} return null; }
   function clearErrorCard() { lastErrorReport = ""; setHidden("error-card", true); $("error-copy-state").textContent = ""; $("error-details-panel").open = false; }
   function formatErrorReport(status) {
@@ -404,7 +425,8 @@
       `状态：${labels[status && status.state] || (status && status.state) || "启动失败"}`,
       `CLI：${o.executable || "—"}`,
       `DSH Home：${o.home || "—"}`,
-      `工作目录：${o.workspace || "—"}`,
+      `桌面端目录：${o.desktopDir || "—"}`,
+      `Chat 工作目录：${o.workspace || "—"}`,
       `端口：${Number.isInteger(o.port) ? o.port : "—"}`,
       `桌面端错误：${status && status.error ? status.error : "—"}`,
       "",
@@ -446,6 +468,9 @@
     const previousState = state;
     state = status.state || "stopped";
     if (state === "stopped" || state === "failed") autoOpenStarted = false;
+    if (state === "failed") { markStartupConfigStale(); void loadGuides(); }
+    if (state === "running" && previousState !== "running") saveOptions(true);
+    $("retry-discovery").textContent = state === "failed" ? "重试启动" : "重新检查";
     $("header-state").dataset.state = state;
     $("header-state").textContent = labels[state] || state;
     $("dashboard-state").dataset.state = state;
@@ -454,13 +479,14 @@
     const o = status.options || {};
     $("metric-executable").textContent = o.executable || "—";
     $("metric-home").textContent = o.home || "—";
+    $("metric-desktop-dir").textContent = o.desktopDir || desktopDirForHome(o.home) || "—";
     $("metric-workspace").textContent = o.workspace || "—";
     $("metric-url").textContent = status.url || "未就绪";
     updateButtons();
     renderErrorCard(status);
     if (status.error) setMessage("");
     if (state === "failed" || status.error) showOnboarding();
-    if (state === "running" && previousState !== "running" && !autoOpenStarted) {
+    if (!manualManagement && state === "running" && previousState !== "running" && !autoOpenStarted) {
       autoOpenStarted = true;
       localStorage.setItem(onboardingKey, "1");
       if (manualManagement) showDashboard();
@@ -487,7 +513,7 @@
       const result = await api("CheckCLI", options());
       fillOptions(result.options); lastVersion = result.version || "已检测"; $("version").textContent = lastVersion; cliReady = true;
       setDetect("found", "dsh 已就绪", `已验证 ${result.options.executable}，版本：${lastVersion}`);
-      setHidden("install-card", true); setMessage("CLI 检测通过，可以直接启动 DSH Chat。");
+      setHidden("install-card", true); saveOptions(false); setMessage("CLI 检测通过，可以直接启动 DSH Chat。");
       $("step-cli").dataset.done = "true"; $("step-cli").dataset.active = "false";
       updateButtons(); return true;
     } catch (error) {
@@ -498,7 +524,7 @@
     setDetect("checking", "正在检查 dsh", "优先检查用户目录，再检查 shell PATH 和系统全局目录…"); cliReady = false; updateButtons();
     try {
       const result = await api("DiscoverCLI");
-      if (result.found) { fillOptions(result.options); lastVersion = result.version || "已检测"; $("version").textContent = lastVersion; cliReady = true; setDetect("found", "dsh 已就绪", `已找到 ${result.options.executable}，版本：${lastVersion}`); setHidden("install-card", true); setMessage("CLI 检测通过，可以直接启动 DSH Chat。"); }
+      if (result.found) { fillOptions(result.options); lastVersion = result.version || "已检测"; $("version").textContent = lastVersion; cliReady = true; saveOptions(false); setDetect("found", "dsh 已就绪", `已找到 ${result.options.executable}，版本：${lastVersion}`); setHidden("install-card", true); setMessage("CLI 检测通过，可以直接启动 DSH Chat。"); }
       else { setDetect("missing", "没有找到 dsh", result.message || "请选择已安装的 dsh，或按下方步骤安装。"); setHidden("install-card", false); $("advanced-settings").open = true; setMessage("请选择 dsh 可执行文件，或先完成 CLI 安装。"); }
       updateButtons(); return result;
     } catch (error) { setDetect("error", "检查失败", errorText(error)); setMessage(errorText(error), true); updateButtons(); return { found: false, error: errorText(error) }; }
@@ -515,23 +541,63 @@
       }
     } catch (error) { setMessage(`DSH 已启动，但打开桌面 WebView 失败：${errorText(error)}`, true); if (!manualManagement) showOnboarding(); }
   }
-  async function startAutomatically() {
-    showLoading("已找到 dsh，正在启动本机 DSH 服务…");
-    saveOptions();
-    try { await api("Start", options()); }
+  async function startAutomatically(fastPath = false) {
+    showLoading(fastPath ? "正在使用已保存配置启动本机 DSH 服务…" : "已找到 dsh，正在启动本机 DSH 服务…");
+    saveOptions(false);
+    try { await api("Start", options()); return true; }
     catch (error) {
+      if (fastPath) {
+        markStartupConfigStale();
+        const result = await discover();
+        if (result && result.found) {
+          showLoading("已重新找到 dsh，正在启动本机 DSH 服务…");
+          saveOptions(false);
+          try { await api("Start", options()); return true; } catch (retryError) { error = retryError; }
+        }
+      }
+      await loadGuides();
       const message = errorText(error);
       showOnboarding();
       setMessage("");
       renderErrorCard({ state: "failed", options: options(), error: message, logs: message });
     }
   }
-  async function loadGuides() {
-    try { const guide = await api("InstallGuide"); $("node-command").textContent = guide.nodeCheck; $("cli-install-command").textContent = guide.installCLI; $("cli-verify-command").textContent = guide.verifyCLI; } catch (error) { setMessage(errorText(error), true); }
-    await refreshBridgeGuide();
+  async function retryFailedStart() {
+    clearErrorCard();
+    let ready = await probeSelected();
+    if (!ready) {
+      const result = await discover();
+      ready = Boolean(result && result.found);
+    }
+    if (!ready) return { found: false };
+    closeAfterChat = !manualManagement;
+    showLoading("CLI 已修复，正在重新启动本机 DSH 服务…");
+    saveOptions(false);
+    await api("Start", options());
+    return { found: true };
+  }
+  function loadGuides() {
+    if (guidesPromise) return guidesPromise;
+    guidesPromise = (async () => {
+      try { const guide = await api("InstallGuide"); $("node-command").textContent = guide.nodeCheck; $("cli-install-command").textContent = guide.installCLI; $("cli-verify-command").textContent = guide.verifyCLI; } catch (error) { setMessage(errorText(error), true); }
+      await refreshBridgeGuide();
+    })();
+    return guidesPromise;
+  }
+  function currentBridgePlatform() {
+    const platform = String((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "").toLowerCase();
+    if (platform.includes("win")) return { label: "Windows PowerShell", command: bridgeGuide && bridgeGuide.powerShellCommand };
+    if (platform.includes("mac")) return { label: "macOS 终端", command: bridgeGuide && bridgeGuide.installCommand };
+    return { label: "Linux 终端", command: bridgeGuide && bridgeGuide.installCommand };
+  }
+  function renderBridgeCommand() {
+    if (!bridgeGuide) return;
+    const platform = currentBridgePlatform();
+    $("bridge-command").textContent = `${platform.label}：\n${platform.command}\n\n验证：\n${bridgeGuide.verifyCommand}`;
+    $("copy-bridge-command").textContent = `复制 ${platform.label} 命令`;
   }
   async function refreshBridgeGuide() {
-    try { bridgeGuide = await api("BridgeGuide", $("bridge-path").value.trim()); $("bridge-path").value = bridgeGuide.pluginPath; $("bridge-command").textContent = bridgeGuide.installCommand + "\n\nWindows PowerShell：\n" + bridgeGuide.powerShellCommand + "\n\n验证：\n" + bridgeGuide.verifyCommand; $("bridge-status").textContent = bridgeGuide.directoryExists ? "已找到项目内插件目录；安装命令只会把它加入 web profile。" : "未找到插件目录，请选择项目中的 plugins/deepseek-harness-desktop-bridge 目录。"; $("step-bridge").dataset.done = bridgeGuide.directoryExists ? "true" : "false"; } catch (error) { $("bridge-status").textContent = errorText(error); }
+    try { bridgeGuide = await api("BridgeGuide", $("bridge-path").value.trim()); $("bridge-path").value = bridgeGuide.pluginPath; renderBridgeCommand(); $("bridge-status").textContent = bridgeGuide.directoryExists ? "已找到项目内插件目录；安装命令只会把它加入 web profile。" : "未找到插件目录，请选择项目中的 plugins/deepseek-harness-desktop-bridge 目录。"; $("step-bridge").dataset.done = bridgeGuide.directoryExists ? "true" : "false"; } catch (error) { $("bridge-status").textContent = errorText(error); }
   }
   async function copyText(value, successText) {
     try {
@@ -551,21 +617,21 @@
     } catch (_) { setMessage("复制失败，请手动选择命令复制。", true); return false; }
   }
   $("check-cli").onclick = () => run(() => probeSelected());
-  $("retry-discovery").onclick = () => run(() => discover());
+  $("retry-discovery").onclick = () => run(() => state === "failed" ? retryFailedStart() : discover());
   $("restore-defaults").onclick = () => { fillOptions(defaultOptions); cliReady = false; void discover(); };
   $("choose-executable").onclick = $("choose-executable-missing").onclick = () => run(async () => { const path = await api("ChooseExecutable"); if (path) { $("executable").value = path; $("advanced-settings").open = true; await probeSelected(); } });
-  $("choose-home").onclick = () => run(async () => { const path = await api("ChooseHome"); if (path) $("home").value = path; });
+  $("choose-home").onclick = () => run(async () => { const path = await api("ChooseHome"); if (path) { $("home").value = path; syncDesktopDir(); } });
   $("choose-workspace").onclick = () => run(async () => { const path = await api("ChooseWorkspace"); if (path) $("workspace").value = path; });
   $("choose-bridge").onclick = () => run(async () => { const path = await api("ChooseBridgePlugin"); if (path) { $("bridge-path").value = path; await refreshBridgeGuide(); } });
   $("bridge-path").addEventListener("change", refreshBridgeGuide);
   $("copy-cli-command").onclick = () => copyText($("cli-install-command").textContent, "已复制 DSH CLI 安装命令。");
-  $("copy-bridge-command").onclick = () => copyText(bridgeGuide ? (navigator.platform.toLowerCase().includes("win") ? bridgeGuide.powerShellCommand : bridgeGuide.installCommand) : $("bridge-command").textContent.split("\n", 1)[0], "已复制桥接插件安装命令。");
+  $("copy-bridge-command").onclick = () => { const platform = currentBridgePlatform(); const command = platform.command || $("bridge-command").textContent.split("\n", 1)[0]; return copyText(command, `已复制 ${platform.label} 安装命令。`); };
   $("copy-error").onclick = async () => {
     if (!lastErrorReport) return;
     const copied = await copyText(lastErrorReport, "");
     $("error-copy-state").textContent = copied ? "已复制" : "复制失败";
   };
-  $("start-first").onclick = () => run(async () => { if (!cliReady && !(await probeSelected())) throw new Error("请先完成 dsh CLI 检测"); closeAfterChat = !manualManagement; saveOptions(); await api("Start", options()); }, () => setMessage("DSH 正在启动；就绪后会自动打开桌面 Chat WebView。"));
+  $("start-first").onclick = () => run(async () => { if (!cliReady && !(await probeSelected())) throw new Error("请先完成 dsh CLI 检测"); closeAfterChat = !manualManagement; saveOptions(false); await api("Start", options()); }, () => setMessage("DSH 正在启动；就绪后会自动打开桌面 Chat WebView。"));
   $("dashboard-start").onclick = () => run(() => state === "running" ? api("Restart") : api("Start", options()), () => setMessage(state === "running" ? "正在重启 DSH…" : "DSH 正在启动…"));
   $("dashboard-stop").onclick = () => run(() => api("Stop"), () => setMessage("已请求停止 DSH。"));
   $("dashboard-open").onclick = () => run(() => api("OpenDSH"), () => setMessage("已在桌面端 WebView 打开 DSH Chat。"));
@@ -574,18 +640,29 @@
   $("open-settings").onclick = () => run(() => api("OpenSettings", options()));
   $("reconfigure").onclick = () => { localStorage.removeItem(onboardingKey); closeAfterChat = false; clearErrorCard(); showOnboarding(); setMessage("可以调整路径后重新检测 CLI。"); };
   $("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
-  ["executable", "home", "workspace", "port"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); }));
+  ["executable", "port"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); }));
+  $("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); });
   async function load() {
-    showLoading(manualManagement ? "正在打开桌面配置…" : "正在检查本机 dsh CLI…");
+    showLoading(manualManagement ? "正在打开桌面配置…" : "正在读取已保存配置…");
     let saved = null;
     try { defaultOptions = await api("Defaults"); fillOptions(defaultOptions); saved = loadSavedOptions(); } catch (error) { showOnboarding(); setMessage(errorText(error), true); return; }
-    await loadGuides();
     if (manualManagement) {
+      await loadGuides();
       const ready = await probeSelected();
       if (ready) showDashboard(); else { await discover(); showOnboarding(); }
       await refresh();
       return;
     }
+    if (saved && saved.executable && saved.lastStartSucceeded === true) {
+      cliReady = true;
+      lastVersion = saved.version || "上次已验证";
+      $("version").textContent = lastVersion;
+      setDetect("cached", "正在使用已保存配置", `将直接启动 ${saved.executable}，跳过重复 CLI 检查…`);
+      await startAutomatically(true);
+      await refresh();
+      return;
+    }
+    await loadGuides();
     let found = false;
     if (saved && saved.executable) found = await probeSelected();
     if (!found) {

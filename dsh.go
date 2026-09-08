@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,25 +22,37 @@ import (
 )
 
 const maxLogBytes = 64 * 1024
+const desktopDataDirName = ".deepseek-harness-desktop"
+const ownedProcessMarkerName = "dsh-process.json"
+const ownedProcessLockName = "dsh.lock"
+const desktopStateDirEnv = "DSH_DESKTOP_STATE_DIR"
 
-// ponytail：只管理自己拥有的 Unix 进程组；Windows Job Objects 需在 Windows 测试后再加入。
+// DSH 只管理自己接管的进程树，并通过全局锁和进程标记保证同一用户下
+// 同时只有一个桌面端拥有的 DSH；Unix 使用进程组，Windows 使用 Job Object。
 type DSH struct {
-	mu             sync.Mutex
-	cmd            *exec.Cmd
-	done           chan struct{}
-	cancel         context.CancelFunc
-	state          string
-	options        Options
-	launchOptions  Options
-	output         *cliOutput
-	url, lastError string
-	bridge         *desktopBridge
-	closed         bool
+	mu                  sync.Mutex
+	lifecycleMu         sync.Mutex
+	windowMu            sync.Mutex
+	cmd                 *exec.Cmd
+	done                chan struct{}
+	cancel              context.CancelFunc
+	state               string
+	options             Options
+	launchOptions       Options
+	output              *cliOutput
+	url, lastError      string
+	chatWindowURL       string
+	managementWindowURL string
+	owner               *ownedProcess
+	processLock         *ownedProcessLock
+	bridge              *desktopBridge
+	closed              bool
 }
 
 type Options struct {
 	Executable string `json:"executable"`
 	Home       string `json:"home"`
+	DesktopDir string `json:"desktopDir"`
 	Workspace  string `json:"workspace"`
 	Port       int    `json:"port"`
 }
@@ -51,6 +65,13 @@ type Status struct {
 	Error   string  `json:"error"`
 }
 
+type ownedProcessMarker struct {
+	PID        int       `json:"pid"`
+	Executable string    `json:"executable"`
+	Home       string    `json:"home"`
+	StartedAt  time.Time `json:"startedAt"`
+}
+
 func defaultOptions() (Options, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -61,7 +82,212 @@ func defaultOptions() (Options, error) {
 		dshHome = filepath.Join(home, ".dsh")
 	}
 	dshHome, err = absolutePath(dshHome)
-	return Options{Executable: "dsh", Home: dshHome, Workspace: home, Port: 0}, err
+	return Options{
+		Executable: "dsh",
+		Home:       dshHome,
+		DesktopDir: desktopDataDirPath(dshHome),
+		Workspace:  home,
+		Port:       0,
+	}, err
+}
+
+func desktopDataDirPath(home string) string {
+	return filepath.Join(home, desktopDataDirName)
+}
+
+func ensurePrivateDirectory(directory string) (string, error) {
+	if info, err := os.Lstat(directory); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New("桌面端目录不能是符号链接")
+		}
+		if !info.IsDir() {
+			return "", errors.New("桌面端目录不是目录")
+		}
+	} else if os.IsNotExist(err) {
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			return "", fmt.Errorf("创建桌面端目录: %w", err)
+		}
+	} else {
+		return "", fmt.Errorf("检查桌面端目录: %w", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(directory, 0700); err != nil {
+			return "", fmt.Errorf("设置桌面端目录权限: %w", err)
+		}
+	}
+	return directory, nil
+}
+
+func ensureDesktopDataDir(home string) (string, error) {
+	return ensurePrivateDirectory(desktopDataDirPath(home))
+}
+
+func desktopProcessDataDir() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv(desktopStateDirEnv)); configured != "" {
+		return absolutePath(configured)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return desktopDataDirPath(home), nil
+}
+
+func ensureDesktopProcessDataDir() (string, error) {
+	directory, err := desktopProcessDataDir()
+	if err != nil {
+		return "", fmt.Errorf("桌面端进程目录: %w", err)
+	}
+	return ensurePrivateDirectory(directory)
+}
+
+func globalOwnedProcessMarkerPath() (string, error) {
+	directory, err := desktopProcessDataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, ownedProcessMarkerName), nil
+}
+
+func ownedProcessLockPath() (string, error) {
+	directory, err := desktopProcessDataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, ownedProcessLockName), nil
+}
+
+func ownedProcessMarkerPath(home string) string {
+	return filepath.Join(desktopDataDirPath(home), ownedProcessMarkerName)
+}
+
+func readProcessMarker(path string) (ownedProcessMarker, bool, error) {
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return ownedProcessMarker{}, false, nil
+	}
+	if err != nil {
+		return ownedProcessMarker{}, false, fmt.Errorf("读取 DSH 进程标记: %w", err)
+	}
+	var marker ownedProcessMarker
+	if err := json.Unmarshal(raw, &marker); err != nil {
+		return ownedProcessMarker{}, false, fmt.Errorf("解析 DSH 进程标记: %w", err)
+	}
+	if marker.PID < 1 {
+		return ownedProcessMarker{}, false, errors.New("DSH 进程标记中的 PID 无效")
+	}
+	return marker, true, nil
+}
+
+func readOwnedProcessMarker(home string) (ownedProcessMarker, bool, error) {
+	return readProcessMarker(ownedProcessMarkerPath(home))
+}
+
+func guardOwnedProcessMarker(home string) error {
+	paths := []string{ownedProcessMarkerPath(home)}
+	globalPath, err := globalOwnedProcessMarkerPath()
+	if err != nil {
+		return fmt.Errorf("定位全局 DSH 进程标记: %w", err)
+	}
+	if filepath.Clean(globalPath) != filepath.Clean(paths[0]) {
+		paths = append(paths, globalPath)
+	}
+	for _, path := range paths {
+		marker, found, err := readProcessMarker(path)
+		if err != nil || !found {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if ownedProcessTreeAlive(nil, marker.PID) {
+			return fmt.Errorf("检测到桌面端仍有 DSH 进程（PID %d），禁止启动第二个实例", marker.PID)
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("清理已退出的 DSH 进程标记: %w", err)
+		}
+	}
+	return nil
+}
+
+func writeProcessMarker(path string, marker ownedProcessMarker) error {
+	raw, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".dsh-process-*.tmp")
+	if err != nil {
+		return fmt.Errorf("创建 DSH 进程标记: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := temporary.Write(raw); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("写入 DSH 进程标记: %w", err)
+	}
+	if err := temporary.Chmod(0600); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("设置 DSH 进程标记权限: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("关闭 DSH 进程标记: %w", err)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("提交 DSH 进程标记: %w", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(path, 0600); err != nil {
+			return fmt.Errorf("设置 DSH 进程标记权限: %w", err)
+		}
+	}
+	return nil
+}
+
+func writeOwnedProcessMarker(home string, pid int, executable string) error {
+	return writeProcessMarker(ownedProcessMarkerPath(home), ownedProcessMarker{
+		PID: pid, Executable: executable, Home: home, StartedAt: time.Now().UTC(),
+	})
+}
+
+func writeGlobalOwnedProcessMarker(home string, pid int, executable string) error {
+	path, err := globalOwnedProcessMarkerPath()
+	if err != nil {
+		return fmt.Errorf("定位全局 DSH 进程标记: %w", err)
+	}
+	return writeProcessMarker(path, ownedProcessMarker{
+		PID: pid, Executable: executable, Home: home, StartedAt: time.Now().UTC(),
+	})
+}
+
+func removeProcessMarker(path string, pid int) error {
+	marker, found, err := readProcessMarker(path)
+	if err != nil || !found {
+		return err
+	}
+	if marker.PID != pid {
+		return fmt.Errorf("DSH 进程标记属于 PID %d，不是当前 PID %d", marker.PID, pid)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func removeOwnedProcessMarker(home string, pid int) error {
+	paths := []string{ownedProcessMarkerPath(home)}
+	globalPath, err := globalOwnedProcessMarkerPath()
+	if err != nil {
+		return err
+	}
+	if filepath.Clean(globalPath) != filepath.Clean(paths[0]) {
+		paths = append(paths, globalPath)
+	}
+	for _, path := range paths {
+		if err := removeProcessMarker(path, pid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func absolutePath(path string) (string, error) {
@@ -90,6 +316,7 @@ func normalizeOptions(o Options) (Options, error) {
 	if o.Home, err = absolutePath(o.Home); err != nil {
 		return o, fmt.Errorf("DSH Home: %w", err)
 	}
+	o.DesktopDir = desktopDataDirPath(o.Home)
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
 		return o, fmt.Errorf("工作目录: %w", err)
 	}
@@ -199,9 +426,62 @@ func joinPathDirectories(dirs []string) string {
 
 func newDSH() *DSH { return &DSH{state: "stopped"} }
 
+// commitCLIOptions 提交一次成功的 CLI 检测结果。若上一次 DSH 已经确认退出，
+// 这里同时清除旧的失败状态，避免新的配置页继续显示过期的启动错误。
+func (d *DSH) commitCLIOptions(o Options) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.cmd != nil {
+		return
+	}
+	d.options, d.launchOptions = o, o
+	if d.state == "failed" {
+		d.state, d.lastError, d.url = "stopped", "", ""
+	}
+}
+
 func (d *DSH) Start(o Options) error {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
+	return d.start(o)
+}
+
+func (d *DSH) start(o Options) error {
 	o, err := normalizeOptions(o)
 	if err != nil {
+		return err
+	}
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		return errors.New("应用正在关闭")
+	}
+	if d.cmd != nil {
+		state := d.state
+		d.mu.Unlock()
+		if state == "stopping" || state == "failed" {
+			return errors.New("当前 DSH 进程树尚未确认退出，禁止启动新的实例")
+		}
+		return errors.New("已有 DSH 实例正在运行；不会启动第二个实例")
+	}
+	d.mu.Unlock()
+	if o.DesktopDir, err = ensureDesktopDataDir(o.Home); err != nil {
+		return err
+	}
+	if _, err := ensureDesktopProcessDataDir(); err != nil {
+		return err
+	}
+	processLock, err := acquireOwnedProcessLock()
+	if err != nil {
+		return err
+	}
+	lockOwned := true
+	defer func() {
+		if lockOwned {
+			_ = releaseOwnedProcessLock(processLock)
+		}
+	}()
+	if err := guardOwnedProcessMarker(o.Home); err != nil {
 		return err
 	}
 	d.mu.Lock()
@@ -210,7 +490,10 @@ func (d *DSH) Start(o Options) error {
 		return errors.New("应用正在关闭")
 	}
 	if d.cmd != nil {
-		return errors.New("请先停止当前 DSH 实例")
+		if d.state == "stopping" || d.state == "failed" {
+			return errors.New("当前 DSH 进程树尚未确认退出，禁止启动新的实例")
+		}
+		return errors.New("已有 DSH 实例正在运行；不会启动第二个实例")
 	}
 	if d.bridge == nil {
 		d.bridge, err = newDesktopBridge(d)
@@ -233,41 +516,117 @@ func (d *DSH) Start(o Options) error {
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr = output, output
 	cmd.WaitDelay = time.Second // A grandchild holding stdout must not prevent reaping the CLI.
-	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
 	if err := cmd.Start(); err != nil {
 		d.state, d.lastError = "failed", err.Error()
 		return err
 	}
+	// 先写全局标记，再写 DSH_HOME 下的诊断标记。若桌面端在这两步之间
+	// 崩溃，新的实例至少仍会看到全局标记，不能因更换 DSH_HOME 而绕过单实例保护。
+	if err := writeGlobalOwnedProcessMarker(o.Home, cmd.Process.Pid, o.Executable); err != nil {
+		_ = killOwnedProcessTree(nil, cmd)
+		_ = cmd.Wait()
+		_ = waitForOwnedProcessTree(nil, cmd.Process.Pid, 3*time.Second)
+		_ = removeOwnedProcessMarker(o.Home, cmd.Process.Pid)
+		output.finish()
+		return err
+	}
+	owner, err := attachOwnedProcess(cmd)
+	if err != nil {
+		_ = killOwnedProcessTree(nil, cmd)
+		_ = cmd.Wait()
+		_ = waitForOwnedProcessTree(nil, cmd.Process.Pid, 3*time.Second)
+		_ = removeOwnedProcessMarker(o.Home, cmd.Process.Pid)
+		output.finish()
+		return fmt.Errorf("无法接管 DSH 进程树；不会留下未管理的子进程: %w", err)
+	}
+	if err := writeOwnedProcessMarker(o.Home, cmd.Process.Pid, o.Executable); err != nil {
+		_ = killOwnedProcessTree(owner, cmd)
+		_ = cmd.Wait()
+		_ = waitForOwnedProcessTree(owner, cmd.Process.Pid, 3*time.Second)
+		_ = releaseOwnedProcess(owner)
+		_ = removeOwnedProcessMarker(o.Home, cmd.Process.Pid)
+		output.finish()
+		return err
+	}
+	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
+	d.chatWindowURL = ""
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	d.cmd, d.done, d.cancel, d.state = cmd, make(chan struct{}), cancel, "starting"
+	d.owner, d.processLock = owner, processLock
+	lockOwned = false
 	done := d.done
 	go func() {
 		err := cmd.Wait()
 		// 即使父进程自行退出，也不要留下桌面端拥有的子进程。
-		cleanupErr := killOwnedProcessTree(cmd)
-		waitForOwnedProcessTree(cmd.Process.Pid, 3*time.Second)
+		cleanupErr := killOwnedProcessTree(owner, cmd)
 		output.finish()
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		cancel()
-		if d.state != "stopping" && d.lastError == "" {
-			d.lastError = "DSH 意外退出"
-			if err != nil {
-				d.lastError += ": " + err.Error()
-			}
-		}
-		if cleanupErr != nil {
-			d.lastError = "无法清理 DSH 子进程: " + cleanupErr.Error()
-		}
-		d.state = "stopped"
-		if d.lastError != "" {
-			d.state = "failed"
-		}
-		d.cmd, d.url = nil, ""
-		close(done)
+		d.finishProcess(cmd, owner, processLock, done, cancel, err, cleanupErr)
 	}()
 	go d.awaitReady(ctx, cmd, output.urls, o.Port)
 	return nil
+}
+
+func (d *DSH) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+	if !waitForOwnedProcessTree(owner, cmd.Process.Pid, 3*time.Second) {
+		d.mu.Lock()
+		if d.cmd == cmd {
+			d.state = "failed"
+			d.url = ""
+			if cleanupErr != nil {
+				d.lastError = "无法确认 DSH 子进程树已退出: " + cleanupErr.Error()
+			} else {
+				d.lastError = "DSH 子进程树未确认退出；禁止启动新的实例"
+			}
+		}
+		d.mu.Unlock()
+		go d.awaitOwnedProcessTree(cmd, owner, processLock, done, cancel, exitErr, cleanupErr)
+		return
+	}
+	d.finalizeProcess(cmd, owner, processLock, done, cancel, exitErr, cleanupErr)
+}
+
+func (d *DSH) awaitOwnedProcessTree(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+	for {
+		_ = killOwnedProcessTree(owner, cmd)
+		if waitForOwnedProcessTree(owner, cmd.Process.Pid, time.Second) {
+			d.finalizeProcess(cmd, owner, processLock, done, cancel, exitErr, cleanupErr)
+			return
+		}
+	}
+}
+
+func (d *DSH) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.cmd != cmd {
+		return
+	}
+	cancel()
+	markerErr := removeOwnedProcessMarker(d.options.Home, cmd.Process.Pid)
+	if d.state != "stopping" && d.lastError == "" {
+		d.lastError = "DSH 意外退出"
+		if exitErr != nil {
+			d.lastError += ": " + exitErr.Error()
+		}
+	}
+	ownerErr := releaseOwnedProcess(owner)
+	lockErr := releaseOwnedProcessLock(processLock)
+	if cleanupErr != nil {
+		d.lastError = "无法清理 DSH 子进程: " + cleanupErr.Error()
+	} else if markerErr != nil {
+		d.lastError = "无法清理 DSH 进程标记: " + markerErr.Error()
+	} else if ownerErr != nil {
+		d.lastError = "无法释放 DSH 进程接管句柄: " + ownerErr.Error()
+	} else if lockErr != nil {
+		d.lastError = "无法释放 DSH 单实例锁: " + lockErr.Error()
+	}
+	d.state = "stopped"
+	if d.lastError != "" {
+		d.state = "failed"
+	}
+	d.cmd, d.url, d.chatWindowURL = nil, "", ""
+	d.owner, d.processLock = nil, nil
+	close(done)
 }
 
 func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
@@ -353,8 +712,14 @@ func (d *DSH) failStartup(cmd *exec.Cmd, message string) {
 }
 
 func (d *DSH) Stop() error {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
+	return d.stop()
+}
+
+func (d *DSH) stop() error {
 	d.mu.Lock()
-	cmd, done := d.cmd, d.done
+	cmd, owner, done := d.cmd, d.owner, d.done
 	if cmd == nil {
 		d.mu.Unlock()
 		return nil
@@ -362,7 +727,7 @@ func (d *DSH) Stop() error {
 	if d.state != "stopping" {
 		d.state = "stopping"
 		d.cancel()
-		if err := terminateOwnedProcess(cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		if err := terminateOwnedProcess(owner, cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			d.lastError = "发送停止信号失败: " + err.Error()
 		}
 	}
@@ -378,11 +743,13 @@ func (d *DSH) Stop() error {
 	owned := d.cmd == cmd
 	d.mu.Unlock()
 	if owned {
-		if err := killOwnedProcessTree(cmd); err != nil {
+		if err := killOwnedProcessTree(owner, cmd); err != nil {
 			return fmt.Errorf("强制停止失败: %w", err)
 		}
 		_, _ = fmt.Fprintln(d.output, "[desktop] 优雅停止超时，已强制结束本次进程树")
-		waitForOwnedProcessTree(cmd.Process.Pid, 3*time.Second)
+		if !waitForOwnedProcessTree(owner, cmd.Process.Pid, 3*time.Second) {
+			return errors.New("DSH 子进程树仍未退出；禁止启动新的实例")
+		}
 	}
 	select {
 	case <-done:
@@ -393,10 +760,12 @@ func (d *DSH) Stop() error {
 }
 
 func (d *DSH) Close() error {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
 	d.mu.Lock()
 	d.closed = true
 	d.mu.Unlock()
-	stopErr := d.Stop()
+	stopErr := d.stop()
 	d.mu.Lock()
 	bridge := d.bridge
 	d.bridge = nil
@@ -413,6 +782,12 @@ func (d *DSH) Close() error {
 
 // Restart 使用最近一次成功提交给桌面端的选项，供设置页的手动操作调用。
 func (d *DSH) Restart() error {
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
+	return d.restart()
+}
+
+func (d *DSH) restart() error {
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
@@ -424,10 +799,10 @@ func (d *DSH) Restart() error {
 		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
 	}
 	d.mu.Unlock()
-	if err := d.Stop(); err != nil {
+	if err := d.stop(); err != nil {
 		return err
 	}
-	return d.Start(o)
+	return d.start(o)
 }
 
 func closeBridge(bridge *desktopBridge) error {
@@ -472,11 +847,11 @@ func checkCLI(o Options) (string, error) {
 	cmd.Dir, cmd.Env = o.Workspace, cliEnv("", o.Executable)
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = output, output, time.Second
-	cmd.Cancel = func() error { return killOwnedProcessTree(cmd) }
+	cmd.Cancel = func() error { return killOwnedProcessTree(nil, cmd) }
 	err = cmd.Run()
 	if cmd.Process != nil {
-		_ = killOwnedProcessTree(cmd)
-		waitForOwnedProcessTree(cmd.Process.Pid, 3*time.Second)
+		_ = killOwnedProcessTree(nil, cmd)
+		waitForOwnedProcessTree(nil, cmd.Process.Pid, 3*time.Second)
 	}
 	output.finish()
 	if err != nil {
