@@ -21,17 +21,14 @@ type Service struct {
 	*dsh.Manager
 	windowMu sync.Mutex
 	updater  *update.Updater
+	stopAuto context.CancelFunc
 }
 
 func New() *Service {
-	s := &Service{Manager: dsh.New(), updater: update.New()}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel}
 	s.SetOpenManagement(s.OpenManagement)
-	go func() {
-		time.Sleep(1500 * time.Millisecond)
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		_, _ = s.updater.Check(ctx)
-	}()
+	go s.updater.RunPeriodic(ctx)
 	return s
 }
 
@@ -73,6 +70,32 @@ func (d *Service) chooseDirectory(title, message string) (string, error) {
 		PromptForSingleSelection()
 }
 
+func (d *Service) ReloadChat(o dsh.Options) error {
+	o.Port = 0
+	if err := d.RestartWithOptions(o); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		st := d.Status()
+		switch st.State {
+		case "running":
+			if st.URL == "" {
+				break
+			}
+			_ = d.NoteChatWindowURL("")
+			return d.OpenDSH()
+		case "failed":
+			if st.Error != "" {
+				return errors.New(st.Error)
+			}
+			return errors.New("重新打开 Chat 失败")
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	return errors.New("重新打开 Chat 超时")
+}
+
 func (d *Service) OpenDSH() error {
 	url, err := d.BrowserURL()
 	if err != nil {
@@ -84,11 +107,11 @@ func (d *Service) OpenDSH() error {
 	}
 	d.windowMu.Lock()
 	defer d.windowMu.Unlock()
-	window, ok := app.Window.GetByName("dsh")
-	needsReload := d.NoteChatWindowURL(url)
+	window, ok := app.Window.GetByName("main")
+	_ = d.NoteChatWindowURL(url)
 	if !ok {
-		window = app.Window.NewWithOptions(ChatWindowOptions(url))
-	} else if needsReload {
+		window = app.Window.NewWithOptions(PrimaryWindowOptions(url))
+	} else {
 		window.SetURL(url)
 	}
 	window.Show()
@@ -106,10 +129,10 @@ func (d *Service) OpenManagement() error {
 	defer d.windowMu.Unlock()
 	const managementURL = "/?manage=1"
 	window, ok := app.Window.GetByName("main")
-	needsReload := d.NoteManagementWindowURL(managementURL)
+	_ = d.NoteManagementWindowURL(managementURL)
 	if !ok {
-		window = app.Window.NewWithOptions(ManagementWindowOptions(managementURL))
-	} else if needsReload {
+		window = app.Window.NewWithOptions(PrimaryWindowOptions(managementURL))
+	} else {
 		window.SetURL(managementURL)
 	}
 	window.Show()

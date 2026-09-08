@@ -6,7 +6,7 @@ import (
 )
 
 func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
-	script := desktopChromeScript(true, false)
+	script := desktopChromeScript(false)
 	styleIndex := strings.Index(script, `style.textContent =`)
 	markupIndex := strings.Index(script, `document.documentElement.appendChild(chrome)`)
 	if styleIndex < 0 || markupIndex < 0 || styleIndex > markupIndex {
@@ -21,7 +21,7 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 }
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {
-	script := desktopChromeScript(false, true)
+	script := desktopChromeScript(true)
 	if !strings.Contains(desktopSidebarTransitionCSS, "grid-template-columns var(--ds-transition-duration-slow)") || !strings.Contains(desktopSidebarTransitionCSS, "padding-right var(--ds-transition-duration-slow)") {
 		t.Fatal("Chat sidebar 必须同时保留列宽与右侧布局过渡")
 	}

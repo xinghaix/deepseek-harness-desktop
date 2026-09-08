@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"deepseek-harness-desktop/internal/desktop"
+	"deepseek-harness-desktop/internal/dsh"
 	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -24,6 +25,9 @@ var assets embed.FS
 type DSH struct{ *desktop.Service }
 
 func main() {
+	if dsh.RunSupervisorIfRequested() {
+		return
+	}
 	update.CleanupLeftovers()
 	web, err := fs.Sub(assets, "assets/web")
 	if err != nil {
@@ -88,7 +92,7 @@ func main() {
 	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) { app.Quit() })
 	app.Menu.SetApplicationMenu(menu)
 
-	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
+	app.Window.NewWithOptions(desktop.PrimaryWindowOptions("/"))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

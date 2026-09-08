@@ -188,7 +188,7 @@ func escapeWailsCSS(css string) string {
 
 const desktopNativeWindowInsetJS = `
 (() => {
-  const isManagement = %t;
+  const isManagement = Boolean(document.querySelector("body > .app-shell"));
   const topInset = %d;
   const chromeStyleId = "dsh-window-inset-style";
   let pageContent = null;
@@ -256,7 +256,7 @@ const desktopNativeWindowInsetJS = `
 
 const desktopChromeJS = `
 (() => {
-  const isManagement = %t;
+  const isManagement = Boolean(document.querySelector("body > .app-shell"));
   const topInset = %d;
   const chromeStyleId = "dsh-desktop-chrome-style";
   if (!document.getElementById(chromeStyleId)) {
@@ -345,11 +345,9 @@ const desktopChromeJS = `
 })();
 `
 
-func desktopChromeScript(management, nativeMac bool) string {
+func desktopChromeScript(nativeMac bool) string {
 	if nativeMac {
-		// macOS 的 HiddenInset 窗口让 WebView 铺满整个窗口；配置页只给自身
-		// 留出顶部空间，Chat 则把 inset 精确施加到左侧 sidebar 内容，不移动主聊天区。
-		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
+		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
 	}
-	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS))
+	return fmt.Sprintf(desktopChromeJS, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS))
 }

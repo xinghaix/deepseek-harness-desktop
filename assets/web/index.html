@@ -16,6 +16,7 @@
       <img class="brand-mark" src="/shared/app-icon.svg" alt="DSH">
       <div class="brand-copy"><span class="brand-name">Deepseek Harness Desktop</span><span class="brand-caption" id="app-caption">DSH 的桌面伴侣</span></div>
     </div>
+    <button class="secondary" id="close-config" type="button" hidden>关闭并回到 Chat</button>
   </header>
 
   <section id="loading-view" class="loading-view">
@@ -36,9 +37,11 @@
 
       <details class="advanced" id="advanced-settings">
         <summary class="advanced-summary">
-          <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title">选择 CLI、DSH Home、Chat 工作目录与端口</span><span class="advanced-summary-copy">自动检测不到时，可手动指定启动参数。</span></span></span>
+          <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title">DSH 运行配置与桌面配置</span><span class="advanced-summary-copy">运行配置传给 dsh web；桌面配置只给桌面端。改完不必重启桌面应用。</span></span></span>
         </summary>
         <div class="advanced-body">
+          <h3 class="config-section-title">运行配置</h3>
+          <p class="hint">这些会传给 dsh web 子进程。保存后请在 Chat 里刷新页面；若改了工作目录或 Home，再点「重新打开 Chat」。不必重启桌面应用。</p>
           <div class="field">
             <label for="executable">dsh 可执行文件</label>
             <div class="input-row"><input id="executable" autocomplete="off" spellcheck="false" placeholder="dsh 或绝对路径"><button class="secondary" id="choose-executable" type="button">选择文件</button></div>
@@ -50,19 +53,16 @@
             <p class="hint">只把这个目录作为 DSH_HOME 传给子进程，不复制、迁移或生成第二份配置。</p>
           </div>
           <div class="field">
+            <label for="workspace">Chat 工作目录（DSH cwd）</label>
+            <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button">选择文件夹</button></div>
+            <p class="hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录。监听端口由 dsh web 自行分配，桌面端从它的输出解析。</p>
+          </div>
+          <h3 class="config-section-title">桌面配置</h3>
+          <p class="hint">只作用于桌面端，不会改 DSH 自己的 settings.yaml。更新检查在运行控制台里设置。</p>
+          <div class="field">
             <label for="desktop-dir">桌面端目录（固定）</label>
             <div class="input-row"><input id="desktop-dir" autocomplete="off" spellcheck="false" readonly aria-readonly="true"></div>
             <p class="hint">固定为 <code>DSH_HOME/.deepseek-harness-desktop</code>，仅供桌面端使用；不会把它当作 Chat workspace。</p>
-          </div>
-          <div class="field">
-            <label for="workspace">Chat 工作目录（DSH cwd）</label>
-            <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button">选择文件夹</button></div>
-            <p class="hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录，或选择上面的桌面端目录以限制相对路径范围。</p>
-          </div>
-          <div class="field">
-            <label for="port">本机端口</label>
-            <input id="port" type="number" min="0" max="65535" step="1" inputmode="numeric">
-            <p class="hint">0 表示由操作系统自动选择 loopback 空闲端口。</p>
           </div>
           <div class="button-row"><button class="secondary" id="check-cli" type="button">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button">恢复默认路径</button></div>
         </div>
@@ -96,6 +96,7 @@
 
       <div class="onboarding-actions">
         <button class="secondary" id="retry-discovery" type="button">重新检查</button>
+        <button class="secondary" id="reload-chat" type="button" hidden>重新打开 Chat</button>
         <button class="primary" id="start-first" type="button" disabled>启动并打开 DSH Chat</button>
       </div>
       <section id="error-card" class="error-card" hidden aria-live="assertive">
@@ -133,7 +134,7 @@
         <section class="panel log-panel"><div class="panel-heading"><h2>启动日志</h2><span class="panel-caption">最近 64 KiB</span></div><pre id="logs">暂无日志</pre></section>
       </div>
       <aside>
-        <section class="panel" id="update-panel"><div class="panel-heading"><h2>桌面端更新</h2><span class="panel-caption" id="update-version">—</span></div><p class="hint" id="update-message">正在检查 GitHub Release…</p><div class="update-progress" id="update-progress" hidden><span id="update-progress-bar"></span></div><pre class="update-notes" id="update-notes" hidden></pre><div class="update-actions"><button class="secondary" id="check-update" type="button">检查更新</button><button class="primary" id="install-update" type="button" hidden>立即更新</button><button class="secondary" id="open-release" type="button" hidden>发行说明</button></div></section>
+        <section class="panel" id="update-panel"><div class="panel-heading"><h2>桌面端更新</h2><span class="panel-caption" id="update-version">—</span></div><p class="hint" id="update-message">发现新版本后由你决定是否安装。</p><label class="update-toggle"><input id="auto-check-update" type="checkbox" checked> 启动成功后每天自动检查更新</label><div class="update-progress" id="update-progress" hidden><span id="update-progress-bar"></span></div><pre class="update-notes" id="update-notes" hidden></pre><div class="update-actions"><button class="secondary" id="check-update" type="button">检查更新</button><button class="primary" id="install-update" type="button" hidden>立即更新</button><button class="secondary" id="open-release" type="button" hidden>发行说明</button></div></section>
         <section class="panel"><h2>常用入口</h2><div class="quick-links"><button id="open-home" type="button">打开 DSH Home</button><button id="open-workspace" type="button">打开工作目录</button><button id="open-settings" type="button">打开 settings.yaml</button></div></section>
         <section class="panel"><h2>桌面管理插件</h2><p class="hint">在 DSH Chat 中打开「设置 → 插件 → 桌面管理」，即可在同一个 DSH WebView 里控制桌面端。</p><button class="secondary" id="show-bridge-guide" type="button" style="margin-top:14px">查看安装命令</button></section>
       </aside>

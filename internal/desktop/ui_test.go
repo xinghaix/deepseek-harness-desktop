@@ -23,11 +23,11 @@ func readManagementUI(t *testing.T) string {
 func TestManagementUIContract(t *testing.T) {
 	html := readManagementUI(t)
 	for _, label := range []string{
-		"dsh 可执行文件", "DSH Home", "桌面端目录（固定）", "Chat 工作目录", "本机端口",
+		"dsh 可执行文件", "DSH Home", "桌面端目录（固定）", "Chat 工作目录", "运行配置", "桌面配置",
 		"选择文件", "恢复默认路径", "选择文件夹", "重新检测 CLI",
 		"启动并打开 DSH Chat", "停止 DSH", "在桌面 WebView 打开 Chat", "打开 DSH Home",
 		"打开工作目录", "打开 settings.yaml", "可选：安装桌面管理桥接插件",
-		"DSH 启动失败", "复制错误信息", "查看原始错误", "桌面端更新", "检查更新",
+		"DSH 启动失败", "复制错误信息", "查看原始错误", "桌面端更新", "检查更新", "每天自动检查更新",
 	} {
 		if !strings.Contains(html, label) {
 			t.Fatalf("missing accepted UI copy %q", label)
@@ -43,19 +43,28 @@ func TestManagementUIContract(t *testing.T) {
 	}
 	for _, method := range []string{
 		"Defaults", "DiscoverCLI", "InstallGuide", "BridgeGuide", "CheckCLI",
-		"Start", "RestartWithOptions", "Stop", "Status", "OpenDSH", "ChooseExecutable",
+		"Start", "Stop", "Status", "OpenDSH", "ChooseExecutable",
 		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
-		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage",
+		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)
 		}
 	}
-	if !strings.Contains(html, `id="port" type="number" min="0"`) || !strings.Contains(html, "自动选择 loopback 空闲端口") {
-		t.Fatal("UI must expose port 0 as the automatic-port option")
+	if strings.Contains(html, `id="port"`) || strings.Contains(html, "本机端口") {
+		t.Fatal("UI must not expose a manual DSH port setting")
 	}
-	if !strings.Contains(html, "autoOpenStarted") || !strings.Contains(html, "openReadyDSH(closeAfterChat)") {
+	if !strings.Contains(html, `port: 0`) {
+		t.Fatal("UI must always launch dsh web with port 0")
+	}
+	if !strings.Contains(html, "autoOpenStarted") || !strings.Contains(html, "void openReadyDSH()") {
 		t.Fatal("UI must open DSH automatically after readiness")
+	}
+	if !strings.Contains(html, "关闭并回到 Chat") || !strings.Contains(html, `id="close-config"`) {
+		t.Fatal("config is a secondary page that must close before returning to Chat")
+	}
+	if !strings.Contains(html, `api("ReloadChat"`) {
+		t.Fatal("runtime config changes must reopen Chat instead of restarting the desktop app")
 	}
 	for _, fragment := range []string{"loading-view", "prefers-color-scheme: dark", "manualManagement"} {
 		if !strings.Contains(html, fragment) {

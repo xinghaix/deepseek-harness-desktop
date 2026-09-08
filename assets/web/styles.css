@@ -108,6 +108,8 @@ h3 { font-size: 15px; line-height: 1.4; }
 .advanced-title { font-size: 14px; line-height: 1.4; font-weight: 700; }
 .advanced-summary-copy { color: var(--muted); margin-top: 6px; font-size: 12px; line-height: 1.55; }
 .advanced-body { padding: 0 18px 18px; }
+.config-section-title { margin: 18px 0 6px; font-size: 13px; font-weight: 700; }
+.config-section-title:first-child { margin-top: 0; }
 .field { margin-bottom: 16px; }
 .field:last-child { margin-bottom: 0; }
 label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
@@ -187,6 +189,8 @@ code { color: #323c4c; font-size: 11px; }
 .log-panel { margin-top: 18px; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .panel-caption { color: var(--muted); font-size: 11px; }
+.update-toggle { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); margin-top: 12px; font-size: 12px; line-height: 1.45; cursor: pointer; }
+.update-toggle input { margin-top: 2px; }
 .update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .update-progress { height: 6px; overflow: hidden; margin-top: 12px; border-radius: 999px; background: var(--panel-soft); }
 .update-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--blue), #a6c1ff); }
