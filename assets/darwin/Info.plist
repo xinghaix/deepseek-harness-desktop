@@ -12,9 +12,9 @@
     <key>CFBundleIdentifier</key>
     <string>ai.deepseek.harness.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>dev</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>dev</string>
     <key>CFBundleIconFile</key>
     <string>icons</string>
     <key>LSMinimumSystemVersion</key>

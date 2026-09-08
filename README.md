@@ -35,12 +35,14 @@ dsh plugin --profile web add file:./plugins/deepseek-harness-desktop-bridge
 
 ## 构建与测试
 
-需要 Go 1.27、Wails 3 和目标平台的原生 WebView 构建依赖。项目的 `Taskfile.yml` 会自动加入 `wails` build tag：
+需要 Go 1.27、Wails 3 和目标平台的原生 WebView 构建依赖。不必安装 `task`，直接：
 
 ```bash
 go test -race ./...
-task build
+./scripts/build.sh 0.2.0
 ```
+
+版本会写进 `internal/version.Version`。省略参数时用最近的 git tag，没有 tag 则为 `dev`。如果要用 Taskfile，先安装 [go-task](https://taskfile.dev)：`brew install go-task`，然后 `task build VERSION=0.2.0`。
 
 产物输出到 `dist/`（已 git 忽略）。macOS 还会额外生成 `dist/deepseek-harness-desktop-darwin-<arch>.dmg`（应用 + Applications 快捷方式，打开后拖进去即可安装）。`task build` 会按当前平台做自签名，同一套脚本在 macOS / Linux / Windows 上都能跑：
 
@@ -48,16 +50,16 @@ task build
 - Windows：用当前用户存储里的自签代码签名证书做 Authenticode（`scripts/sign-windows.ps1`）
 - Linux：写出 `.sha256` 校验和；系统没有等价的代码签名 API
 
-已安装的应用可在配置页「桌面端更新」中检查 GitHub Release、校验 SHA256 后安装并重启。只支持本仓库的 Release，没有其它更新源。
+已安装的应用可在配置页手动检查 GitHub Release；也可开启「每天自动检查更新」（启动约 1 小时后首次检查，之后大约每天一次）。发现新版本后不会自动安装。运行时版本来自 Go 变量 `internal/version.Version`，由构建注入；发布时只需打 `vX.Y.Z` tag，不必改源码。
 
 这不是 Apple Developer ID / Microsoft EV 签名，也未经公证。从网上下载后，macOS 仍可能需要右键「打开」，Windows 仍可能被 SmartScreen 拦截。
 
 指定目标架构时：
 
 ```bash
-GOOS=windows GOARCH=amd64 task build
-GOOS=darwin GOARCH=arm64 task build
-GOOS=linux GOARCH=amd64 task build
+GOOS=windows GOARCH=amd64 ./scripts/build.sh 0.2.0
+GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.2.0
+GOOS=linux GOARCH=amd64 ./scripts/build.sh 0.2.0
 ```
 
 Linux 构建需要 GTK 4 / WebKitGTK 6，macOS 构建需要 Xcode，Windows 构建使用 WebView2。未在目标系统实际构建或运行的组合，不宣称已验收。

@@ -34,7 +34,7 @@ func applyAndRelaunch(staged, _ string) error {
 		if err := replaceDir(bundle, app); err != nil {
 			return err
 		}
-		return relaunchOpen(bundle)
+		return relaunchOpen(preferDisplayBundle(bundle))
 	}
 	inner := filepath.Join(app, "Contents", "MacOS", filepath.Base(exe))
 	if _, err := os.Stat(inner); err != nil {
@@ -44,6 +44,20 @@ func applyAndRelaunch(staged, _ string) error {
 		return err
 	}
 	return relaunchWait(exe)
+}
+
+const macOSBundleName = "Deepseek Harness Desktop.app"
+
+func preferDisplayBundle(bundle string) string {
+	wanted := filepath.Join(filepath.Dir(bundle), macOSBundleName)
+	if filepath.Clean(bundle) == filepath.Clean(wanted) {
+		return bundle
+	}
+	_ = os.RemoveAll(wanted)
+	if err := os.Rename(bundle, wanted); err != nil {
+		return bundle
+	}
+	return wanted
 }
 
 func replaceDir(dest, src string) error {

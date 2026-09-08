@@ -79,9 +79,9 @@ jobs:
           os=$(go env GOOS)
           case "$os" in
             darwin)
-              ditto -c -k --keepParent dist/deepseek-harness-desktop.app \
+              ditto -c -k --keepParent "dist/Deepseek Harness Desktop.app" \
                 "release/deepseek-harness-desktop-darwin-${arch}.zip"
-              sh scripts/package-darwin-dmg.sh dist/deepseek-harness-desktop.app \
+              sh scripts/package-darwin-dmg.sh "dist/Deepseek Harness Desktop.app" \
                 "release/deepseek-harness-desktop-darwin-${arch}.dmg"
               ;;
             linux)

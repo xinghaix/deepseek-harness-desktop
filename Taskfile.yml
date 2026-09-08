@@ -5,7 +5,7 @@ vars:
   TARGET_ARCH: '{{.GOARCH | default ARCH}}'
   DIST: dist
   APP: deepseek-harness-desktop
-  VERSION: '{{.VERSION | default "0.1.0"}}'
+  BUNDLE_NAME: Deepseek Harness Desktop
 
 tasks:
   icons:
@@ -17,6 +17,8 @@ tasks:
     summary: Build the Deepseek Harness Desktop binary for the selected platform
     cmds:
       - task: '{{.TARGET_OS}}:build'
+        vars:
+          VERSION: '{{.VERSION}}'
 
   test:
     summary: Run process, UI contract, and Wails-tagged desktop tests
@@ -28,7 +30,7 @@ tasks:
     summary: Build the Linux Deepseek Harness Desktop binary
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - sh scripts/go-build.sh '{{.VERSION | default .APP_VERSION}}' -- -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
       - sh scripts/sign.sh {{.DIST}}/{{.APP}}
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
@@ -41,18 +43,18 @@ tasks:
     summary: Build the macOS Deepseek Harness Desktop binary and app bundle
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
-      - rm -rf {{.DIST}}/{{.APP}}.app
-      - mkdir -p {{.DIST}}/{{.APP}}.app/Contents/{MacOS,Resources/plugins}
+      - sh scripts/go-build.sh '{{.VERSION | default .APP_VERSION}}' -- -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - rm -rf {{.DIST}}/{{.APP}}.app "{{.DIST}}/{{.BUNDLE_NAME}}.app"
+      - mkdir -p "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/MacOS" "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/Resources/plugins"
       - go run ./tools/icons
-      - cp {{.DIST}}/{{.APP}} {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
-      - cp assets/darwin/icons.icns {{.DIST}}/{{.APP}}.app/Contents/Resources/icons.icns
-      - cp assets/darwin/Info.plist {{.DIST}}/{{.APP}}.app/Contents/Info.plist
-      - python3 -c "from pathlib import Path; import sys; p=Path(sys.argv[1]); v=sys.argv[2]; p.write_text(p.read_text().replace('0.1.0', v))" {{.DIST}}/{{.APP}}.app/Contents/Info.plist {{.VERSION}}
-      - cp -R plugins/deepseek-harness-desktop-bridge {{.DIST}}/{{.APP}}.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
-      - chmod 755 {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
-      - sh scripts/sign.sh {{.DIST}}/{{.APP}}.app
-      - sh scripts/package-darwin-dmg.sh {{.DIST}}/{{.APP}}.app {{.DIST}}/{{.APP}}-darwin-{{.TARGET_ARCH}}.dmg
+      - cp {{.DIST}}/{{.APP}} "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/MacOS/{{.APP}}"
+      - cp assets/darwin/icons.icns "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/Resources/icons.icns"
+      - cp assets/darwin/Info.plist "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/Info.plist"
+      - python3 scripts/stamp-plist-version.py "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/Info.plist" "$(sh scripts/app-version.sh '{{.VERSION | default .APP_VERSION}}')"
+      - cp -R plugins/deepseek-harness-desktop-bridge "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge"
+      - chmod 755 "{{.DIST}}/{{.BUNDLE_NAME}}.app/Contents/MacOS/{{.APP}}"
+      - sh scripts/sign.sh "{{.DIST}}/{{.BUNDLE_NAME}}.app"
+      - sh scripts/package-darwin-dmg.sh "{{.DIST}}/{{.BUNDLE_NAME}}.app" {{.DIST}}/{{.APP}}-darwin-{{.TARGET_ARCH}}.dmg
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -64,7 +66,7 @@ tasks:
     summary: Build the Windows Deepseek Harness Desktop binary
     cmds:
       - mkdir -p {{.DIST}}
-      - go build -tags '{{.BUILD_TAGS}}' -ldflags '-X deepseek-harness-desktop/internal/version.Version={{.VERSION}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
+      - sh scripts/go-build.sh '{{.VERSION | default .APP_VERSION}}' -- -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
       - cmd: sh scripts/sign.sh {{.DIST}}/{{.APP}}.exe
         platforms: [linux, darwin]
       - cmd: powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 {{.DIST}}/{{.APP}}.exe
