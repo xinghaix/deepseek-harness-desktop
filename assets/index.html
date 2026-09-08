@@ -121,13 +121,6 @@
     .field { margin-bottom: 16px; }
     .field:last-child { margin-bottom: 0; }
     label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .toggle-row label { margin: 0; }
-    .toggle-input { width: 44px; min-width: 44px; height: 24px; min-height: 24px; position: relative; appearance: none; border: 0; border-radius: 999px; padding: 0; background: #c7ced9; cursor: pointer; transition: background .16s ease, box-shadow .16s ease; }
-    .toggle-input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(27, 37, 61, .24); transition: transform .16s ease; }
-    .toggle-input:checked { background: var(--blue); }
-    .toggle-input:checked::after { transform: translateX(20px); }
-    .toggle-input:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(49, 91, 232, .20); }
     .input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
     input { width: 100%; min-height: 40px; border: 1px solid #d4d9e3; border-radius: 9px; padding: 8px 10px; background: #fff; color: var(--text); outline: none; font-size: 13px; }
     input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(49, 91, 232, .12); }
@@ -271,7 +264,7 @@
   <section id="loading-view" class="loading-view">
     <div class="loading-card">
       <div class="loading-mark"><img src="/dsh-app-icon.svg" alt="DSH"></div>
-      <div class="loading-title">正在准备 DSH Desktop</div>
+      <div class="loading-title">正在准备 Deepseek Harness Desktop</div>
       <p class="loading-message" id="loading-message">正在检查本机 CLI、用户目录和 Node 全局目录…</p>
       <div class="loading-progress" aria-hidden="true"></div>
       <p class="loading-hint">不会下载或修改你的 DSH 配置</p>
@@ -313,10 +306,6 @@
             <label for="port">本机端口</label>
             <input id="port" type="number" min="0" max="65535" step="1" inputmode="numeric">
             <p class="hint">0 表示由操作系统自动选择 loopback 空闲端口。</p>
-          </div>
-          <div class="field">
-            <div class="toggle-row"><label for="use-action-pill">折叠侧栏时显示横向操作胶囊</label><input class="toggle-input" id="use-action-pill" type="checkbox" role="switch" aria-describedby="action-pill-hint"></div>
-            <p class="hint" id="action-pill-hint">默认使用与交通灯安全区对齐的 DSH 原生 84px 折叠轨道；开启后，展开侧栏、新建会话和搜索等入口会移动到 Chat 主区顶部的横向胶囊。重启 DSH 后生效。</p>
           </div>
           <div class="button-row"><button class="secondary" id="check-cli" type="button">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button">恢复默认路径</button></div>
         </div>
@@ -383,12 +372,11 @@
     <div class="dashboard-head"><div><div class="eyebrow">运行控制台</div><h1>DSH 已准备好</h1><p>从这里管理启动参数；聊天内容和 DSH 设置仍保留在官方 DSH Web UI 中。</p></div><button class="secondary" id="reconfigure" type="button">重新配置</button></div>
     <div class="dashboard-grid">
       <div>
-        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped">未启动</span><span class="version" id="version">尚未检测</span></div><p class="status-summary" id="dashboard-message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled>停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled>在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span>CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span>DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span>桌面端目录</span><strong id="metric-desktop-dir">—</strong></div><div class="metric"><span>Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span>折叠交互</span><strong id="metric-sidebar-mode">原生折叠轨道</strong></div><div class="metric"><span>地址</span><strong id="metric-url">未就绪</strong></div></div></section>
+        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped">未启动</span><span class="version" id="version">尚未检测</span></div><p class="status-summary" id="dashboard-message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled>停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled>在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span>CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span>DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span>桌面端目录</span><strong id="metric-desktop-dir">—</strong></div><div class="metric"><span>Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span>地址</span><strong id="metric-url">未就绪</strong></div></div></section>
         <section class="panel log-panel"><div class="panel-heading"><h2>启动日志</h2><span class="panel-caption">最近 64 KiB</span></div><pre id="logs">暂无日志</pre></section>
       </div>
       <aside>
         <section class="panel"><h2>常用入口</h2><div class="quick-links"><button id="open-home" type="button">打开 DSH Home</button><button id="open-workspace" type="button">打开工作目录</button><button id="open-settings" type="button">打开 settings.yaml</button></div></section>
-        <section class="panel"><h2>Chat 折叠交互</h2><div class="toggle-row"><label for="dashboard-use-action-pill">启用横向操作胶囊</label><input class="toggle-input" id="dashboard-use-action-pill" type="checkbox" role="switch" aria-describedby="dashboard-action-pill-hint"></div><p class="hint" id="dashboard-action-pill-hint">关闭为 DSH 原生折叠轨道，开启后重启 DSH 生效。</p></section>
         <section class="panel"><h2>桌面管理插件</h2><p class="hint">在 DSH Chat 中打开「设置 → 插件 → 桌面管理」，即可在同一个 DSH WebView 里控制桌面端。</p><button class="secondary" id="show-bridge-guide" type="button" style="margin-top:14px">查看安装命令</button></section>
       </aside>
     </div>
@@ -417,15 +405,14 @@
 
   function options() {
     const portText = $("port").value.trim();
-    return { executable: $("executable").value.trim(), home: $("home").value.trim(), desktopDir: $("desktop-dir").value.trim(), workspace: $("workspace").value.trim(), port: portText === "" ? 0 : Number(portText), useActionPill: $("use-action-pill").checked };
+    return { executable: $("executable").value.trim(), home: $("home").value.trim(), desktopDir: $("desktop-dir").value.trim(), workspace: $("workspace").value.trim(), port: portText === "" ? 0 : Number(portText) };
   }
   function errorText(error) { return error && error.message ? error.message : String(error || "操作失败"); }
   function setMessage(text, isError = false) { $("onboarding-message").textContent = text || ""; $("onboarding-message").dataset.error = isError ? "true" : "false"; $("dashboard-message").textContent = text || "准备启动 DSH…"; }
   function setHidden(id, hidden) { $(id).hidden = hidden; }
   function desktopDirForHome(home) { const value = String(home || "").trim(); if (!value) return ""; const separator = value.includes("\\") ? "\\" : "/"; const base = value.replace(/[\\/]+$/, "") || separator; return base === separator ? `${base}.deepseek-harness-desktop` : `${base}${separator}.deepseek-harness-desktop`; }
   function syncDesktopDir() { $("desktop-dir").value = desktopDirForHome($("home").value); }
-  function setActionPillInputs(enabled) { $("use-action-pill").checked = enabled; $("dashboard-use-action-pill").checked = enabled; }
-  function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = desktopDirForHome(o.home) || o.desktopDir || ""; $("workspace").value = o.workspace || ""; $("port").value = Number.isInteger(o.port) ? o.port : 0; setActionPillInputs(o.useActionPill === true); }
+  function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = desktopDirForHome(o.home) || o.desktopDir || ""; $("workspace").value = o.workspace || ""; $("port").value = Number.isInteger(o.port) ? o.port : 0; }
   function saveOptions(lastStartSucceeded = false) { try { const value = options(); value.lastStartSucceeded = Boolean(lastStartSucceeded); if (lastVersion) value.version = lastVersion; localStorage.setItem(storageKey, JSON.stringify(value)); } catch (_) {} }
   function markStartupConfigStale() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object" && value.lastStartSucceeded) { value.lastStartSucceeded = false; localStorage.setItem(storageKey, JSON.stringify(value)); } } catch (_) {} }
   function loadSavedOptions() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object") { fillOptions(value); return value; } } catch (_) {} return null; }
@@ -441,7 +428,6 @@
       `桌面端目录：${o.desktopDir || "—"}`,
       `Chat 工作目录：${o.workspace || "—"}`,
       `端口：${Number.isInteger(o.port) ? o.port : "—"}`,
-      `折叠交互：${o.useActionPill ? "横向操作胶囊" : "原生折叠轨道"}`,
       `桌面端错误：${status && status.error ? status.error : "—"}`,
       "",
       "DSH 原始启动日志：",
@@ -495,7 +481,6 @@
     $("metric-home").textContent = o.home || "—";
     $("metric-desktop-dir").textContent = o.desktopDir || desktopDirForHome(o.home) || "—";
     $("metric-workspace").textContent = o.workspace || "—";
-    $("metric-sidebar-mode").textContent = o.useActionPill ? "横向操作胶囊" : "原生折叠轨道";
     $("metric-url").textContent = status.url || "未就绪";
     updateButtons();
     renderErrorCard(status);
@@ -654,15 +639,8 @@
   $("open-workspace").onclick = () => run(() => api("OpenWorkspace", options()));
   $("open-settings").onclick = () => run(() => api("OpenSettings", options()));
   $("reconfigure").onclick = () => { localStorage.removeItem(onboardingKey); closeAfterChat = false; clearErrorCard(); showOnboarding(); setMessage("可以调整路径后重新检测 CLI。"); };
-  $("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
+  $("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; void loadGuides(); $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
   ["executable", "port"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); }));
-  function onActionPillChange(event) {
-    setActionPillInputs(event.target.checked);
-    saveOptions(false);
-    setMessage($("use-action-pill").checked ? "已选择横向操作胶囊；重启 DSH 后生效。" : "已恢复原生折叠轨道；重启 DSH 后生效。");
-  }
-  $("use-action-pill").addEventListener("change", onActionPillChange);
-  $("dashboard-use-action-pill").addEventListener("change", onActionPillChange);
   $("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); });
   async function load() {
     showLoading(manualManagement ? "正在打开桌面配置…" : "正在读取已保存配置…");

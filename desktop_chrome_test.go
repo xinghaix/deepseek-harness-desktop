@@ -42,8 +42,8 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	if !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") || !strings.Contains(script, "84px") || strings.Contains(script, "dsh-native-sidebar-cap") {
 		t.Fatal("macOS 原生折叠轨道未对齐交通灯安全区")
 	}
-	if !strings.Contains(script, "let actionPillEnabled = false") || !strings.Contains(script, "__dshDesktopActionPillSetEnabled") {
-		t.Fatal("默认模式必须保留可动态切换的隐藏胶囊控制器")
+	if strings.Contains(script, "action-pill") || strings.Contains(script, "ActionPill") {
+		t.Fatal("Chat 窗口不应注入已移除的操作胶囊")
 	}
 	if strings.Contains(script, ".dsh-window-content:not(.dsh-window-management)") {
 		t.Fatal("macOS Chat 不应给整个 root 增加顶部内边距")
@@ -53,25 +53,6 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	}
 	if strings.Contains(script, "dsh-desktop-chrome__controls") {
 		t.Fatal("macOS 不应注入自绘控制按钮")
-	}
-}
-
-func TestDesktopChromeScriptActionPillMode(t *testing.T) {
-	script := desktopChromeScriptWithMode(false, true, true)
-	for _, fragment := range []string{
-		"dsh-desktop-action-pill", "data-sidebar-collapsed", "ResizeObserver",
-		"findCenter", "展开侧边栏", "新建会话", "搜索会话", "OpenManagement",
-		"let actionPillEnabled = true", "__dshDesktopActionPillSetEnabled",
-	} {
-		if !strings.Contains(script, fragment) {
-			t.Fatalf("横向操作胶囊脚本缺少 %q", fragment)
-		}
-	}
-	if !strings.Contains(script, "84px") || !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") {
-		t.Fatal("横向操作胶囊模式的原生折叠轨道未保持交通灯安全区")
-	}
-	if !strings.Contains(desktopActionPillCSS, "#dsh-desktop-action-pill[data-visible=\"true\"]") {
-		t.Fatal("横向操作胶囊缺少折叠态显示样式")
 	}
 }
 

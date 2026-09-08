@@ -78,7 +78,7 @@ func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS 标题栏配置仅适用于 darwin")
 	}
-	options := chatWindowOptionsWithMode("http://127.0.0.1:12345", false)
+	options := chatWindowOptions("http://127.0.0.1:12345")
 	if options.Mac.TitleBar.ToolbarStyle != application.MacToolbarStyleUnifiedCompact {
 		t.Fatalf("macOS Chat 应使用紧凑 unified 标题栏，得到 %v", options.Mac.TitleBar.ToolbarStyle)
 	}

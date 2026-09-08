@@ -10,7 +10,7 @@ import (
 
 const (
 	// 紧凑统一标题栏比默认 unified 少一段垂直留白；注入层与它共用 36px
-	// 安全区，保证交通灯、侧栏品牌和胶囊的定位基准一致。
+	// 安全区，保证交通灯与侧栏内容的定位基准一致。
 	desktopNativeTopInset = 36
 	desktopCustomTopInset = 48
 )
@@ -176,95 +176,6 @@ body > .app-shell {
 }
 `
 
-const desktopActionPillCSS = `
-#dsh-desktop-action-pill {
-  --dsh-pill-text: var(--dsw-alias-label-primary, #202531);
-  --dsh-pill-muted: var(--dsw-alias-label-secondary, #6f7785);
-  --dsh-pill-border: var(--dsw-alias-border-l2, rgba(122, 132, 150, .20));
-  --dsh-pill-bg: var(--dsw-alias-bg-elevated, rgba(255, 255, 255, .90));
-  position: fixed;
-  z-index: 2147483646;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-height: 40px;
-  max-width: calc(100vw - 32px);
-  padding: 4px;
-  border: 1px solid var(--dsh-pill-border);
-  border-radius: 999px;
-  background: var(--dsh-pill-bg);
-  box-shadow: 0 8px 24px rgba(20, 26, 38, .14);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  color: var(--dsh-pill-muted);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translate(-50%, -6px) scale(.98);
-  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
-  user-select: none;
-}
-#dsh-desktop-action-pill[data-visible="true"] {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translate(-50%, 0) scale(1);
-}
-#dsh-desktop-action-pill[hidden],
-#dsh-desktop-action-pill button[hidden] {
-  display: none !important;
-}
-#dsh-desktop-action-pill button {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  padding: 0;
-  color: var(--dsh-pill-muted);
-  background: transparent;
-  cursor: pointer;
-  transition: background .14s ease, color .14s ease, transform .14s ease;
-}
-#dsh-desktop-action-pill button:hover {
-  color: var(--dsh-pill-text);
-  background: var(--dsw-alias-interactive-bg-hover, rgba(40, 48, 65, .10));
-}
-#dsh-desktop-action-pill button:active {
-  transform: scale(.92);
-}
-#dsh-desktop-action-pill button svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-@media (prefers-color-scheme: dark) {
-  #dsh-desktop-action-pill {
-    --dsh-pill-border: var(--dsw-alias-border-l2, rgba(255, 255, 255, .16));
-    --dsh-pill-bg: var(--dsw-alias-bg-elevated, rgba(29, 34, 45, .92));
-    box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #dsh-desktop-action-pill,
-  #dsh-desktop-action-pill button {
-    transition: none;
-  }
-}
-`
-
-func desktopActionPillCSSForWindow(management bool) string {
-	if management {
-		return ""
-	}
-	return desktopActionPillCSS
-}
-
 // escapeWailsCSS 为 Wails beta.16 macOS 的 windowInjectCSS 转义 CSS。
 // 该版本会把 CSS 放进单引号 JavaScript 字符串，换行、反斜杠和单引号
 // 若不先转义，会导致整段 CSS 注入脚本解析失败。
@@ -275,223 +186,6 @@ func escapeWailsCSS(css string) string {
 		"\r", `\r`,
 		"\n", `\n`,
 	).Replace(css)
-}
-
-// desktopActionPillScript 为 Chat 提供可切换的折叠态快捷操作胶囊。运行时始终以隐藏
-// 形态安装轻量控制器，只有显式开启时才显示；这样已有窗口可以通过 ExecJS 切换模式，
-// 通过 DSH 已有的可访问名称和稳定的 sidebar 结构转发原生操作，不复制会话或布局状态。
-const desktopActionPillScript = `
-  if (!isManagement && !window.__dshDesktopActionPillInstalled) {
-    window.__dshDesktopActionPillInstalled = true;
-    const actionPillId = "dsh-desktop-action-pill";
-    const actionPillIcons = {
-      toggle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h16"/></svg>',
-      new: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5v8A1.5 1.5 0 0 1 14.5 15h-5L6 18v-3.2a1.5 1.5 0 0 1-2-1.3Z"/><path d="M19 8v6.5A1.5 1.5 0 0 1 17.5 16H16M19 11h-5M16.5 8.5v5"/></svg>',
-      search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"/><path d="m15.2 15.2 4.5 4.5"/></svg>',
-      settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"/><path d="m19.4 13.4 1.1.8-1.8 3.1-1.3-.5a7.5 7.5 0 0 1-1.6.9l-.2 1.4h-3.6l-.2-1.4a7.5 7.5 0 0 1-1.6-.9l-1.3.5-1.8-3.1 1.1-.8a7.5 7.5 0 0 1 0-1.8l-1.1-.8 1.8-3.1 1.3.5a7.5 7.5 0 0 1 1.6-.9l.2-1.4h3.6l.2 1.4a7.5 7.5 0 0 1 1.6.9l1.3-.5 1.8 3.1-1.1.8a7.5 7.5 0 0 1 0 1.8Z"/></svg>'
-    };
-    const actionPillText = {
-      zh: { toolbar: "Chat 快捷操作", toggle: "展开侧边栏", new: "新建会话", search: "搜索会话", settings: "打开桌面设置" },
-      en: { toolbar: "Chat quick actions", toggle: "Open sidebar", new: "New session", search: "Search sessions", settings: "Open desktop settings" }
-    };
-    let actionPill = null;
-    let observedContent = null;
-    let observedFrame = null;
-    let frameObserver = null;
-    let contentObserver = null;
-    let resizeObserver = null;
-    let documentObserver = null;
-    let languageObserver = null;
-    let syncQueued = false;
-    let actionPillEnabled = %t;
-
-    const languageKey = () => String(document.documentElement.lang || "").toLowerCase().startsWith("zh") ? "zh" : "en";
-    const text = () => actionPillText[languageKey()];
-    const setButtonLabel = (button, label) => {
-      button.title = label;
-      button.setAttribute("aria-label", label);
-    };
-    const ensurePill = () => {
-      if (actionPill && actionPill.isConnected) return actionPill;
-      actionPill = document.getElementById(actionPillId);
-      if (actionPill) return actionPill;
-      actionPill = document.createElement("div");
-      actionPill.id = actionPillId;
-      actionPill.setAttribute("role", "toolbar");
-      actionPill.hidden = true;
-      for (const action of ["toggle", "new", "search", "settings"]) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.action = action;
-        button.innerHTML = actionPillIcons[action];
-        actionPill.appendChild(button);
-      }
-      actionPill.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-action]");
-        if (!button) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const action = button.dataset.action;
-        if (action === "settings") {
-          const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-          if (typeof call === "function") void call("main.DSH.OpenManagement");
-          return;
-        }
-        const frame = observedFrame || findFrame(getContent());
-        const sidebar = findSidebar(frame);
-        const target = action === "toggle"
-          ? findToggleButton(sidebar)
-          : action === "new" ? findNewSessionButton(sidebar) : findSearchButton(sidebar);
-        if (target) {
-          target.click();
-          scheduleSync();
-        }
-      });
-      (document.body || document.documentElement).appendChild(actionPill);
-      return actionPill;
-    };
-    const updateLabels = () => {
-      const pill = ensurePill();
-      const labels = text();
-      pill.setAttribute("aria-label", labels.toolbar);
-      for (const button of pill.querySelectorAll("button[data-action]")) {
-        const action = button.dataset.action;
-        if (action && labels[action]) setButtonLabel(button, labels[action]);
-      }
-    };
-    const getContent = () => document.getElementById("root");
-    const findFrame = (content) => {
-      if (!content) return null;
-      const overlay = content.querySelector("[data-shell-overlay]");
-      return overlay && overlay.parentElement
-        ? overlay.parentElement
-        : content.querySelector("[data-sidebar-collapsed], [data-details-collapsed]");
-    };
-    const findDirectChild = (frame, selector) => {
-      const match = frame && frame.querySelector(selector);
-      if (!match) return null;
-      let child = match;
-      while (child.parentElement && child.parentElement !== frame) child = child.parentElement;
-      return child;
-    };
-    const findCenter = (frame) => findDirectChild(frame, "[data-slot='conversation']") || (frame && frame.children[1]) || null;
-    const findSidebar = (frame) => {
-      const slot = frame && frame.querySelector("[data-slot='sidebar']");
-      return slot && slot.firstElementChild;
-    };
-    const labelIncludes = (button, words) => {
-      const label = (String(button.getAttribute("aria-label") || "") + " " + String(button.getAttribute("title") || "")).toLowerCase();
-      return words.some(word => label.includes(word));
-    };
-    const findToggleButton = (sidebar) => {
-      const logoRow = sidebar && sidebar.firstElementChild;
-      const buttons = logoRow ? logoRow.querySelectorAll("button") : [];
-      if (buttons.length > 0) return buttons[buttons.length - 1];
-      return sidebar && [...sidebar.querySelectorAll("button")].find(button => labelIncludes(button, ["sidebar", "侧边栏", "侧栏"]));
-    };
-    const findNewSessionButton = (sidebar) => {
-      if (!sidebar) return null;
-      const buttons = [...sidebar.querySelectorAll("button")];
-      const labeled = buttons.find(button => labelIncludes(button, ["new session", "new conversation", "新建会话", "新会话", "新对话"]));
-      if (labeled) return labeled;
-      const logoRow = sidebar.firstElementChild;
-      const logoButtonCount = logoRow ? logoRow.querySelectorAll("button").length : 0;
-      return buttons[logoButtonCount] || null;
-    };
-    const findSearchButton = (sidebar) => {
-      if (!sidebar) return null;
-      return [...sidebar.querySelectorAll("button")].find(button => labelIncludes(button, ["search", "搜索", "查找", "检索"]));
-    };
-    const bindFrame = (frame) => {
-      if (frame === observedFrame) return;
-      frameObserver?.disconnect();
-      resizeObserver?.disconnect();
-      observedFrame = frame;
-      if (!frame) return;
-      frameObserver = new MutationObserver(scheduleSync);
-      frameObserver.observe(frame, { attributes: true, attributeFilter: ["data-sidebar-collapsed", "style"], childList: true });
-      if (typeof ResizeObserver === "function") {
-        resizeObserver = new ResizeObserver(scheduleSync);
-        resizeObserver.observe(frame);
-        const center = findCenter(frame);
-        if (center) resizeObserver.observe(center);
-      }
-    };
-    const sync = () => {
-      const pill = ensurePill();
-      updateLabels();
-      const content = getContent();
-      if (content !== observedContent) {
-        contentObserver?.disconnect();
-        observedContent = content;
-        if (content) {
-          contentObserver = new MutationObserver(scheduleSync);
-          contentObserver.observe(content, { childList: true });
-        }
-      }
-      const frame = findFrame(content);
-      bindFrame(frame);
-      if (!frame) {
-        pill.hidden = true;
-        pill.dataset.visible = "false";
-        pill.setAttribute("aria-hidden", "true");
-        return;
-      }
-      const center = findCenter(frame);
-      const centerRect = center && center.getBoundingClientRect();
-      const frameRect = frame.getBoundingClientRect();
-      const sidebar = findSidebar(frame);
-      const visible = actionPillEnabled && frame.hasAttribute("data-sidebar-collapsed") && centerRect && centerRect.width >= 220 && centerRect.height > 0;
-      pill.hidden = !visible;
-      pill.dataset.visible = visible ? "true" : "false";
-      pill.setAttribute("aria-hidden", visible ? "false" : "true");
-      if (!visible) return;
-      pill.style.left = (centerRect.left + centerRect.width / 2) + "px";
-      pill.style.top = Math.max(frameRect.top + 8, topInset + 8) + "px";
-      pill.style.maxWidth = Math.max(180, Math.min(360, centerRect.width - 24)) + "px";
-      const newButton = pill.querySelector("button[data-action='new']");
-      const searchButton = pill.querySelector("button[data-action='search']");
-      if (newButton) newButton.hidden = !findNewSessionButton(sidebar);
-      if (searchButton) searchButton.hidden = !findSearchButton(sidebar);
-    };
-    function scheduleSync() {
-      if (syncQueued) return;
-      syncQueued = true;
-      window.requestAnimationFrame(() => {
-        syncQueued = false;
-        sync();
-      });
-    }
-    updateLabels();
-    if (document.body) {
-      documentObserver = new MutationObserver(scheduleSync);
-      documentObserver.observe(document.body, { childList: true });
-    }
-    languageObserver = new MutationObserver(updateLabels);
-    languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    window.addEventListener("resize", scheduleSync, { passive: true });
-    window.__dshDesktopActionPillSetEnabled = (enabled) => {
-      actionPillEnabled = enabled === true;
-      scheduleSync();
-    };
-    sync();
-  }
-`
-
-func desktopActionPillScriptForMode(enabled bool) string {
-	return fmt.Sprintf(desktopActionPillScript, enabled)
-}
-
-const desktopActionPillModeScript = `
-(() => {
-  if (typeof window.__dshDesktopActionPillSetEnabled === "function") {
-    window.__dshDesktopActionPillSetEnabled(%t);
-  }
-})();
-`
-
-func desktopActionPillModeScriptForMode(enabled bool) string {
-	return fmt.Sprintf(desktopActionPillModeScript, enabled)
 }
 
 const desktopNativeWindowInsetJS = `
@@ -559,7 +253,6 @@ const desktopNativeWindowInsetJS = `
     return overlay?.parentElement || null;
   }
   applyInset();
-%s
 })();
 `
 
@@ -587,7 +280,6 @@ const desktopChromeJS = `
     content.style.setProperty("--dsh-window-top-inset", topInset + "px");
   };
   applyInset();
-%s
   const root = document.documentElement;
   root.classList.toggle("dsh-desktop-config", isManagement);
   if (document.getElementById("dsh-desktop-chrome")) return;
@@ -656,19 +348,10 @@ const desktopChromeJS = `
 `
 
 func desktopChromeScript(management, nativeMac bool) string {
-	return desktopChromeScriptWithMode(management, nativeMac, false)
-}
-
-func desktopChromeScriptWithMode(management, nativeMac, useActionPill bool) string {
-	actionPillScript := ""
-	if !management {
-		actionPillScript = desktopActionPillScriptForMode(useActionPill)
-	}
-	pillCSS := desktopActionPillCSSForWindow(management)
 	if nativeMac {
 		// macOS 的 HiddenInset 窗口让 WebView 铺满整个窗口；配置页只给自身
 		// 留出顶部空间，Chat 则把 inset 精确施加到左侧 sidebar 内容，不移动主聊天区。
-		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS+pillCSS), actionPillScript)
+		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
 	}
-	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS+pillCSS), actionPillScript)
+	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS))
 }

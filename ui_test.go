@@ -13,7 +13,6 @@ func TestManagementUIContract(t *testing.T) {
 	html := string(data)
 	for _, label := range []string{
 		"dsh 可执行文件", "DSH Home", "桌面端目录（固定）", "Chat 工作目录", "本机端口",
-		"折叠侧栏时显示横向操作胶囊", "默认使用与交通灯安全区对齐的 DSH 原生 84px 折叠轨道", "useActionPill", "dashboard-use-action-pill",
 		"选择文件", "恢复默认路径", "选择文件夹", "重新检测 CLI",
 		"启动并打开 DSH Chat", "停止 DSH", "在桌面 WebView 打开 Chat", "打开 DSH Home",
 		"打开工作目录", "打开 settings.yaml", "可选：安装桌面管理桥接插件",
@@ -21,6 +20,14 @@ func TestManagementUIContract(t *testing.T) {
 	} {
 		if !strings.Contains(html, label) {
 			t.Fatalf("missing accepted UI copy %q", label)
+		}
+	}
+	if strings.Contains(html, "DSH Desktop") {
+		t.Fatal("UI must use the full Deepseek Harness Desktop application name")
+	}
+	for _, removed := range []string{"Chat 折叠交互", "横向操作胶囊", "useActionPill", "action-pill", "metric-sidebar-mode"} {
+		if strings.Contains(html, removed) {
+			t.Fatalf("UI must not expose removed Chat fold interaction %q", removed)
 		}
 	}
 	for _, method := range []string{
@@ -53,7 +60,7 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, `if (!manualManagement && state === "running"`) {
 		t.Fatal("manual configuration must not reopen or refresh the existing Chat window")
 	}
-	for _, fragment := range []string{"scrollbar-color", "navigator.userAgentData", "Windows PowerShell", "macOS 终端", "Linux 终端", "DSH cwd", "DSH_HOME/.deepseek-harness-desktop", "desktopDir", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", `aria-readonly="true"`, "metric-sidebar-mode", "横向操作胶囊；重启 DSH 后生效"} {
+	for _, fragment := range []string{"scrollbar-color", "navigator.userAgentData", "Windows PowerShell", "macOS 终端", "Linux 终端", "DSH cwd", "DSH_HOME/.deepseek-harness-desktop", "desktopDir", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", `aria-readonly="true"`} {
 		if !strings.Contains(html, fragment) {
 			t.Fatalf("UI is missing platform/workspace fragment %q", fragment)
 		}
