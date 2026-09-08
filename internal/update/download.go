@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 )
 
 func (u *Updater) Download(ctx context.Context) error {
@@ -49,7 +50,7 @@ func (u *Updater) Download(ctx context.Context) error {
 		return u.fail(err)
 	}
 	req.Header.Set("User-Agent", "Deepseek-Harness-Desktop/"+u.current)
-	res, err := u.client.Do(req)
+	res, err := downloadClient(u.client).Do(req)
 	if err != nil {
 		return u.fail(err)
 	}
@@ -120,6 +121,16 @@ type countWriter struct{ n *atomic.Int64 }
 func (c countWriter) Write(p []byte) (int, error) {
 	c.n.Add(int64(len(p)))
 	return len(p), nil
+}
+
+func downloadClient(base *http.Client) *http.Client {
+	client := &http.Client{Timeout: 20 * time.Minute}
+	if base != nil {
+		client.Transport = base.Transport
+		client.CheckRedirect = base.CheckRedirect
+		client.Jar = base.Jar
+	}
+	return client
 }
 
 func fileChecksum(path string) string {

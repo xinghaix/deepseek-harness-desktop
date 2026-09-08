@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"deepseek-harness-desktop/internal/version"
 )
@@ -16,24 +17,25 @@ import (
 var errNoReleases = errors.New("还没有 GitHub Release")
 
 type Updater struct {
-	mu       sync.Mutex
-	client   *http.Client
-	apiBase  string
-	repo     string
-	current  string
-	goos     string
-	goarch   string
-	state    string
-	latest   string
-	notes    string
-	release  string
-	asset    githubAsset
-	sum      string
-	file     string
-	errMsg   string
-	done     atomic.Int64
-	total    atomic.Int64
-	allowURL func(string) error
+	mu        sync.Mutex
+	client    *http.Client
+	apiBase   string
+	repo      string
+	current   string
+	goos      string
+	goarch    string
+	state     string
+	latest    string
+	notes     string
+	release   string
+	asset     githubAsset
+	sum       string
+	file      string
+	errMsg    string
+	done      atomic.Int64
+	total     atomic.Int64
+	autoCheck atomic.Bool
+	allowURL  func(string) error
 }
 
 func New() *Updater {
@@ -41,8 +43,8 @@ func New() *Updater {
 	if repo == "" {
 		repo = DefaultRepo
 	}
-	return &Updater{
-		client:  &http.Client{Timeout: 0},
+	u := &Updater{
+		client:  &http.Client{Timeout: 15 * time.Second},
 		apiBase: "https://api.github.com",
 		repo:    repo,
 		current: version.Version,
@@ -50,9 +52,28 @@ func New() *Updater {
 		goarch:  runtime.GOARCH,
 		state:   StateIdle,
 	}
+	u.loadPrefs()
+	return u
 }
 
 func (u *Updater) CurrentVersion() string { return NormalizeVersion(u.current) }
+
+// KickCheck starts a GitHub check in the background so Wails bindings never block on the network.
+func (u *Updater) KickCheck() {
+	u.mu.Lock()
+	if u.state == StateChecking || u.state == StateDownloading || u.state == StateApplying {
+		u.mu.Unlock()
+		return
+	}
+	u.state = StateChecking
+	u.errMsg = ""
+	u.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_, _ = u.Check(ctx)
+	}()
+}
 
 func (u *Updater) Snapshot() Snapshot {
 	u.mu.Lock()
@@ -73,6 +94,7 @@ func (u *Updater) Snapshot() Snapshot {
 		BytesDone:      done,
 		Progress:       progress,
 		Error:          u.errMsg,
+		AutoCheck:      u.autoCheck.Load(),
 	}
 }
 
@@ -173,6 +195,7 @@ func (u *Updater) snapshotLocked() Snapshot {
 		BytesDone:      done,
 		Progress:       progress,
 		Error:          u.errMsg,
+		AutoCheck:      u.autoCheck.Load(),
 	}
 }
 

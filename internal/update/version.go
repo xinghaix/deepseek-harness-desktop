@@ -25,6 +25,7 @@ type Snapshot struct {
 	BytesDone      int64   `json:"bytesDone"`
 	Progress       float64 `json:"progress"`
 	Error          string  `json:"error"`
+	AutoCheck      bool    `json:"autoCheck"`
 }
 
 func NormalizeVersion(v string) string {

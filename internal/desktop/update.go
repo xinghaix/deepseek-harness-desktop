@@ -22,9 +22,22 @@ func (s *Service) UpdateStatus() update.Snapshot {
 }
 
 func (s *Service) CheckUpdate() (update.Snapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	return s.updater.Check(ctx)
+	s.updater.KickCheck()
+	return s.updater.Snapshot(), nil
+}
+
+func (s *Service) SetAutoCheckUpdate(enabled bool) (update.Snapshot, error) {
+	if err := s.updater.SetAutoCheck(enabled); err != nil {
+		return s.updater.Snapshot(), err
+	}
+	return s.updater.Snapshot(), nil
+}
+
+func (s *Service) Close() error {
+	if s.stopAuto != nil {
+		s.stopAuto()
+	}
+	return s.Manager.Close()
 }
 
 func (s *Service) OpenReleasePage() error {
