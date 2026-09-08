@@ -241,6 +241,15 @@ func TestDSH(t *testing.T) {
 		if len(s.Logs) > maxLogBytes || strings.Contains(s.Logs, "test-only-token") || strings.Contains(s.URL, "?") {
 			t.Fatalf("unbounded or unredacted status: %+v", s)
 		}
+		browser, err := d.BrowserURL()
+		if err != nil || !strings.Contains(browser, "token=") {
+			t.Fatalf("browser URL must keep the unused login token: %q %v", browser, err)
+		}
+		d.MarkBrowserOpened()
+		after, err := d.BrowserURL()
+		if err != nil || strings.Contains(after, "token=") {
+			t.Fatalf("token must not be reused after the WebView opens: %q %v", after, err)
+		}
 		raw, err := os.ReadFile(filepath.Join(o.Home, "observed.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -365,9 +374,9 @@ func TestDSH(t *testing.T) {
 		if err := d.Start(o); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(600 * time.Millisecond)
-		if d.Status().State == "running" || hits.Load() != 0 {
-			t.Fatal("accepted/followed foreign redirect")
+		await(t, 8*time.Second, func() bool { return d.Status().State == "running" })
+		if hits.Load() != 0 {
+			t.Fatal("followed a foreign redirect")
 		}
 		if err := d.Stop(); err != nil {
 			t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,13 +16,17 @@ import (
 	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 type Service struct {
 	*dsh.Manager
-	windowMu sync.Mutex
-	updater  *update.Updater
-	stopAuto context.CancelFunc
+	windowMu      sync.Mutex
+	updater       *update.Updater
+	stopAuto      context.CancelFunc
+	configHooked  bool
+	chatHooked    bool
+	openedChatURL string
 }
 
 func New() *Service {
@@ -83,7 +88,8 @@ func (d *Service) ReloadChat(o dsh.Options) error {
 			if st.URL == "" {
 				break
 			}
-			_ = d.NoteChatWindowURL("")
+			d.openedChatURL = ""
+			d.NoteChatWindowURL("")
 			return d.OpenDSH()
 		case "failed":
 			if st.Error != "" {
@@ -97,7 +103,7 @@ func (d *Service) ReloadChat(o dsh.Options) error {
 }
 
 func (d *Service) OpenDSH() error {
-	url, err := d.BrowserURL()
+	chatURL, err := d.BrowserURL()
 	if err != nil {
 		return err
 	}
@@ -107,19 +113,31 @@ func (d *Service) OpenDSH() error {
 	}
 	d.windowMu.Lock()
 	defer d.windowMu.Unlock()
-	window, ok := app.Window.GetByName("main")
-	_ = d.NoteChatWindowURL(url)
+	// dsh web cookies are SameSite=Strict. Navigating the config WebView
+	// (wails://) to 127.0.0.1 drops the login cookie on the 303 to /. Chat
+	// must be a separate WebView whose first load is the printed token URL.
+	chat, ok := app.Window.GetByName("dsh")
 	if !ok {
-		window = app.Window.NewWithOptions(PrimaryWindowOptions(url))
+		chat = app.Window.NewWithOptions(ChatWindowOptions(chatURL))
+		d.hookChatWindow(app, chat)
+		d.MarkBrowserOpened()
+		d.openedChatURL = chatURL
+		d.NoteChatWindowURL(chatURL)
+	} else if sameHTTPOrigin(d.openedChatURL, chatURL) {
+		// Keep the existing first-party session; do not SetURL.
 	} else {
-		window.SetURL(url)
+		chat.SetURL(chatURL)
+		d.MarkBrowserOpened()
+		d.openedChatURL = chatURL
+		d.NoteChatWindowURL(chatURL)
 	}
-	window.Show()
-	window.Focus()
+	d.dismissConfigModal(app, chat)
+	chat.Show()
+	chat.Focus()
 	return nil
 }
 
-// OpenManagement 把主窗口恢复到桌面端控制台，供用户从聊天窗口返回管理页。
+// OpenManagement 把配置作为 Chat 上的模态打开，不隐藏 Chat。
 func (d *Service) OpenManagement() error {
 	app, err := desktopApp()
 	if err != nil {
@@ -128,16 +146,99 @@ func (d *Service) OpenManagement() error {
 	d.windowMu.Lock()
 	defer d.windowMu.Unlock()
 	const managementURL = "/?manage=1"
+	chat, chatOK := app.Window.GetByName("dsh")
 	window, ok := app.Window.GetByName("main")
-	_ = d.NoteManagementWindowURL(managementURL)
 	if !ok {
-		window = app.Window.NewWithOptions(PrimaryWindowOptions(managementURL))
-	} else {
+		opts := ManagementWindowOptions(managementURL)
+		if chatOK {
+			opts = ConfigModalWindowOptions(managementURL)
+		}
+		window = app.Window.NewWithOptions(opts)
+		d.NoteManagementWindowURL(managementURL)
+	} else if d.NoteManagementWindowURL(managementURL) {
 		window.SetURL(managementURL)
+	}
+	d.hookConfigWindow(window)
+	if chatOK {
+		presentConfigModal(chat, window)
+		return nil
 	}
 	window.Show()
 	window.Focus()
 	return nil
+}
+
+func presentConfigModal(chat, config application.Window) {
+	if chat == nil || config == nil {
+		return
+	}
+	config.SetAlwaysOnTop(true)
+	config.SetSize(720, 680)
+	config.SetMinSize(640, 520)
+	chat.SetEnabled(false)
+	chat.ExecJS(dimChatJS)
+	chat.AttachModal(config)
+	config.Show()
+	config.Center()
+	config.Focus()
+}
+
+func (d *Service) dismissConfigModal(app *application.App, chat application.Window) {
+	if chat != nil {
+		chat.ExecJS(undimChatJS)
+		chat.SetEnabled(true)
+	}
+	config, ok := app.Window.GetByName("main")
+	if !ok {
+		return
+	}
+	d.configHooked = false
+	config.SetAlwaysOnTop(false)
+	config.Close()
+}
+
+func (d *Service) hookConfigWindow(window application.Window) {
+	if d.configHooked || window == nil {
+		return
+	}
+	d.configHooked = true
+	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+		d.configHooked = false
+		app, err := desktopApp()
+		if err != nil {
+			return
+		}
+		if chat, ok := app.Window.GetByName("dsh"); ok {
+			chat.ExecJS(undimChatJS)
+			chat.SetEnabled(true)
+			chat.Focus()
+		}
+	})
+}
+
+func (d *Service) hookChatWindow(app *application.App, window application.Window) {
+	if d.chatHooked || window == nil {
+		return
+	}
+	d.chatHooked = true
+	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+		if config, ok := app.Window.GetByName("main"); ok {
+			config.Close()
+		}
+	})
+}
+
+func sameHTTPOrigin(a, b string) bool {
+	oa, ob := httpOrigin(a), httpOrigin(b)
+	return oa != "" && oa == ob
+}
+
+func httpOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func (d *Service) OpenHome(o dsh.Options) error {

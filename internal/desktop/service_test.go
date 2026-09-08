@@ -21,11 +21,31 @@ func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
 	}
 }
 
+func TestConfigModalStaysAboveChatWindow(t *testing.T) {
+	chat := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
+	modal := ConfigModalWindowOptions("/?manage=1")
+	if chat.Name != "dsh" || modal.Name != "main" {
+		t.Fatal("Chat must be a separate WebView from the config modal")
+	}
+	if !modal.AlwaysOnTop || modal.Width >= chat.Width {
+		t.Fatal("config over Chat must be a smaller always-on-top modal")
+	}
+}
+
 func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS 标题栏配置仅适用于 darwin")
 	}
-	options := ChatWindowOptions("http://127.0.0.1:12345")
+	chat := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
+	config := ManagementWindowOptions("/")
+	modal := ConfigModalWindowOptions("/?manage=1")
+	if chat.Name != "dsh" || config.Name != "main" || modal.Name != "main" {
+		t.Fatal("Chat must be a separate WebView from the config page")
+	}
+	if !modal.AlwaysOnTop || modal.Width >= chat.Width {
+		t.Fatal("config over Chat must be a smaller always-on-top modal")
+	}
+	options := chat
 	if options.Mac.TitleBar.ToolbarStyle != application.MacToolbarStyleUnifiedCompact {
 		t.Fatalf("macOS Chat 应使用紧凑 unified 标题栏，得到 %v", options.Mac.TitleBar.ToolbarStyle)
 	}

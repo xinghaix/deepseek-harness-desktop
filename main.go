@@ -92,7 +92,7 @@ func main() {
 	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) { app.Quit() })
 	app.Menu.SetApplicationMenu(menu)
 
-	app.Window.NewWithOptions(desktop.PrimaryWindowOptions("/"))
+	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

@@ -171,7 +171,7 @@ async function probeSelected() {
     fillOptions(result.options); lastVersion = result.version || "已检测"; $("version").textContent = lastVersion; cliReady = true;
     const runningNow = result.version === "DSH 已运行";
     setDetect("found", runningNow ? "dsh 正在运行" : "dsh 已就绪", runningNow ? `运行配置已保存（${result.options.executable}）。不必重启桌面应用。` : `已验证 ${result.options.executable}，版本：${lastVersion}`);
-    setHidden("install-card", true); saveOptions(false); setMessage(runningNow ? "运行配置已保存。请在 Chat 页面刷新；若改了工作目录或 Home，点「重新打开 Chat」。" : "CLI 检测通过，可以直接启动 DSH Chat。");
+    setHidden("install-card", true); saveOptions(false); setMessage(runningNow ? "运行配置已保存。关掉配置模态即回到 Chat；若改了工作目录、Home 或 CLI，点「重新打开 Chat」以重启 dsh web。" : "CLI 检测通过，可以直接启动 DSH Chat。");
     $("step-cli").dataset.done = "true"; $("step-cli").dataset.active = "false";
     updateButtons(); return true;
   } catch (error) {

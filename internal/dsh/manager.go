@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"os/exec"
@@ -40,6 +39,7 @@ type Manager struct {
 	launchOptions       Options
 	output              *cliOutput
 	url, lastError      string
+	browserTokenUsed    bool
 	chatWindowURL       string
 	managementWindowURL string
 	openManagement      func() error
@@ -587,6 +587,7 @@ func (d *Manager) start(o Options) error {
 		return err
 	}
 	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
+	d.browserTokenUsed = false
 	d.chatWindowURL = ""
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	d.cmd, d.done, d.cancel, d.state = cmd, make(chan struct{}), cancel, "starting"
@@ -668,9 +669,8 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 }
 
 func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
-	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
-		Jar: jar, Timeout: time.Second,
+		Timeout:       time.Second,
 		Transport:     &http.Transport{Proxy: nil, DisableKeepAlives: true},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
@@ -684,7 +684,7 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				d.failStartup(cmd, "启动超时：未收到匹配的就绪 URL 或本机认证检查未通过")
+				d.failStartup(cmd, "启动超时：未收到匹配的就绪 URL 或本机服务未响应")
 			}
 			return
 		case announced := <-urls:
@@ -706,36 +706,32 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 			if candidate == "" {
 				continue
 			}
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, candidate, nil)
+			// Do not GET the printed ?token= URL here: dsh web treats it as a
+			// one-time login. The WebView must be the process that redeems it.
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, candidateBase+"/", nil)
 			response, err := client.Do(req)
 			if err != nil {
 				continue
 			}
-			code, location := response.StatusCode, response.Header.Get("Location")
+			location := response.Header.Get("Location")
 			_ = response.Body.Close()
-			// DSH 0.1.2-rc.1 会用 ?token 换取签名 Cookie，然后重定向到 /。
-			// 这里只跟随这个精确的本机跳转，绝不跟随任意 Location。
-			if code == http.StatusSeeOther && location == "/" {
-				req, _ = http.NewRequestWithContext(ctx, http.MethodGet, candidateBase+"/", nil)
-				response, err = client.Do(req)
-				if err != nil {
-					continue
-				}
-				code = response.StatusCode
-				_ = response.Body.Close()
-			}
-			if code != http.StatusOK {
-				continue
+			if redirect, err := url.Parse(location); err == nil && redirect.Host != "" && !loopbackHost(redirect.Hostname()) {
+				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
+				return
 			}
 			d.mu.Lock()
 			if d.cmd == cmd && d.state == "starting" {
 				d.options.Port = candidatePort
-				d.url, d.state = candidate, "running"
+				d.url, d.browserTokenUsed, d.state = candidate, false, "running"
 			}
 			d.mu.Unlock()
 			return
 		}
 	}
+}
+
+func loopbackHost(host string) bool {
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
 }
 
 func (d *Manager) failStartup(cmd *exec.Cmd, message string) {
@@ -884,7 +880,16 @@ func (d *Manager) BrowserURL() (string, error) {
 	if d.state != "running" {
 		return "", errors.New("DSH 尚未就绪")
 	}
+	if d.browserTokenUsed {
+		return "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(d.options.Port)) + "/", nil
+	}
 	return d.url, nil
+}
+
+func (d *Manager) MarkBrowserOpened() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.browserTokenUsed = true
 }
 
 func checkCLI(o Options) (string, error) {

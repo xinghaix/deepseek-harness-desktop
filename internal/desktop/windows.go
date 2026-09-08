@@ -8,9 +8,37 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func PrimaryWindowOptions(url string) application.WebviewWindowOptions {
+func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
 		Name:               "main",
+		Title:              "Deepseek Harness Desktop",
+		Width:              980,
+		Height:             760,
+		MinWidth:           760,
+		MinHeight:          620,
+		URL:                url,
+		UseApplicationMenu: true,
+		Windows:            application.WindowsWindow{Theme: application.SystemDefault},
+		DevToolsEnabled:    false,
+	}
+	return applyDesktopWindowChrome(options)
+}
+
+func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
+	options := ManagementWindowOptions(url)
+	options.Width = 720
+	options.Height = 680
+	options.MinWidth = 640
+	options.MinHeight = 520
+	options.AlwaysOnTop = true
+	options.Hidden = true
+	options.Title = "桌面配置"
+	return options
+}
+
+func ChatWindowOptions(url string) application.WebviewWindowOptions {
+	options := application.WebviewWindowOptions{
+		Name:               "dsh",
 		Title:              "Deepseek Harness Desktop",
 		Width:              1280,
 		Height:             860,
@@ -24,13 +52,8 @@ func PrimaryWindowOptions(url string) application.WebviewWindowOptions {
 	return applyDesktopWindowChrome(options)
 }
 
-func ManagementWindowOptions(url string) application.WebviewWindowOptions {
-	return PrimaryWindowOptions(url)
-}
-
-func ChatWindowOptions(url string) application.WebviewWindowOptions {
-	return PrimaryWindowOptions(url)
-}
+const dimChatJS = "(function(){var id='dsh-desktop-config-dim';if(document.getElementById(id))return;var el=document.createElement('div');el.id=id;el.style.cssText='position:fixed;inset:0;background:rgba(15,18,24,.42);z-index:2147483646;pointer-events:none';document.documentElement.appendChild(el);})();"
+const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 
 func applyDesktopWindowChrome(options application.WebviewWindowOptions) application.WebviewWindowOptions {
 	if runtime.GOOS == "darwin" {
