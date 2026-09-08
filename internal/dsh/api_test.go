@@ -22,12 +22,20 @@ func TestRunningDSHDoesNotSpawnDetectionCLI(t *testing.T) {
 	}
 	await(t, 8*time.Second, func() bool { return d.Status().State == "running" })
 
-	checked, err := d.CheckCLI(o)
+	next := o
+	next.Workspace = t.TempDir()
+	checked, err := d.CheckCLI(next)
 	if err != nil {
 		t.Fatalf("CheckCLI while running: %v", err)
 	}
-	if checked.Version != "DSH 已运行" || checked.Options.Home != d.Status().Options.Home {
+	if checked.Version != "DSH 已运行" {
 		t.Fatalf("unexpected running CheckCLI result: %+v", checked)
+	}
+	if checked.Options.Workspace != next.Workspace {
+		t.Fatalf("CheckCLI while running discarded new workspace: %+v", checked.Options)
+	}
+	if d.Status().Options.Workspace == next.Workspace {
+		t.Fatal("running instance must keep the old workspace until restart")
 	}
 
 	discovered, err := d.DiscoverCLI()

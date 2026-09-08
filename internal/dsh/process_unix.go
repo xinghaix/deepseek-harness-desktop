@@ -59,10 +59,6 @@ func releaseOwnedProcess(owner *ownedProcess) error {
 	return nil
 }
 
-func configureProcess(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-}
-
 func terminateOwnedProcess(owner *ownedProcess, cmd *exec.Cmd) error {
 	_ = owner
 	if cmd.Process == nil {

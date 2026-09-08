@@ -98,10 +98,9 @@ func (d *Manager) CheckCLI(o Options) (CheckResult, error) {
 	}
 	d.mu.Lock()
 	busy := d.cmd != nil
-	runningOptions := d.options
 	d.mu.Unlock()
 	if busy {
-		return CheckResult{Version: "DSH 已运行", Options: runningOptions}, nil
+		return CheckResult{Version: "DSH 已运行", Options: normalized}, nil
 	}
 	version, err := checkCLI(normalized)
 	if err != nil {

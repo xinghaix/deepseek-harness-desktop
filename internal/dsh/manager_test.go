@@ -23,6 +23,9 @@ import (
 
 // 测试二进制是受控的子进程，不代表真实 DSH 的行为。
 func TestMain(m *testing.M) {
+	if RunSupervisorIfRequested() {
+		return
+	}
 	mode := os.Getenv("DSHD_TEST_CHILD")
 	if mode == "" {
 		stateDir, err := os.MkdirTemp("", "deepseek-harness-desktop-test-state-")

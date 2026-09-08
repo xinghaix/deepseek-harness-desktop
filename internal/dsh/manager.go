@@ -540,8 +540,7 @@ func (d *Manager) start(o Options) error {
 			return err
 		}
 	}
-	// DSH 支持 --port 0，并让操作系统选择实际的 loopback 端口。
-	// 只有固定端口需要预检查；预检查端口 0 没有额外保护价值。
+	// UI always requests port 0. A non-zero port is only for tests; refuse to take over a busy port.
 	if o.Port != 0 {
 		listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.Port)))
 		if err != nil {
