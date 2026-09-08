@@ -24,6 +24,12 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {
 	script := desktopChromeScript(false, true)
+	if !strings.Contains(desktopSidebarTransitionCSS, "grid-template-columns var(--ds-transition-duration-slow)") || !strings.Contains(desktopSidebarTransitionCSS, "padding-right var(--ds-transition-duration-slow)") {
+		t.Fatal("Chat sidebar 必须同时保留列宽与右侧布局过渡")
+	}
+	if !strings.Contains(desktopSidebarTransitionCSS, "transition: none !important") {
+		t.Fatal("Chat sidebar 拖拽和减少动效状态必须禁用过渡")
+	}
 	if !strings.Contains(script, "dsh-window-sidebar") || !strings.Contains(script, "data-slot='sidebar'") || !strings.Contains(script, "firstElementChild") || !strings.Contains(script, "const topInset = 36") {
 		t.Fatal("macOS 左侧 sidebar 未预留原生标题栏安全区")
 	}

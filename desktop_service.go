@@ -237,7 +237,7 @@ func applyDesktopWindowChromeWithMode(options application.WebviewWindowOptions, 
 		options.JS = desktopChromeScriptWithMode(management, true, useActionPill)
 		// CSS 由 WebView 在导航完成后直接注入，和异步挂载的 React DOM
 		// 解耦；JS 仍负责给配置页和 sidebar 写入动态标记。
-		options.CSS = escapeWailsCSS(desktopNativeWindowInsetCSS + desktopActionPillCSSForWindow(management))
+		options.CSS = escapeWailsCSS(desktopSidebarTransitionCSS + desktopNativeWindowInsetCSS + desktopActionPillCSSForWindow(management))
 		return options
 	}
 	options.Frameless = true

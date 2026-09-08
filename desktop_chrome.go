@@ -119,6 +119,33 @@ const desktopWindowInsetCSS = `
 }
 `
 
+// desktopSidebarTransitionCSS 恢复 DSH AppFrame 的列宽过渡。dsh-better-sidebar
+// 的 layout.css 为兼容旧版 DOM 使用相同的兜底选择器，但 transition 简写只保留了
+// padding-right，从而覆盖了 ui-layout 原本的 grid-template-columns 过渡；外层侧栏
+// 会瞬间收起，而 SidebarRoot 内部的文字淡出与图标进入仍按 150ms + 150ms 执行。
+const desktopSidebarTransitionCSS = `
+#root [data-dsh-frame],
+#root > [data-slot="root"] > div {
+  transition:
+    grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    padding-right var(--ds-transition-duration-slow) var(--ds-ease-in-out) !important;
+}
+
+body[data-dsh-sidebar-dragging] #root [data-dsh-frame],
+body[data-dsh-sidebar-dragging] #root > [data-slot="root"] > div,
+#root [data-dsh-frame][data-dragging],
+#root > [data-slot="root"] > div[data-dragging] {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root [data-dsh-frame],
+  #root > [data-slot="root"] > div {
+    transition: none !important;
+  }
+}
+`
+
 const desktopNativeWindowInsetCSS = `
 .dsh-window-content {
   box-sizing: border-box !important;
@@ -640,7 +667,7 @@ func desktopChromeScriptWithMode(management, nativeMac, useActionPill bool) stri
 	if nativeMac {
 		// macOS 的 HiddenInset 窗口让 WebView 铺满整个窗口；配置页只给自身
 		// 留出顶部空间，Chat 则把 inset 精确施加到左侧 sidebar 内容，不移动主聊天区。
-		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopNativeWindowInsetCSS+pillCSS), actionPillScript)
+		return fmt.Sprintf(desktopNativeWindowInsetJS, management, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS+pillCSS), actionPillScript)
 	}
-	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopWindowInsetCSS+pillCSS), actionPillScript)
+	return fmt.Sprintf(desktopChromeJS, management, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS+pillCSS), actionPillScript)
 }
