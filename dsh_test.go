@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-// The test binary is a controlled child process, not a substitute for real DSH.
+// 测试二进制是受控的子进程，不代表真实 DSH 的行为。
 func TestMain(m *testing.M) {
 	mode := os.Getenv("DSHD_TEST_CHILD")
 	if mode == "" {
@@ -70,6 +70,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(25)
 	}
+	actualPort := listener.Addr().(*net.TCPAddr).Port
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, os.Interrupt)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +95,7 @@ func TestMain(m *testing.M) {
 	if mode == "loud" {
 		fmt.Println(strings.Repeat("x", 256*1024))
 	}
-	url := "http://127.0.0.1:" + port + "/?token=test-only-token"
+	url := "http://127.0.0.1:" + strconv.Itoa(actualPort) + "/?token=test-only-token"
 	if mode == "wrong-url" {
 		url = "http://127.0.0.1:1/?token=test-only-token"
 	}
@@ -157,6 +158,9 @@ func TestDSH(t *testing.T) {
 		if defaults.Home != filepath.Join(home, ".dsh") {
 			t.Fatal(defaults.Home)
 		}
+		if defaults.Port != 0 {
+			t.Fatalf("default port = %d, want 0", defaults.Port)
+		}
 		o := options(t)
 		normalized, err := normalizeOptions(o)
 		if err != nil || !filepath.IsAbs(normalized.Home) {
@@ -166,8 +170,12 @@ func TestDSH(t *testing.T) {
 			t.Fatal("normalization created Home")
 		}
 		o.Port = 0
+		if _, err := normalizeOptions(o); err != nil {
+			t.Fatalf("rejected automatic port: %v", err)
+		}
+		o.Port = -1
 		if _, err := normalizeOptions(o); err == nil {
-			t.Fatal("accepted port zero")
+			t.Fatal("accepted negative port")
 		}
 		o.Port = 3080
 		o.Executable = filepath.Join(t.TempDir(), "missing")
@@ -207,7 +215,11 @@ func TestDSH(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := []string{"web", "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open"}
-		if !reflect.DeepEqual(observed.Args, want) || observed.Home != o.Home || observed.Cwd != o.Workspace || observed.Inherited != "kept" {
+		resolvedWorkspace, err := filepath.EvalSymlinks(o.Workspace)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(observed.Args, want) || observed.Home != o.Home || observed.Cwd != resolvedWorkspace || observed.Inherited != "kept" {
 			t.Fatalf("%+v", observed)
 		}
 		if os.Getenv("DSH_HOME") != "  " {
@@ -311,6 +323,44 @@ func TestDSH(t *testing.T) {
 			t.Fatalf("owned descendant still listening: %v", err)
 		}
 		_ = listener.Close()
+	})
+	t.Run("os-assigned-port", func(t *testing.T) {
+		t.Setenv("DSHD_TEST_CHILD", "dynamic")
+		o := options(t)
+		o.Port = 0
+		d := newDSH()
+		t.Cleanup(func() { _ = d.Close() })
+		if err := d.Start(o); err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(8 * time.Second)
+		for d.Status().State != "running" && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if d.Status().State != "running" {
+			t.Fatalf("automatic port startup did not become ready: %+v", d.Status())
+		}
+		s := d.Status()
+		if s.Options.Port < 1 || s.Options.Port > 65535 || strings.Contains(s.URL, ":0/") {
+			t.Fatalf("OS-assigned port was not published safely: %+v", s)
+		}
+		wantURL := "http://127.0.0.1:" + strconv.Itoa(s.Options.Port) + "/"
+		if s.URL != wantURL {
+			t.Fatalf("status URL %q, want %q", s.URL, wantURL)
+		}
+		if d.launchOptions.Port != 0 {
+			t.Fatalf("restart policy lost automatic port selection: %+v", d.launchOptions)
+		}
+		if err := d.Restart(); err != nil {
+			t.Fatal(err)
+		}
+		await(t, 8*time.Second, func() bool { return d.Status().State == "running" })
+		if d.launchOptions.Port != 0 {
+			t.Fatalf("restart changed automatic port policy: %+v", d.launchOptions)
+		}
+		if err := d.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
 

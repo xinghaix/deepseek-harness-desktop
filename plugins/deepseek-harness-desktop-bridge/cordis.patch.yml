@@ -1,0 +1,4 @@
+# 将桌面端管理桥接宿主插件加入当前 profile。
+- insert:
+    - id: deepseek-harness-desktop-bridge
+      name: '@deepseek-ai/deepseek-harness-desktop-bridge'

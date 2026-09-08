@@ -40,8 +40,8 @@ func taskkill(cmd *exec.Cmd, force bool) error {
 }
 
 func ownedProcessTreeAlive(pid int) bool {
-	// ponytail: taskkill /T is enough for this wrapper; use Job Objects only if
-	// Windows graceful-shutdown semantics become a real requirement.
+	// ponytail：这个包装器使用 taskkill /T 已足够；只有 Windows 优雅停止语义
+	// 成为实际需求时才引入 Job Objects。
 	return false
 }
 

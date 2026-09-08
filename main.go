@@ -11,8 +11,9 @@ import (
 func main() {
 	manager := newDSH()
 	app := application.New(application.Options{
-		Name:        "DSH Desktop",
-		Description: "管理本机已安装的 DSH CLI，不复制 DSH 配置",
+		Name:        "Deepseek Harness Desktop",
+		Description: "管理本机已安装的 DSH CLI，并在桌面 WebView 中运行 DSH Chat",
+		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(manager),
 		},
@@ -25,16 +26,23 @@ func main() {
 		OnShutdown: func() { _ = manager.Close() },
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:            "main",
-		Title:           "DSH Desktop",
-		Width:           980,
-		Height:          760,
-		MinWidth:        760,
-		MinHeight:       620,
-		URL:             "/",
-		DevToolsEnabled: false,
+	menu := app.NewMenu()
+	settingsMenu := menu.AddSubmenu("设置")
+	settingsMenu.Add("打开桌面端配置").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
+		if err := manager.OpenManagement(); err != nil {
+			log.Printf("打开桌面端配置失败: %v", err)
+		}
 	})
+	settingsMenu.Add("打开 DSH Chat").OnClick(func(*application.Context) {
+		if err := manager.OpenDSH(); err != nil {
+			log.Printf("打开 DSH Chat 失败: %v", err)
+		}
+	})
+	settingsMenu.AddSeparator()
+	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) { app.Quit() })
+	app.Menu.SetApplicationMenu(menu)
+
+	app.Window.NewWithOptions(managementWindowOptions("/"))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

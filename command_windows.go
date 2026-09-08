@@ -34,7 +34,7 @@ func commandLine(executable string, args ...string) string {
 	for _, arg := range args {
 		parts = append(parts, quoteCmdArg(arg))
 	}
-	// cmd.exe /s /c needs one outer pair when the command path contains spaces.
+	// 当命令路径包含空格时，cmd.exe /s /c 需要一对最外层引号。
 	return `"` + strings.Join(parts, " ") + `"`
 }
 

@@ -21,7 +21,7 @@ import (
 
 const maxLogBytes = 64 * 1024
 
-// ponytail: one owned Unix process group. Add Windows Job Objects only with Windows testing.
+// ponytail：只管理自己拥有的 Unix 进程组；Windows Job Objects 需在 Windows 测试后再加入。
 type DSH struct {
 	mu             sync.Mutex
 	cmd            *exec.Cmd
@@ -29,8 +29,10 @@ type DSH struct {
 	cancel         context.CancelFunc
 	state          string
 	options        Options
+	launchOptions  Options
 	output         *cliOutput
 	url, lastError string
+	bridge         *desktopBridge
 	closed         bool
 }
 
@@ -59,7 +61,7 @@ func defaultOptions() (Options, error) {
 		dshHome = filepath.Join(home, ".dsh")
 	}
 	dshHome, err = absolutePath(dshHome)
-	return Options{Executable: "dsh", Home: dshHome, Workspace: home, Port: 3080}, err
+	return Options{Executable: "dsh", Home: dshHome, Workspace: home, Port: 0}, err
 }
 
 func absolutePath(path string) (string, error) {
@@ -81,8 +83,8 @@ func absolutePath(path string) (string, error) {
 }
 
 func normalizeOptions(o Options) (Options, error) {
-	if o.Port < 1 || o.Port > 65535 {
-		return o, errors.New("端口必须在 1–65535 之间")
+	if o.Port < 0 || o.Port > 65535 {
+		return o, errors.New("端口必须在 0–65535 之间（0 表示自动选择空闲端口）")
 	}
 	var err error
 	if o.Home, err = absolutePath(o.Home); err != nil {
@@ -110,7 +112,7 @@ func normalizeOptions(o Options) (Options, error) {
 			return o, err
 		}
 	}
-	o.Executable, err = exec.LookPath(o.Executable)
+	o.Executable, err = resolveCLIExecutable(o.Executable)
 	if err != nil {
 		return o, fmt.Errorf("找不到可执行的 dsh；请选择已安装的 CLI（不会自动下载）: %w", err)
 	}
@@ -132,6 +134,69 @@ func childEnv(home string) []string {
 	return env
 }
 
+// cliEnv 为桌面端启动的 CLI 补齐用户在终端中通常拥有、但 GUI 进程未必继承的
+// Node/npm 路径。它不会修改桌面进程自己的环境，只作用于子进程。
+func cliEnv(home, executable string) []string {
+	env := childEnv(home)
+	pathValue := envValue(env, "PATH")
+	dirs := []string{filepath.Dir(executable)}
+	dirs = append(dirs, cliSearchDirectories()...)
+	if pathValue != "" {
+		dirs = append(dirs, strings.Split(pathValue, string(os.PathListSeparator))...)
+	}
+	return withEnvValue(env, "PATH", joinPathDirectories(dirs))
+}
+
+func envValue(env []string, wanted string) string {
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && strings.EqualFold(key, wanted) {
+			return value
+		}
+	}
+	return ""
+}
+
+func withEnvValue(env []string, wanted, value string) []string {
+	result := make([]string, 0, len(env)+1)
+	found := false
+	for _, entry := range env {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.EqualFold(key, wanted) {
+			if !found {
+				result = append(result, wanted+"="+value)
+				found = true
+			}
+			continue
+		}
+		result = append(result, entry)
+	}
+	if !found {
+		result = append(result, wanted+"="+value)
+	}
+	return result
+}
+
+func joinPathDirectories(dirs []string) string {
+	seen := make(map[string]struct{}, len(dirs))
+	result := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		if absolute, err := filepath.Abs(dir); err == nil {
+			dir = absolute
+		}
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		result = append(result, dir)
+	}
+	return strings.Join(result, string(os.PathListSeparator))
+}
+
 func newDSH() *DSH { return &DSH{state: "stopped"} }
 
 func (d *DSH) Start(o Options) error {
@@ -147,18 +212,28 @@ func (d *DSH) Start(o Options) error {
 	if d.cmd != nil {
 		return errors.New("请先停止当前 DSH 实例")
 	}
-	listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.Port)))
-	if err != nil {
-		return fmt.Errorf("端口不可用；不会接管或停止其他进程: %w", err)
+	if d.bridge == nil {
+		d.bridge, err = newDesktopBridge(d)
+		if err != nil {
+			return err
+		}
 	}
-	_ = listener.Close()
+	// DSH 支持 --port 0，并让操作系统选择实际的 loopback 端口。
+	// 只有固定端口需要预检查；预检查端口 0 没有额外保护价值。
+	if o.Port != 0 {
+		listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.Port)))
+		if err != nil {
+			return fmt.Errorf("端口不可用；不会接管或停止其他进程: %w", err)
+		}
+		_ = listener.Close()
+	}
 	output := newOutput()
 	cmd := newCLICommand(o.Executable, "web", "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open")
-	cmd.Dir, cmd.Env = o.Workspace, childEnv(o.Home)
+	cmd.Dir, cmd.Env = o.Workspace, d.bridge.env(cliEnv(o.Home, o.Executable))
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr = output, output
 	cmd.WaitDelay = time.Second // A grandchild holding stdout must not prevent reaping the CLI.
-	d.options, d.output, d.url, d.lastError = o, output, "", ""
+	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
 	if err := cmd.Start(); err != nil {
 		d.state, d.lastError = "failed", err.Error()
 		return err
@@ -168,7 +243,7 @@ func (d *DSH) Start(o Options) error {
 	done := d.done
 	go func() {
 		err := cmd.Wait()
-		// Do not leave owned descendants behind even if their parent exits on its own.
+		// 即使父进程自行退出，也不要留下桌面端拥有的子进程。
 		cleanupErr := killOwnedProcessTree(cmd)
 		waitForOwnedProcessTree(cmd.Process.Pid, 3*time.Second)
 		output.finish()
@@ -195,8 +270,7 @@ func (d *DSH) Start(o Options) error {
 	return nil
 }
 
-func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, port int) {
-	base := "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
 		Jar: jar, Timeout: time.Second,
@@ -207,6 +281,8 @@ func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string,
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 	candidate := ""
+	candidateBase := ""
+	candidatePort := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -216,11 +292,19 @@ func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string,
 			return
 		case announced := <-urls:
 			u, err := url.Parse(announced)
-			if err != nil || u.Scheme != "http" || "http://"+u.Host != base || u.User != nil || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+			if err != nil || u == nil {
+				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
+				return
+			}
+			actualPort, portErr := strconv.Atoi(u.Port())
+			portMatches := requestedPort == 0 || actualPort == requestedPort
+			if u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || portErr != nil || actualPort < 1 || actualPort > 65535 || !portMatches || u.User != nil || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
 				return
 			}
 			candidate = announced
+			candidateBase = "http://" + u.Host
+			candidatePort = actualPort
 		case <-ticker.C:
 			if candidate == "" {
 				continue
@@ -232,10 +316,10 @@ func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string,
 			}
 			code, location := response.StatusCode, response.Header.Get("Location")
 			_ = response.Body.Close()
-			// DSH 0.1.2-rc.1 exchanges ?token for a signed cookie then redirects to /.
-			// Follow only this exact local hop, never an arbitrary Location header.
+			// DSH 0.1.2-rc.1 会用 ?token 换取签名 Cookie，然后重定向到 /。
+			// 这里只跟随这个精确的本机跳转，绝不跟随任意 Location。
 			if code == http.StatusSeeOther && location == "/" {
-				req, _ = http.NewRequestWithContext(ctx, http.MethodGet, base+"/", nil)
+				req, _ = http.NewRequestWithContext(ctx, http.MethodGet, candidateBase+"/", nil)
 				response, err = client.Do(req)
 				if err != nil {
 					continue
@@ -248,6 +332,7 @@ func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string,
 			}
 			d.mu.Lock()
 			if d.cmd == cmd && d.state == "starting" {
+				d.options.Port = candidatePort
 				d.url, d.state = candidate, "running"
 			}
 			d.mu.Unlock()
@@ -311,7 +396,45 @@ func (d *DSH) Close() error {
 	d.mu.Lock()
 	d.closed = true
 	d.mu.Unlock()
-	return d.Stop()
+	stopErr := d.Stop()
+	d.mu.Lock()
+	bridge := d.bridge
+	d.bridge = nil
+	d.mu.Unlock()
+	bridgeErr := closeBridge(bridge)
+	if stopErr != nil && bridgeErr != nil {
+		return errors.Join(stopErr, bridgeErr)
+	}
+	if stopErr != nil {
+		return stopErr
+	}
+	return bridgeErr
+}
+
+// Restart 使用最近一次成功提交给桌面端的选项，供设置页的手动操作调用。
+func (d *DSH) Restart() error {
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		return errors.New("应用正在关闭")
+	}
+	o := d.launchOptions
+	if strings.TrimSpace(o.Executable) == "" {
+		d.mu.Unlock()
+		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
+	}
+	d.mu.Unlock()
+	if err := d.Stop(); err != nil {
+		return err
+	}
+	return d.Start(o)
+}
+
+func closeBridge(bridge *desktopBridge) error {
+	if bridge == nil {
+		return nil
+	}
+	return bridge.close()
 }
 
 func (d *DSH) Status() Status {
@@ -345,8 +468,8 @@ func checkCLI(o Options) (string, error) {
 	defer cancel()
 	output := newOutput()
 	cmd := newCLICommandContext(ctx, o.Executable, "--version")
-	// --version validates the executable only; never initialize or mutate DSH_HOME here.
-	cmd.Dir, cmd.Env = o.Workspace, childEnv("")
+	// --version 只校验可执行文件；这里绝不初始化或修改 DSH_HOME。
+	cmd.Dir, cmd.Env = o.Workspace, cliEnv("", o.Executable)
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = output, output, time.Second
 	cmd.Cancel = func() error { return killOwnedProcessTree(cmd) }
@@ -362,8 +485,8 @@ func checkCLI(o Options) (string, error) {
 	return strings.TrimSpace(output.text()), nil
 }
 
-// io.Writer, not Scanner: drain even hostile long lines. Keep complete lines only.
-// ponytail: 64 KiB in memory; drop individual lines over 16 KiB, no log files.
+// 使用 io.Writer 而不是 Scanner，确保恶意超长行也能被排空；只保留完整日志行。
+// ponytail：内存上限为 64 KiB；单行超过 16 KiB 时丢弃该行，不写入日志文件。
 type cliOutput struct {
 	mu       sync.Mutex
 	data     string

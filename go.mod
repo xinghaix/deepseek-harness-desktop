@@ -1,4 +1,4 @@
-module dsh-desktop
+module deepseek-harness-desktop
 
 go 1.27.0
 

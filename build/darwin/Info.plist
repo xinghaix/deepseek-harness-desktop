@@ -1,0 +1,29 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleName</key>
+    <string>Deepseek Harness Desktop</string>
+    <key>CFBundleDisplayName</key>
+    <string>Deepseek Harness Desktop</string>
+    <key>CFBundleExecutable</key>
+    <string>deepseek-harness-desktop</string>
+    <key>CFBundleIdentifier</key>
+    <string>ai.deepseek.harness.desktop</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleIconFile</key>
+    <string>icons</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Deepseek Harness Desktop</string>
+</dict>
+</plist>

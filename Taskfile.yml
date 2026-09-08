@@ -6,7 +6,7 @@ vars:
 
 tasks:
   build:
-    summary: Build the DSH Desktop binary for the selected platform
+    summary: Build the Deepseek Harness Desktop binary for the selected platform
     cmds:
       - task: '{{.TARGET_OS}}:build'
 
@@ -16,9 +16,9 @@ tasks:
       - go test -race ./...
 
   linux:build:
-    summary: Build the Linux desktop binary
+    summary: Build the Linux Deepseek Harness Desktop binary
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop .
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop .
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -27,9 +27,18 @@ tasks:
       CGO_ENABLED: '1'
 
   darwin:build:
-    summary: Build the macOS desktop binary
+    summary: Build the macOS Deepseek Harness Desktop binary and app bundle
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop .
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop .
+      - rm -rf bin/deepseek-harness-desktop.app
+      - mkdir -p build/darwin build/windows bin/deepseek-harness-desktop.app/Contents/{MacOS,Resources}
+      - wails3 generate icons -input build/appicon.png -macfilename build/darwin/icons.icns -windowsfilename build/windows/icon.ico
+      - cp bin/deepseek-harness-desktop bin/deepseek-harness-desktop.app/Contents/MacOS/deepseek-harness-desktop
+      - cp build/darwin/icons.icns bin/deepseek-harness-desktop.app/Contents/Resources/icons.icns
+      - cp build/darwin/Info.plist bin/deepseek-harness-desktop.app/Contents/Info.plist
+      - mkdir -p bin/deepseek-harness-desktop.app/Contents/Resources/plugins
+      - cp -R plugins/deepseek-harness-desktop-bridge bin/deepseek-harness-desktop.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
+      - chmod 755 bin/deepseek-harness-desktop.app/Contents/MacOS/deepseek-harness-desktop
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -38,9 +47,9 @@ tasks:
       CGO_ENABLED: '1'
 
   windows:build:
-    summary: Build the Windows desktop binary
+    summary: Build the Windows Deepseek Harness Desktop binary
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/dsh-desktop.exe .
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop.exe .
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
