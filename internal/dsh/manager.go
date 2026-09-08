@@ -1,4 +1,4 @@
-package main
+package dsh
 
 import (
 	"bytes"
@@ -29,10 +29,9 @@ const desktopStateDirEnv = "DSH_DESKTOP_STATE_DIR"
 
 // DSH 只管理自己接管的进程树，并通过全局锁和进程标记保证同一用户下
 // 同时只有一个桌面端拥有的 DSH；Unix 使用进程组，Windows 使用 Job Object。
-type DSH struct {
+type Manager struct {
 	mu                  sync.Mutex
 	lifecycleMu         sync.Mutex
-	windowMu            sync.Mutex
 	cmd                 *exec.Cmd
 	done                chan struct{}
 	cancel              context.CancelFunc
@@ -43,6 +42,7 @@ type DSH struct {
 	url, lastError      string
 	chatWindowURL       string
 	managementWindowURL string
+	openManagement      func() error
 	owner               *ownedProcess
 	processLock         *ownedProcessLock
 	bridge              *desktopBridge
@@ -424,11 +424,50 @@ func joinPathDirectories(dirs []string) string {
 	return strings.Join(result, string(os.PathListSeparator))
 }
 
-func newDSH() *DSH { return &DSH{state: "stopped"} }
+func New() *Manager { return &Manager{state: "stopped"} }
+
+// SetOpenManagement 注入打开配置窗口的实现。进程内核不能依赖 Wails。
+func (d *Manager) SetOpenManagement(fn func() error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.openManagement = fn
+}
+
+func (d *Manager) callOpenManagement() error {
+	d.mu.Lock()
+	fn := d.openManagement
+	d.mu.Unlock()
+	if fn == nil {
+		return errors.New("桌面配置窗口仅在 Wails 桌面应用中可用")
+	}
+	return fn()
+}
+
+// NoteChatWindowURL 记录 Chat 窗口当前加载的 URL；返回是否需要重新加载。
+func (d *Manager) NoteChatWindowURL(url string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.chatWindowURL == url {
+		return false
+	}
+	d.chatWindowURL = url
+	return true
+}
+
+// NoteManagementWindowURL 记录配置窗口当前加载的 URL；返回是否需要重新加载。
+func (d *Manager) NoteManagementWindowURL(url string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.managementWindowURL == url {
+		return false
+	}
+	d.managementWindowURL = url
+	return true
+}
 
 // commitCLIOptions 提交一次成功的 CLI 检测结果。若上一次 DSH 已经确认退出，
 // 这里同时清除旧的失败状态，避免新的配置页继续显示过期的启动错误。
-func (d *DSH) commitCLIOptions(o Options) {
+func (d *Manager) commitCLIOptions(o Options) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.cmd != nil {
@@ -440,13 +479,13 @@ func (d *DSH) commitCLIOptions(o Options) {
 	}
 }
 
-func (d *DSH) Start(o Options) error {
+func (d *Manager) Start(o Options) error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
 	return d.start(o)
 }
 
-func (d *DSH) start(o Options) error {
+func (d *Manager) start(o Options) error {
 	o, err := normalizeOptions(o)
 	if err != nil {
 		return err
@@ -566,7 +605,7 @@ func (d *DSH) start(o Options) error {
 	return nil
 }
 
-func (d *DSH) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+func (d *Manager) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
 	if !waitForOwnedProcessTree(owner, cmd.Process.Pid, 3*time.Second) {
 		d.mu.Lock()
 		if d.cmd == cmd {
@@ -585,7 +624,7 @@ func (d *DSH) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *own
 	d.finalizeProcess(cmd, owner, processLock, done, cancel, exitErr, cleanupErr)
 }
 
-func (d *DSH) awaitOwnedProcessTree(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+func (d *Manager) awaitOwnedProcessTree(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
 	for {
 		_ = killOwnedProcessTree(owner, cmd)
 		if waitForOwnedProcessTree(owner, cmd.Process.Pid, time.Second) {
@@ -595,7 +634,7 @@ func (d *DSH) awaitOwnedProcessTree(cmd *exec.Cmd, owner *ownedProcess, processL
 	}
 }
 
-func (d *DSH) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
+func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *ownedProcessLock, done chan struct{}, cancel context.CancelFunc, exitErr, cleanupErr error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.cmd != cmd {
@@ -629,7 +668,7 @@ func (d *DSH) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLock *o
 	close(done)
 }
 
-func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
+func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
 		Jar: jar, Timeout: time.Second,
@@ -700,7 +739,7 @@ func (d *DSH) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string,
 	}
 }
 
-func (d *DSH) failStartup(cmd *exec.Cmd, message string) {
+func (d *Manager) failStartup(cmd *exec.Cmd, message string) {
 	d.mu.Lock()
 	if d.cmd != cmd || d.state != "starting" {
 		d.mu.Unlock()
@@ -711,13 +750,13 @@ func (d *DSH) failStartup(cmd *exec.Cmd, message string) {
 	_ = d.Stop()
 }
 
-func (d *DSH) Stop() error {
+func (d *Manager) Stop() error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
 	return d.stop()
 }
 
-func (d *DSH) stop() error {
+func (d *Manager) stop() error {
 	d.mu.Lock()
 	cmd, owner, done := d.cmd, d.owner, d.done
 	if cmd == nil {
@@ -759,7 +798,7 @@ func (d *DSH) stop() error {
 	}
 }
 
-func (d *DSH) Close() error {
+func (d *Manager) Close() error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
 	d.mu.Lock()
@@ -781,7 +820,7 @@ func (d *DSH) Close() error {
 }
 
 // Restart 使用最近一次成功提交给桌面端的选项，供设置页的手动操作调用。
-func (d *DSH) Restart() error {
+func (d *Manager) Restart() error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
 	return d.restart()
@@ -789,13 +828,13 @@ func (d *DSH) Restart() error {
 
 // RestartWithOptions 使用配置页当前提交的路径和端口重启 DSH，并沿用配置页已有的
 // 校验与启动链路。桥接插件继续使用无参 Restart，保持原有行为。
-func (d *DSH) RestartWithOptions(o Options) error {
+func (d *Manager) RestartWithOptions(o Options) error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
 	return d.restartWithOptions(o)
 }
 
-func (d *DSH) restart() error {
+func (d *Manager) restart() error {
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
@@ -810,7 +849,7 @@ func (d *DSH) restart() error {
 	return d.restartWithOptions(o)
 }
 
-func (d *DSH) restartWithOptions(o Options) error {
+func (d *Manager) restartWithOptions(o Options) error {
 	if strings.TrimSpace(o.Executable) == "" {
 		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
 	}
@@ -827,7 +866,7 @@ func closeBridge(bridge *desktopBridge) error {
 	return bridge.close()
 }
 
-func (d *DSH) Status() Status {
+func (d *Manager) Status() Status {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s := Status{State: d.state, Options: d.options, Error: d.lastError}
@@ -840,7 +879,7 @@ func (d *DSH) Status() Status {
 	return s
 }
 
-func (d *DSH) browserURL() (string, error) {
+func (d *Manager) BrowserURL() (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.state != "running" {

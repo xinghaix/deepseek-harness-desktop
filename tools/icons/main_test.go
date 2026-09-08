@@ -11,7 +11,7 @@ import (
 
 func sourceTokens(t *testing.T) []pathToken {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "assets", "dsh-app-icon.svg"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "assets", "shared", "app-icon.svg"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package main
+package dsh
 
 import (
 	"context"
@@ -24,7 +24,7 @@ const (
 // desktopBridge 是只监听回环地址的控制面。DSH 插件通过自己的认证 RPC
 // 调用它，控制面本身只接受带随机令牌的有限操作。
 type desktopBridge struct {
-	owner    *DSH
+	owner    *Manager
 	listener net.Listener
 	server   *http.Server
 	url      string
@@ -33,7 +33,7 @@ type desktopBridge struct {
 	closeErr error
 }
 
-func newDesktopBridge(owner *DSH) (*desktopBridge, error) {
+func newDesktopBridge(owner *Manager) (*desktopBridge, error) {
 	var rawToken [32]byte
 	if _, err := rand.Read(rawToken[:]); err != nil {
 		return nil, fmt.Errorf("生成桌面桥接令牌失败: %w", err)
@@ -124,7 +124,7 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			writeBridgeError(w, http.StatusMethodNotAllowed, "打开桌面配置接口只接受 POST")
 			return
 		}
-		if err := b.owner.openManagement(); err != nil {
+		if err := b.owner.callOpenManagement(); err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return
 		}

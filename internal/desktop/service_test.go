@@ -1,0 +1,35 @@
+//go:build wails && (linux || darwin)
+
+package desktop
+
+import (
+	"os"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
+	raw, err := os.ReadFile(repoFile(t, "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "menu.AddRole(application.EditMenu)") {
+		t.Fatal("application menu must expose the system Edit role")
+	}
+}
+
+func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS 标题栏配置仅适用于 darwin")
+	}
+	options := ChatWindowOptions("http://127.0.0.1:12345")
+	if options.Mac.TitleBar.ToolbarStyle != application.MacToolbarStyleUnifiedCompact {
+		t.Fatalf("macOS Chat 应使用紧凑 unified 标题栏，得到 %v", options.Mac.TitleBar.ToolbarStyle)
+	}
+	if options.Mac.InvisibleTitleBarHeight != desktopNativeTopInset {
+		t.Fatalf("macOS 注入安全区与原生标题栏高度不一致：%d != %d", options.Mac.InvisibleTitleBarHeight, desktopNativeTopInset)
+	}
+}

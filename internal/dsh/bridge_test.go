@@ -1,4 +1,4 @@
-package main
+package dsh
 
 import (
 	"io"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
-	owner := newDSH()
+	owner := New()
 	bridge, err := newDesktopBridge(owner)
 	if err != nil {
 		t.Fatal(err)

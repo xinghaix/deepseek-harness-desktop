@@ -3,13 +3,40 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"log"
+	"net/http"
+	"runtime"
+
+	"deepseek-harness-desktop/internal/desktop"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+//go:embed assets/web
+//go:embed assets/shared/app-icon.png
+//go:embed assets/shared/app-icon.svg
+//go:embed assets/darwin/app-icon.png
+var assets embed.FS
+
+type DSH struct{ *desktop.Service }
+
 func main() {
-	manager := newDSH()
+	web, err := fs.Sub(assets, "assets/web")
+	if err != nil {
+		log.Fatal(err)
+	}
+	shared, err := fs.Sub(assets, "assets/shared")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/shared/", http.StripPrefix("/shared/", http.FileServer(http.FS(shared))))
+	mux.Handle("/", application.BundledAssetFileServer(web))
+
+	service := desktop.New()
+	manager := &DSH{Service: service}
 	app := application.New(application.Options{
 		Name:        "Deepseek Harness Desktop",
 		Description: "管理本机已安装的 DSH CLI，并在桌面 WebView 中运行 DSH Chat",
@@ -22,12 +49,12 @@ func main() {
 				}
 			},
 		},
-		Icon: appIcon,
+		Icon: appIcon(),
 		Services: []application.Service{
 			application.NewService(manager),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.BundledAssetFileServer(assets),
+			Handler: mux,
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
@@ -59,9 +86,21 @@ func main() {
 	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) { app.Quit() })
 	app.Menu.SetApplicationMenu(menu)
 
-	app.Window.NewWithOptions(managementWindowOptions("/"))
+	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func appIcon() []byte {
+	name := "assets/shared/app-icon.png"
+	if runtime.GOOS == "darwin" {
+		name = "assets/darwin/app-icon.png"
+	}
+	data, err := assets.ReadFile(name)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

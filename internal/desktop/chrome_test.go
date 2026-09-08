@@ -1,6 +1,4 @@
-//go:build wails
-
-package main
+package desktop
 
 import (
 	"strings"

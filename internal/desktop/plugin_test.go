@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestDesktopBridgePluginContract(t *testing.T) {
-	const root = "plugins/deepseek-harness-desktop-bridge"
+	root := repoFile(t, "plugins", "deepseek-harness-desktop-bridge")
 	manifestBytes, err := os.ReadFile(root + "/package.json")
 	if err != nil {
 		t.Fatal(err)

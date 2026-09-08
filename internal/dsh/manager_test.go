@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package main
+package dsh
 
 import (
 	"encoding/json"
@@ -221,7 +221,7 @@ func TestDSH(t *testing.T) {
 	t.Run("auth-argv-env-cwd-restart-and-log-bound", func(t *testing.T) {
 		t.Setenv("DSHD_TEST_CHILD", "loud")
 		o := options(t)
-		d := newDSH()
+		d := New()
 		t.Cleanup(func() { _ = d.Close() })
 		version, err := checkCLI(o)
 		if err != nil || version != "test-fixture-dsh" {
@@ -286,7 +286,7 @@ func TestDSH(t *testing.T) {
 	t.Run("concurrent-start-has-one-owner", func(t *testing.T) {
 		t.Setenv("DSHD_TEST_CHILD", "dynamic")
 		o := options(t)
-		d := newDSH()
+		d := New()
 		t.Cleanup(func() { _ = d.Close() })
 		const attempts = 4
 		ready := make(chan struct{})
@@ -322,7 +322,7 @@ func TestDSH(t *testing.T) {
 		t.Setenv("DSHD_TEST_CHILD", "dynamic")
 		first := options(t)
 		second := options(t)
-		d1, d2 := newDSH(), newDSH()
+		d1, d2 := New(), New()
 		t.Cleanup(func() { _ = d1.Close(); _ = d2.Close() })
 		if err := d1.Start(first); err != nil {
 			t.Fatal(err)
@@ -346,7 +346,7 @@ func TestDSH(t *testing.T) {
 		var hits atomic.Int32
 		foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1); w.WriteHeader(200) }))
 		defer foreign.Close()
-		d := newDSH()
+		d := New()
 		t.Cleanup(func() { _ = d.Close() })
 		o := options(t)
 		o.Port = foreign.Listener.Addr().(*net.TCPAddr).Port
@@ -373,7 +373,7 @@ func TestDSH(t *testing.T) {
 	t.Run("startup-failures", func(t *testing.T) {
 		for _, mode := range []string{"exit", "wrong-url", "no-url"} {
 			t.Setenv("DSHD_TEST_CHILD", mode)
-			d := newDSH()
+			d := New()
 			t.Cleanup(func() { _ = d.Close() })
 			if err := d.Start(options(t)); err != nil {
 				t.Fatal(err)
@@ -398,7 +398,7 @@ func TestDSH(t *testing.T) {
 		t.Setenv("DSHD_TEST_CHILD", "tree")
 		address := "127.0.0.1:" + strconv.Itoa(freePort(t))
 		t.Setenv("DSHD_TEST_DESCENDANT", address)
-		d := newDSH()
+		d := New()
 		t.Cleanup(func() { _ = d.Close() })
 		if err := d.Start(options(t)); err != nil {
 			t.Fatal(err)
@@ -425,7 +425,7 @@ func TestDSH(t *testing.T) {
 		t.Setenv("DSHD_TEST_CHILD", "dynamic")
 		o := options(t)
 		o.Port = 0
-		d := newDSH()
+		d := New()
 		t.Cleanup(func() { _ = d.Close() })
 		if err := d.Start(o); err != nil {
 			t.Fatal(err)
@@ -477,7 +477,7 @@ func TestRealDSH(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := newDSH()
+	d := New()
 	t.Cleanup(func() { _ = d.Close() })
 	for range 2 {
 		if err := d.Start(o); err != nil {

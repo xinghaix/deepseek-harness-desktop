@@ -3,6 +3,8 @@ version: '3'
 vars:
   TARGET_OS: '{{.GOOS | default OS}}'
   TARGET_ARCH: '{{.GOARCH | default ARCH}}'
+  DIST: dist
+  APP: deepseek-harness-desktop
 
 tasks:
   icons:
@@ -16,14 +18,16 @@ tasks:
       - task: '{{.TARGET_OS}}:build'
 
   test:
-    summary: Run the dependency-free process and UI contract tests
+    summary: Run process, UI contract, and Wails-tagged desktop tests
     cmds:
       - go test -race ./...
+      - go test -race -tags wails ./...
 
   linux:build:
     summary: Build the Linux Deepseek Harness Desktop binary
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop .
+      - mkdir -p {{.DIST}}
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -34,16 +38,16 @@ tasks:
   darwin:build:
     summary: Build the macOS Deepseek Harness Desktop binary and app bundle
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop .
-      - rm -rf bin/deepseek-harness-desktop.app
-      - mkdir -p build/darwin build/windows bin/deepseek-harness-desktop.app/Contents/{MacOS,Resources}
+      - mkdir -p {{.DIST}}
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - rm -rf {{.DIST}}/{{.APP}}.app
+      - mkdir -p {{.DIST}}/{{.APP}}.app/Contents/{MacOS,Resources/plugins}
       - go run ./tools/icons
-      - cp bin/deepseek-harness-desktop bin/deepseek-harness-desktop.app/Contents/MacOS/deepseek-harness-desktop
-      - cp build/darwin/icons.icns bin/deepseek-harness-desktop.app/Contents/Resources/icons.icns
-      - cp build/darwin/Info.plist bin/deepseek-harness-desktop.app/Contents/Info.plist
-      - mkdir -p bin/deepseek-harness-desktop.app/Contents/Resources/plugins
-      - cp -R plugins/deepseek-harness-desktop-bridge bin/deepseek-harness-desktop.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
-      - chmod 755 bin/deepseek-harness-desktop.app/Contents/MacOS/deepseek-harness-desktop
+      - cp {{.DIST}}/{{.APP}} {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
+      - cp assets/darwin/icons.icns {{.DIST}}/{{.APP}}.app/Contents/Resources/icons.icns
+      - cp assets/darwin/Info.plist {{.DIST}}/{{.APP}}.app/Contents/Info.plist
+      - cp -R plugins/deepseek-harness-desktop-bridge {{.DIST}}/{{.APP}}.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
+      - chmod 755 {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -54,7 +58,8 @@ tasks:
   windows:build:
     summary: Build the Windows Deepseek Harness Desktop binary
     cmds:
-      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o bin/deepseek-harness-desktop.exe .
+      - mkdir -p {{.DIST}}
+      - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:

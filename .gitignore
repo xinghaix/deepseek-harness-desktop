@@ -1,2 +1,7 @@
-bin/*
-!bin/.gitkeep
+# Build output
+/dist/
+/bin/
+
+# OS / IDE
+.DS_Store
+.idea/

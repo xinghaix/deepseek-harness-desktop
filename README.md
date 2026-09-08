@@ -13,6 +13,15 @@ Deepseek Harness Desktop 是 DSH 的轻量桌面伴侣：复用用户已经安�
 
 首页还提供可选的桌面管理桥接插件安装提示。安装后，在 DSH Chat 的「设置 → 插件 → 桌面管理」中可以查看状态、启动、停止和重启由本桌面端拥有的 DSH 进程。
 
+## 仓库布局
+
+- `main.go`：Wails 入口、资源嵌入和 `main.DSH.*` 绑定包装
+- `internal/dsh`：DSH 进程生命周期、CLI 发现和回环控制面（不依赖 Wails）
+- `internal/desktop`：窗口、标题栏注入和文件对话框
+- `assets/web`：配置页；`assets/shared`：跨平台图标源；`assets/{darwin,linux,windows}`：各平台打包输入
+- `plugins/deepseek-harness-desktop-bridge`：可选桌面管理桥接插件
+- `dist/`：编译打包产物（git 忽略）
+
 ## 桥接插件
 
 插件源码位于 [`plugins/deepseek-harness-desktop-bridge`](plugins/deepseek-harness-desktop-bridge)。在项目根目录执行：
@@ -32,27 +41,21 @@ go test -race ./...
 task build
 ```
 
-也可以直接使用 Wails：
-
-```bash
-wails3 build
-```
-
-在 macOS 上，构建任务会同时生成 `bin/deepseek-harness-desktop.app`；将该目录压缩或制作 DMG 后即可分发。当前应用包未进行开发者签名和公证。
+产物输出到 `dist/`（已 git 忽略）。在 macOS 上，构建任务会同时生成 `dist/deepseek-harness-desktop.app`；将该目录压缩或制作 DMG 后即可分发。当前应用包未进行开发者签名和公证。
 
 指定目标架构时：
 
 ```bash
-GOOS=windows GOARCH=amd64 wails3 build
-GOOS=darwin GOARCH=arm64 wails3 build
-GOOS=linux GOARCH=amd64 wails3 build
+GOOS=windows GOARCH=amd64 task build
+GOOS=darwin GOARCH=arm64 task build
+GOOS=linux GOARCH=amd64 task build
 ```
 
 Linux 构建需要 GTK 4 / WebKitGTK 6，macOS 构建需要 Xcode，Windows 构建使用 WebView2。未在目标系统实际构建或运行的组合，不宣称已验收。
 
 ### 图标资源
 
-`assets/dsh-app-icon.svg` 是统一的 1024×1024 方形主素材，已去掉外层 border；鲸鱼在所有输出中使用同一组 optical bounding box。Windows 的 ICO、Linux 的 hicolor SVG/16–512px PNG 使用主素材；macOS 使用 `assets/dsh-app-icon-macos.png` 和对应 ICNS，在同一几何上额外保留 10% 透明边距，以匹配 Dock 中其他应用的视觉重量。旧的 `dsh-favicon.svg/png` 保留为兼容路径，并与主素材保持一致。
+`assets/shared/app-icon.svg` 是统一的 1024×1024 方形主素材，已去掉外层 border；鲸鱼在所有输出中使用同一组 optical bounding box。Windows 的 ICO、Linux 的 hicolor SVG/16–512px PNG 使用主素材；macOS 使用 `assets/darwin/app-icon.png` 和对应 ICNS，在同一几何上额外保留 10% 透明边距，以匹配 Dock 中其他应用的视觉重量。
 
 在目标平台的原生 Go 环境中执行下面的命令即可重新生成全部图标；macOS 的 ICNS 使用可移植的 ICNS 编码器生成，不依赖手工维护二进制文件：
 
@@ -60,7 +63,7 @@ Linux 构建需要 GTK 4 / WebKitGTK 6，macOS 构建需要 Xcode，Windows 构�
 go run ./tools/icons
 ```
 
-Linux 安装包可使用 `build/linux/deepseek-harness-desktop.desktop`，并将 `build/linux/icons/hicolor` 安装到系统的 icon theme 目录。
+Linux 安装包可使用 `assets/linux/deepseek-harness-desktop.desktop`，并将 `assets/linux/icons/hicolor` 安装到系统的 icon theme 目录。
 
 ## 数据与进程边界
 

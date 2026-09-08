@@ -45,16 +45,13 @@ type pathToken struct {
 }
 
 func main() {
-	sourceSVG := flag.String("source-svg", "assets/dsh-app-icon.svg", "读取鲸鱼路径的统一主素材 SVG")
-	appSVG := flag.String("app-svg", "assets/dsh-app-icon.svg", "统一主素材 SVG 输出路径")
-	appPNG := flag.String("app-png", "assets/dsh-app-icon.png", "统一主素材 PNG 输出路径")
-	macPNG := flag.String("mac-png", "assets/dsh-app-icon-macos.png", "macOS 额外留白 PNG 输出路径")
-	compatSVG := flag.String("compat-svg", "assets/dsh-favicon.svg", "旧 favicon SVG 兼容输出路径")
-	compatPNG := flag.String("compat-png", "assets/dsh-favicon.png", "旧 favicon PNG 兼容输出路径")
-	buildPNG := flag.String("build-png", "build/appicon.png", "Wails 构建输入 PNG 输出路径")
-	windowsICO := flag.String("windows-ico", "build/windows/icon.ico", "Windows ICO 输出路径")
-	linuxRoot := flag.String("linux-root", "build/linux/icons", "Linux hicolor 图标根目录")
-	darwinICNS := flag.String("darwin-icns", "build/darwin/icons.icns", "macOS ICNS 输出路径")
+	sourceSVG := flag.String("source-svg", "assets/shared/app-icon.svg", "读取鲸鱼路径的统一主素材 SVG")
+	appSVG := flag.String("app-svg", "assets/shared/app-icon.svg", "统一主素材 SVG 输出路径")
+	appPNG := flag.String("app-png", "assets/shared/app-icon.png", "统一主素材 PNG 输出路径")
+	macPNG := flag.String("mac-png", "assets/darwin/app-icon.png", "macOS 额外留白 PNG 输出路径")
+	windowsICO := flag.String("windows-ico", "assets/windows/icon.ico", "Windows ICO 输出路径")
+	linuxRoot := flag.String("linux-root", "assets/linux/icons", "Linux hicolor 图标根目录")
+	darwinICNS := flag.String("darwin-icns", "assets/darwin/icons.icns", "macOS ICNS 输出路径")
 	flag.Parse()
 
 	source, err := os.ReadFile(*sourceSVG)
@@ -75,15 +72,11 @@ func main() {
 	if err != nil {
 		fatalf("生成主 PNG 失败: %v", err)
 	}
-	for _, output := range []string{*appSVG, *compatSVG} {
-		if err := writeBytes(output, masterSVG); err != nil {
-			fatalf("写入 SVG %s 失败: %v", output, err)
-		}
+	if err := writeBytes(*appSVG, masterSVG); err != nil {
+		fatalf("写入 SVG %s 失败: %v", *appSVG, err)
 	}
-	for _, output := range []string{*appPNG, *compatPNG, *buildPNG} {
-		if err := writeBytes(output, masterPNG); err != nil {
-			fatalf("写入 PNG %s 失败: %v", output, err)
-		}
+	if err := writeBytes(*appPNG, masterPNG); err != nil {
+		fatalf("写入 PNG %s 失败: %v", *appPNG, err)
 	}
 	macIcon, err := encodePNG(renderIcon(canvasSize, tokens, macIconScale))
 	if err != nil {

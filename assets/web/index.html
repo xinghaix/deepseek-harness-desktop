@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fc">
+  <meta name="theme-color" content="#1b1f27" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/svg+xml" href="/shared/app-icon.svg">
+  <title>Deepseek Harness Desktop</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="/shared/app-icon.svg" alt="DSH">
+      <div class="brand-copy"><span class="brand-name">Deepseek Harness Desktop</span><span class="brand-caption">DSH 的桌面伴侣</span></div>
+    </div>
+  </header>
+
+  <section id="loading-view" class="loading-view">
+    <div class="loading-card">
+      <div class="loading-mark"><img src="/shared/app-icon.svg" alt="DSH"></div>
+      <div class="loading-title">正在准备 Deepseek Harness Desktop</div>
+      <p class="loading-message" id="loading-message">正在检查本机 CLI、用户目录和 Node 全局目录…</p>
+      <div class="loading-progress" aria-hidden="true"></div>
+      <p class="loading-hint">不会下载或修改你的 DSH 配置</p>
+    </div>
+  </section>
+
+  <section id="onboarding-view" class="onboarding" hidden>
+    <div class="onboarding-main">
+      <div class="eyebrow">首次启动</div>
+      <h1>把 DSH 带进桌面端</h1>
+      <p class="lead">桌面端会先检查本机已有的 dsh CLI。确认后，DSH Chat 会在独立的桌面 WebView 中打开；你的 DSH Home、凭据和插件仍由 DSH 自己管理。</p>
+
+      <details class="advanced" id="advanced-settings">
+        <summary class="advanced-summary">
+          <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title">选择 CLI、DSH Home、Chat 工作目录与端口</span><span class="advanced-summary-copy">自动检测不到时，可手动指定启动参数。</span></span></span>
+        </summary>
+        <div class="advanced-body">
+          <div class="field">
+            <label for="executable">dsh 可执行文件</label>
+            <div class="input-row"><input id="executable" autocomplete="off" spellcheck="false" placeholder="dsh 或绝对路径"><button class="secondary" id="choose-executable" type="button">选择文件</button></div>
+            <p class="hint">如果自动检测不到，请选择已经安装的 dsh、dsh.cmd 或绝对路径；桌面端不会自动下载 CLI。</p>
+          </div>
+          <div class="field">
+            <label for="home">DSH Home</label>
+            <div class="input-row"><input id="home" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-home" type="button">选择文件夹</button></div>
+            <p class="hint">只把这个目录作为 DSH_HOME 传给子进程，不复制、迁移或生成第二份配置。</p>
+          </div>
+          <div class="field">
+            <label for="desktop-dir">桌面端目录（固定）</label>
+            <div class="input-row"><input id="desktop-dir" autocomplete="off" spellcheck="false" readonly aria-readonly="true"></div>
+            <p class="hint">固定为 <code>DSH_HOME/.deepseek-harness-desktop</code>，仅供桌面端使用；不会把它当作 Chat workspace。</p>
+          </div>
+          <div class="field">
+            <label for="workspace">Chat 工作目录（DSH cwd）</label>
+            <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button">选择文件夹</button></div>
+            <p class="hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录，或选择上面的桌面端目录以限制相对路径范围。</p>
+          </div>
+          <div class="field">
+            <label for="port">本机端口</label>
+            <input id="port" type="number" min="0" max="65535" step="1" inputmode="numeric">
+            <p class="hint">0 表示由操作系统自动选择 loopback 空闲端口。</p>
+          </div>
+          <div class="button-row"><button class="secondary" id="check-cli" type="button">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button">恢复默认路径</button></div>
+        </div>
+      </details>
+
+      <section class="install-card" id="install-card" hidden>
+        <h2>还没有找到 dsh？</h2>
+        <p>可以先在终端安装官方 CLI，安装完成后回到这里点击「重新检测 CLI」。下面只展示命令，不会由桌面端直接执行。</p>
+        <ol class="install-steps"><li>确认 Node.js 可用：<code id="node-command">node --version</code></li><li>安装 DSH CLI：<code id="cli-install-command">npm install --global @deepseek-ai/dsh</code></li><li>验证安装：<code id="cli-verify-command">dsh --version</code></li></ol>
+        <div class="button-row" style="margin-top:14px"><button class="secondary" id="copy-cli-command" type="button">复制安装命令</button><button class="secondary" id="choose-executable-missing" type="button">选择已安装的 dsh</button></div>
+      </section>
+
+      <details class="bridge-card" id="bridge-card">
+        <summary class="bridge-summary">
+          <span class="bridge-head"><img class="bridge-mark" src="/shared/app-icon.svg" alt=""><span class="bridge-copy"><span class="bridge-title">可选：安装桌面管理桥接插件</span><span class="bridge-summary-copy">让 DSH Chat 能控制桌面端；不安装也可以继续使用 DSH Chat。</span></span></span>
+        </summary>
+        <div class="bridge-body">
+          <p class="hint">安装后，DSH Chat 的「设置 → 插件 → 桌面管理」会提供状态、启动、停止、重启和打开桌面配置按钮。</p>
+          <div class="bridge-path"><input id="bridge-path" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-bridge" type="button">选择目录</button></div>
+          <div class="bridge-status" id="bridge-status">正在准备本地插件安装提示…</div>
+          <pre class="command" id="bridge-command"></pre>
+          <div class="button-row"><button class="secondary" id="copy-bridge-command" type="button">复制当前系统命令</button></div>
+        </div>
+      </details>
+
+      <div class="detect-card" id="detect-card" data-state="checking">
+        <div class="detect-icon"><img class="bridge-mark" src="/shared/app-icon.svg" alt=""></div>
+        <div class="detect-copy"><div class="detect-title" id="detect-title">正在检查 dsh</div><p class="detect-message" id="detect-message">正在检查 GUI 可见的 PATH 和常见 Node 全局目录…</p></div>
+        <div class="detect-runtime"><span class="detect-runtime-label">桌面端状态</span><span class="connection-chip" id="header-state" data-state="stopped">未启动</span></div>
+      </div>
+
+      <div class="onboarding-actions">
+        <button class="secondary" id="retry-discovery" type="button">重新检查</button>
+        <button class="primary" id="start-first" type="button" disabled>启动并打开 DSH Chat</button>
+      </div>
+      <section id="error-card" class="error-card" hidden aria-live="assertive">
+        <div class="error-toolbar">
+          <span class="error-title" id="error-title">DSH 启动失败</span>
+          <div>
+            <span class="error-copy-state" id="error-copy-state" aria-live="polite"></span>
+            <button class="secondary error-copy" id="copy-error" type="button" aria-label="复制错误信息" title="复制错误信息">复制</button>
+          </div>
+        </div>
+        <details class="error-details" id="error-details-panel" aria-label="查看原始错误：DSH 返回的原始错误信息">
+          <summary>查看日志</summary>
+          <pre id="error-details-text">暂无错误详情</pre>
+        </details>
+      </section>
+      <div class="inline-message" id="onboarding-message" aria-live="polite"></div>
+    </div>
+
+    <aside class="steps-panel">
+      <h2>三步完成设置</h2>
+      <ol class="steps">
+        <li class="step" id="step-cli" data-active="true"><span class="step-number">1</span><div><div class="step-title">检查 CLI</div><p class="step-copy">找到并验证本机 dsh</p></div></li>
+        <li class="step" id="step-bridge"><span class="step-number">2</span><div><div class="step-title">可选桥接</div><p class="step-copy">让 DSH 设置可管理桌面端</p></div></li>
+        <li class="step" id="step-chat"><span class="step-number">3</span><div><div class="step-title">打开 Chat</div><p class="step-copy">在桌面 WebView 中开始工作</p></div></li>
+      </ol>
+      <p class="privacy-note">桌面端只管理自己启动的一个 DSH 进程。凭据不会显示在引导页、日志或桥接响应中。</p>
+    </aside>
+  </section>
+
+  <section id="dashboard-view" hidden>
+    <div class="dashboard-head"><div><div class="eyebrow">运行控制台</div><h1>DSH 已准备好</h1><p>从这里管理启动参数；聊天内容和 DSH 设置仍保留在官方 DSH Web UI 中。</p></div><button class="secondary" id="reconfigure" type="button">重新配置</button></div>
+    <div class="dashboard-grid">
+      <div>
+        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped">未启动</span><span class="version" id="version">尚未检测</span></div><p class="status-summary" id="dashboard-message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled>停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled>在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span>CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span>DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span>桌面端目录</span><strong id="metric-desktop-dir">—</strong></div><div class="metric"><span>Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span>地址</span><strong id="metric-url">未就绪</strong></div></div></section>
+        <section class="panel log-panel"><div class="panel-heading"><h2>启动日志</h2><span class="panel-caption">最近 64 KiB</span></div><pre id="logs">暂无日志</pre></section>
+      </div>
+      <aside>
+        <section class="panel"><h2>常用入口</h2><div class="quick-links"><button id="open-home" type="button">打开 DSH Home</button><button id="open-workspace" type="button">打开工作目录</button><button id="open-settings" type="button">打开 settings.yaml</button></div></section>
+        <section class="panel"><h2>桌面管理插件</h2><p class="hint">在 DSH Chat 中打开「设置 → 插件 → 桌面管理」，即可在同一个 DSH WebView 里控制桌面端。</p><button class="secondary" id="show-bridge-guide" type="button" style="margin-top:14px">查看安装命令</button></section>
+      </aside>
+    </div>
+    <p class="footer-note">DSH Chat 使用独立的桌面 WebView 窗口打开，不会跳转到系统默认浏览器。</p>
+  </section>
+</main>
+
+<script src="/wails/runtime.js" type="module"></script>
+<script src="/app.js"></script>
+</body>
+</html>

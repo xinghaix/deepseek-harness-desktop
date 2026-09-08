@@ -1,16 +1,27 @@
-package main
+package desktop
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
 
-func TestManagementUIContract(t *testing.T) {
-	data, err := assets.ReadFile("assets/index.html")
-	if err != nil {
-		t.Fatal(err)
+func readManagementUI(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	for _, name := range []string{"index.html", "styles.css", "app.js"} {
+		data, err := os.ReadFile(repoFile(t, "assets", "web", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Write(data)
+		b.WriteByte('\n')
 	}
-	html := string(data)
+	return b.String()
+}
+
+func TestManagementUIContract(t *testing.T) {
+	html := readManagementUI(t)
 	for _, label := range []string{
 		"dsh 可执行文件", "DSH Home", "桌面端目录（固定）", "Chat 工作目录", "本机端口",
 		"选择文件", "恢复默认路径", "选择文件夹", "重新检测 CLI",
