@@ -28,6 +28,7 @@ tasks:
     cmds:
       - mkdir -p {{.DIST}}
       - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}} .
+      - sh scripts/sign.sh {{.DIST}}/{{.APP}}
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -48,6 +49,8 @@ tasks:
       - cp assets/darwin/Info.plist {{.DIST}}/{{.APP}}.app/Contents/Info.plist
       - cp -R plugins/deepseek-harness-desktop-bridge {{.DIST}}/{{.APP}}.app/Contents/Resources/plugins/deepseek-harness-desktop-bridge
       - chmod 755 {{.DIST}}/{{.APP}}.app/Contents/MacOS/{{.APP}}
+      - sh scripts/sign.sh {{.DIST}}/{{.APP}}.app
+      - sh scripts/package-darwin-dmg.sh {{.DIST}}/{{.APP}}.app {{.DIST}}/{{.APP}}-darwin-{{.TARGET_ARCH}}.dmg
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:
@@ -60,6 +63,10 @@ tasks:
     cmds:
       - mkdir -p {{.DIST}}
       - go build -tags '{{.BUILD_TAGS}}' -trimpath -buildvcs=false -o {{.DIST}}/{{.APP}}.exe .
+      - cmd: sh scripts/sign.sh {{.DIST}}/{{.APP}}.exe
+        platforms: [linux, darwin]
+      - cmd: powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 {{.DIST}}/{{.APP}}.exe
+        platforms: [windows]
     vars:
       BUILD_TAGS: '{{if .EXTRA_TAGS}}wails,{{.EXTRA_TAGS}}{{else}}wails{{end}}'
     env:

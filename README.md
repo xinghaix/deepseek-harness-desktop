@@ -21,6 +21,7 @@ Deepseek Harness Desktop 是 DSH 的轻量桌面伴侣：复用用户已经安�
 - `assets/web`：配置页；`assets/shared`：跨平台图标源；`assets/{darwin,linux,windows}`：各平台打包输入
 - `plugins/deepseek-harness-desktop-bridge`：可选桌面管理桥接插件
 - `dist/`：编译打包产物（git 忽略）
+- `scripts/sign.sh`：跨平台自签名入口
 
 ## 桥接插件
 
@@ -41,7 +42,13 @@ go test -race ./...
 task build
 ```
 
-产物输出到 `dist/`（已 git 忽略）。在 macOS 上，构建任务会同时生成 `dist/deepseek-harness-desktop.app`；将该目录压缩或制作 DMG 后即可分发。当前应用包未进行开发者签名和公证。
+产物输出到 `dist/`（已 git 忽略）。macOS 还会额外生成 `dist/deepseek-harness-desktop-darwin-<arch>.dmg`（应用 + Applications 快捷方式，打开后拖进去即可安装）。`task build` 会按当前平台做自签名，同一套脚本在 macOS / Linux / Windows 上都能跑：
+
+- macOS：对 `.app` 做 ad-hoc `codesign`（`scripts/sign-darwin.sh`），并生成可拖到 Applications 的安装 DMG
+- Windows：用当前用户存储里的自签代码签名证书做 Authenticode（`scripts/sign-windows.ps1`）
+- Linux：写出 `.sha256` 校验和；系统没有等价的代码签名 API
+
+这不是 Apple Developer ID / Microsoft EV 签名，也未经公证。从网上下载后，macOS 仍可能需要右键「打开」，Windows 仍可能被 SmartScreen 拦截。
 
 指定目标架构时：
 
@@ -64,6 +71,17 @@ go run ./tools/icons
 ```
 
 Linux 安装包可使用 `assets/linux/deepseek-harness-desktop.desktop`，并将 `assets/linux/icons/hicolor` 安装到系统的 icon theme 目录。
+
+### 发布
+
+只对 **main 上的版本 tag** 打包。在已经合入 main 的提交上打 `vX.Y.Z` 并推送后，GitHub Actions 会在对应系统上构建并自签名，然后创建 GitHub Release（含 SHA256SUMS）：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+不在 main 上的 tag 会被 workflow 拒绝。
 
 ## 数据与进程边界
 
