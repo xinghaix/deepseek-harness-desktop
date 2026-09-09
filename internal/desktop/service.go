@@ -188,7 +188,6 @@ func presentConfigModal(chat, config application.Window) {
 		return
 	}
 	config.SetAlwaysOnTop(true)
-	config.SetFrameless(true)
 	config.SetCloseButtonState(application.ButtonHidden)
 	config.SetMinimiseButtonState(application.ButtonHidden)
 	config.SetMaximiseButtonState(application.ButtonHidden)

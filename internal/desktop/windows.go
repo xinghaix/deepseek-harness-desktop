@@ -47,7 +47,10 @@ func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
 		JS:                    desktopModalChromeJS,
 	}
 	if runtime.GOOS == "darwin" {
+		// Default Frameless keeps NSWindowStyleMaskTitled|Closable so traffic
+		// lights stay. A custom radius forces a true borderless window.
 		options.Mac.InvisibleTitleBarHeight = 0
+		options.Mac.CornerRadius = 12
 	}
 	return options
 }

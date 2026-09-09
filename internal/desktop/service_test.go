@@ -33,6 +33,9 @@ func TestConfigModalStaysAboveChatWindow(t *testing.T) {
 	if !modal.Frameless || modal.CloseButtonState != application.ButtonHidden {
 		t.Fatal("config modal over Chat must not show traffic lights or window chrome")
 	}
+	if runtime.GOOS == "darwin" && modal.Mac.CornerRadius == 0 {
+		t.Fatal("macOS config modal must use a custom corner radius so Wails does not keep AppKit traffic lights")
+	}
 	if runtime.GOOS == "darwin" && ManagementWindowOptions("/").Frameless {
 		t.Fatal("first-run setup window should keep native traffic lights")
 	}
