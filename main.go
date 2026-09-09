@@ -72,30 +72,9 @@ func main() {
 		},
 	})
 
-	menu := app.NewMenu()
-	// Wails 的 Edit role 会把当前获得焦点的 WebView 作为目标，统一提供
-	// Cmd/Ctrl+C、V、X、A、Z、Shift+Z 等系统编辑快捷键；配置页和 Chat
-	// 不需要各自重复实现一套剪贴板透传逻辑。
-	menu.AddRole(application.EditMenu)
-	settingsMenu := menu.AddSubmenu("设置")
-	settingsMenu.Add("打开桌面端配置").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
-		if err := manager.OpenManagement(); err != nil {
-			log.Printf("打开桌面端配置失败: %v", err)
-		}
-	})
-	settingsMenu.Add("打开 DSH Chat").OnClick(func(*application.Context) {
-		if err := manager.OpenDSH(); err != nil {
-			log.Printf("打开 DSH Chat 失败: %v", err)
-		}
-	})
-	settingsMenu.AddSeparator()
-	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) {
-		if err := manager.RequestQuit(); err != nil {
-			log.Printf("退出确认失败: %v", err)
-			app.Quit()
-		}
-	})
-	app.Menu.SetApplicationMenu(menu)
+	// 桌面动作放进各平台宿主菜单（macOS 应用菜单 / Windows·Linux「文件」），
+	// 不再单独挂「设置」。Edit role 仍负责把焦点 WebView 接到系统剪贴板快捷键。
+	app.Menu.SetApplicationMenu(desktop.ApplicationMenu(app, manager))
 
 	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 

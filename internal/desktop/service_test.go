@@ -12,7 +12,7 @@ import (
 )
 
 func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
-	raw, err := os.ReadFile(repoFile(t, "main.go"))
+	raw, err := os.ReadFile(repoFile(t, "internal", "desktop", "menu.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
