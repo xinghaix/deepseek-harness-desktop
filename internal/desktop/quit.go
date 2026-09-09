@@ -32,7 +32,7 @@ func (d *Service) RequestQuit() error {
 		d.forceQuit()
 		return nil
 	}
-	chat, ok := app.Window.GetByName("dsh")
+	chat, ok := app.Window.GetByName(chatWindowName)
 	if !ok {
 		d.forceQuit()
 		return nil
@@ -63,7 +63,7 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 	dialog.SetCancelButton(stay)
 	stay.OnClick(func() { d.quitPromptOpen.Store(false) })
 	quit.OnClick(func() { d.forceQuit() })
-	if chat, ok := app.Window.GetByName("dsh"); ok {
+	if chat, ok := app.Window.GetByName(chatWindowName); ok {
 		dialog.AttachToWindow(chat)
 	}
 	dialog.Show()
@@ -77,10 +77,13 @@ func (d *Service) forceQuit() {
 	if app == nil {
 		return
 	}
-	if config, ok := app.Window.GetByName("main"); ok {
+	if config, ok := app.Window.GetByName(configWindowName); ok {
 		config.Close()
 	}
-	if chat, ok := app.Window.GetByName("dsh"); ok {
+	if setup, ok := app.Window.GetByName(setupWindowName); ok {
+		setup.Close()
+	}
+	if chat, ok := app.Window.GetByName(chatWindowName); ok {
 		chat.Close()
 	}
 	app.Quit()

@@ -8,9 +8,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+const (
+	setupWindowName  = "main"
+	configWindowName = "config"
+	chatWindowName   = "dsh"
+)
+
 func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
-		Name:               "main",
+		Name:               setupWindowName,
 		Title:              "Deepseek Harness Desktop",
 		Width:              980,
 		Height:             760,
@@ -26,7 +32,7 @@ func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 
 func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
-		Name:                  "main",
+		Name:                  configWindowName,
 		Title:                 "桌面配置",
 		Width:                 720,
 		Height:                680,
@@ -57,7 +63,7 @@ func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
 
 func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
-		Name:               "dsh",
+		Name:               chatWindowName,
 		Title:              "Deepseek Harness Desktop",
 		Width:              1280,
 		Height:             860,

@@ -123,7 +123,7 @@ func (d *Service) OpenDSH() error {
 	// dsh web cookies are SameSite=Strict. Navigating the config WebView
 	// (wails://) to 127.0.0.1 drops the login cookie on the 303 to /. Chat
 	// must be a separate WebView whose first load is the printed token URL.
-	chat, ok := app.Window.GetByName("dsh")
+	chat, ok := app.Window.GetByName(chatWindowName)
 	if !ok {
 		chat = app.Window.NewWithOptions(ChatWindowOptions(chatURL))
 		d.hookChatWindow(app, chat)
@@ -152,25 +152,25 @@ func (d *Service) OpenManagement() error {
 	}
 	d.windowMu.Lock()
 	defer d.windowMu.Unlock()
-	chat, chatOK := app.Window.GetByName("dsh")
-	window, ok := app.Window.GetByName("main")
+	chat, chatOK := app.Window.GetByName(chatWindowName)
 	if chatOK {
 		const modalURL = "/?manage=1&modal=1"
-		if ok && !d.configIsModal {
-			d.configHooked = false
-			window.Close()
-			ok = false
-		}
+		window, ok := app.Window.GetByName(configWindowName)
 		if !ok {
 			window = app.Window.NewWithOptions(ConfigModalWindowOptions(modalURL))
 			d.configIsModal = true
+			d.configHooked = false
 			d.NoteManagementWindowURL(modalURL)
+		}
+		if setup, setupOK := app.Window.GetByName(setupWindowName); setupOK {
+			setup.Hide()
 		}
 		d.hookConfigWindow(window)
 		presentConfigModal(chat, window)
 		return nil
 	}
 	const managementURL = "/?manage=1"
+	window, ok := app.Window.GetByName(setupWindowName)
 	if !ok {
 		window = app.Window.NewWithOptions(ManagementWindowOptions(managementURL))
 		d.NoteManagementWindowURL(managementURL)
@@ -204,15 +204,16 @@ func (d *Service) dismissConfigModal(app *application.App, chat application.Wind
 	if chat != nil {
 		chat.ExecJS(undimChatJS)
 	}
-	config, ok := app.Window.GetByName("main")
-	if !ok {
-		return
-	}
 	d.configHooked = false
 	d.configIsModal = false
 	d.configDirty = false
-	config.SetAlwaysOnTop(false)
-	config.Close()
+	if config, ok := app.Window.GetByName(configWindowName); ok {
+		config.SetAlwaysOnTop(false)
+		config.Close()
+	}
+	if setup, ok := app.Window.GetByName(setupWindowName); ok {
+		setup.Close()
+	}
 }
 
 func (d *Service) hookConfigWindow(window application.Window) {
@@ -231,7 +232,7 @@ func (d *Service) hookConfigWindow(window application.Window) {
 		if err != nil {
 			return
 		}
-		if chat, ok := app.Window.GetByName("dsh"); ok {
+		if chat, ok := app.Window.GetByName(chatWindowName); ok {
 			chat.ExecJS(undimChatJS)
 			chat.Focus()
 		}
@@ -252,12 +253,12 @@ func (d *Service) TryDismissConfig() error {
 		return err
 	}
 	if d.configDirty {
-		if config, ok := app.Window.GetByName("main"); ok {
+		if config, ok := app.Window.GetByName(configWindowName); ok {
 			config.Focus()
 		}
 		return nil
 	}
-	chat, _ := app.Window.GetByName("dsh")
+	chat, _ := app.Window.GetByName(chatWindowName)
 	d.dismissConfigModal(app, chat)
 	if chat != nil {
 		chat.Show()
@@ -274,7 +275,7 @@ func (d *Service) DismissConfig() error {
 		return err
 	}
 	d.configDirty = false
-	chat, _ := app.Window.GetByName("dsh")
+	chat, _ := app.Window.GetByName(chatWindowName)
 	d.dismissConfigModal(app, chat)
 	if chat != nil {
 		chat.Show()
@@ -291,8 +292,11 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if d.allowQuit.Load() {
 			d.configDirty = false
-			if config, ok := app.Window.GetByName("main"); ok {
+			if config, ok := app.Window.GetByName(configWindowName); ok {
 				config.Close()
+			}
+			if setup, ok := app.Window.GetByName(setupWindowName); ok {
+				setup.Close()
 			}
 			return
 		}
