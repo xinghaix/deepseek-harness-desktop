@@ -46,7 +46,7 @@ func TestManagementUIContract(t *testing.T) {
 		"Start", "Stop", "Status", "OpenDSH", "ChooseExecutable",
 		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
-		"SetConfigDirty", "DismissConfig",
+		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)
@@ -69,6 +69,12 @@ func TestManagementUIContract(t *testing.T) {
 	}
 	if !strings.Contains(html, "TryDismissConfig") {
 		t.Fatal("clicking outside a clean config modal must try to dismiss it")
+	}
+	if !strings.Contains(html, "dsh-desktop-config-modal") {
+		t.Fatal("reopened desktop config over Chat must use modal styling without first-run chrome")
+	}
+	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "退出时若有任务正在执行") {
+		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")
 	}
 	if !strings.Contains(html, `api("ReloadChat"`) {
 		t.Fatal("runtime config changes must reopen Chat instead of restarting the desktop app")

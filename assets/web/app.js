@@ -3,7 +3,10 @@ const labels = { stopped: "未启动", starting: "启动中", running: "运行�
 const api = (method, ...args) => wails.Call.ByName(`main.DSH.${method}`, ...args);
 const storageKey = "deepseek-harness-desktop.options";
 const onboardingKey = "deepseek-harness-desktop.onboarding-done";
-const manualManagement = new URLSearchParams(window.location.search).get("manage") === "1";
+const pageParams = new URLSearchParams(window.location.search);
+const manualManagement = pageParams.get("manage") === "1";
+const configModal = pageParams.get("modal") === "1";
+if (configModal) document.documentElement.classList.add("dsh-desktop-config-modal");
 let state = "stopped";
 let busy = false;
 let cliReady = false;
@@ -319,12 +322,30 @@ $("discard-confirm").onclick = () => run(async () => { if (baselineOptions) fill
 $("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; void loadGuides(); $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
 $("check-update").onclick = () => run(() => api("CheckUpdate"));
 $("auto-check-update").onchange = () => run(() => api("SetAutoCheckUpdate", $("auto-check-update").checked));
+function applyConfirmQuitPref(enabled) {
+  ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
+}
+async function loadDesktopPrefs() {
+  try {
+    const prefs = await api("DesktopPrefs");
+    if (prefs && typeof prefs.confirmQuitWhenBusy === "boolean") applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
+  } catch (_) {}
+}
+["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.onchange = () => run(async () => {
+    const prefs = await api("SetConfirmQuitWhenBusy", el.checked);
+    applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
+  });
+});
 $("install-update").onclick = () => run(() => api("InstallUpdate"), () => setMessage("正在安装桌面端更新并重启…"));
 $("open-release").onclick = () => run(() => api("OpenReleasePage"));
 ["executable", "workspace"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); }));
 $("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); syncConfigDirty(); });
 async function load() {
   showLoading(manualManagement ? "正在打开桌面配置…" : "正在读取已保存配置…");
+  void loadDesktopPrefs();
   void api("AppVersion").then((v) => {
     const shown = formatAppVersion(v);
     if (shown) $("app-caption").textContent = `DSH 的桌面伴侣 · ${shown}`;

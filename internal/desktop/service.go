@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"deepseek-harness-desktop/internal/dsh"
@@ -21,18 +22,23 @@ import (
 
 type Service struct {
 	*dsh.Manager
-	windowMu      sync.Mutex
-	updater       *update.Updater
-	stopAuto      context.CancelFunc
-	configHooked  bool
-	chatHooked    bool
-	openedChatURL string
-	configDirty   bool
+	windowMu       sync.Mutex
+	updater        *update.Updater
+	stopAuto       context.CancelFunc
+	prefs          desktopPrefs
+	configHooked   bool
+	chatHooked     bool
+	openedChatURL  string
+	configDirty    bool
+	configIsModal  bool
+	allowQuit      atomic.Bool
+	quitPromptOpen atomic.Bool
 }
 
 func New() *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel}
+	s.prefs.load()
 	s.SetOpenManagement(s.OpenManagement)
 	go s.updater.RunPeriodic(ctx)
 	return s
@@ -146,24 +152,32 @@ func (d *Service) OpenManagement() error {
 	}
 	d.windowMu.Lock()
 	defer d.windowMu.Unlock()
-	const managementURL = "/?manage=1"
 	chat, chatOK := app.Window.GetByName("dsh")
 	window, ok := app.Window.GetByName("main")
-	if !ok {
-		opts := ManagementWindowOptions(managementURL)
-		if chatOK {
-			opts = ConfigModalWindowOptions(managementURL)
+	if chatOK {
+		const modalURL = "/?manage=1&modal=1"
+		if ok && !d.configIsModal {
+			d.configHooked = false
+			window.Close()
+			ok = false
 		}
-		window = app.Window.NewWithOptions(opts)
+		if !ok {
+			window = app.Window.NewWithOptions(ConfigModalWindowOptions(modalURL))
+			d.configIsModal = true
+			d.NoteManagementWindowURL(modalURL)
+		}
+		d.hookConfigWindow(window)
+		presentConfigModal(chat, window)
+		return nil
+	}
+	const managementURL = "/?manage=1"
+	if !ok {
+		window = app.Window.NewWithOptions(ManagementWindowOptions(managementURL))
 		d.NoteManagementWindowURL(managementURL)
 	} else if d.NoteManagementWindowURL(managementURL) {
 		window.SetURL(managementURL)
 	}
 	d.hookConfigWindow(window)
-	if chatOK {
-		presentConfigModal(chat, window)
-		return nil
-	}
 	window.Show()
 	window.Focus()
 	return nil
@@ -174,8 +188,13 @@ func presentConfigModal(chat, config application.Window) {
 		return
 	}
 	config.SetAlwaysOnTop(true)
+	config.SetFrameless(true)
+	config.SetCloseButtonState(application.ButtonHidden)
+	config.SetMinimiseButtonState(application.ButtonHidden)
+	config.SetMaximiseButtonState(application.ButtonHidden)
+	config.SetFullscreenButtonState(application.ButtonHidden)
 	config.SetSize(720, 680)
-	config.SetMinSize(640, 520)
+	config.SetMinSize(560, 480)
 	chat.ExecJS(dimChatJS)
 	config.Show()
 	config.Center()
@@ -191,6 +210,7 @@ func (d *Service) dismissConfigModal(app *application.App, chat application.Wind
 		return
 	}
 	d.configHooked = false
+	d.configIsModal = false
 	d.configDirty = false
 	config.SetAlwaysOnTop(false)
 	config.Close()
@@ -269,11 +289,16 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 		return
 	}
 	d.chatHooked = true
-	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
-		d.configDirty = false
-		if config, ok := app.Window.GetByName("main"); ok {
-			config.Close()
+	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if d.allowQuit.Load() {
+			d.configDirty = false
+			if config, ok := app.Window.GetByName("main"); ok {
+				config.Close()
+			}
+			return
 		}
+		event.Cancel()
+		_ = d.RequestQuit()
 	})
 }
 

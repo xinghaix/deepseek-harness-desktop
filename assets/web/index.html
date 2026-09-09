@@ -64,6 +64,10 @@
             <div class="input-row"><input id="desktop-dir" autocomplete="off" spellcheck="false" readonly aria-readonly="true"></div>
             <p class="hint">固定为 <code>DSH_HOME/.deepseek-harness-desktop</code>，仅供桌面端使用；不会把它当作 Chat workspace。</p>
           </div>
+          <div class="field">
+            <label class="update-toggle"><input id="confirm-quit-busy-setup" type="checkbox" checked> 退出时若有任务正在执行，先询问我</label>
+            <p class="hint">窗口关闭按钮和退出快捷键会先弹出确认。关掉此项后，无论有没有任务都会直接退出。</p>
+          </div>
           <div class="button-row"><button class="secondary" id="check-cli" type="button">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button">恢复默认路径</button></div>
         </div>
       </details>
@@ -134,6 +138,7 @@
         <section class="panel log-panel"><div class="panel-heading"><h2>启动日志</h2><span class="panel-caption">最近 64 KiB</span></div><pre id="logs">暂无日志</pre></section>
       </div>
       <aside>
+        <section class="panel"><div class="panel-heading"><h2>桌面行为</h2></div><label class="update-toggle"><input id="confirm-quit-busy" type="checkbox" checked> 退出时若有任务正在执行，先询问我</label><p class="hint">窗口关闭按钮和 ⌘Q / Ctrl+Q 会先确认。关掉后始终直接退出。</p></section>
         <section class="panel" id="update-panel"><div class="panel-heading"><h2>桌面端更新</h2><span class="panel-caption" id="update-version">—</span></div><p class="hint" id="update-message">发现新版本后由你决定是否安装。</p><label class="update-toggle"><input id="auto-check-update" type="checkbox" checked> 启动成功后每天自动检查更新</label><div class="update-progress" id="update-progress" hidden><span id="update-progress-bar"></span></div><pre class="update-notes" id="update-notes" hidden></pre><div class="update-actions"><button class="secondary" id="check-update" type="button">检查更新</button><button class="primary" id="install-update" type="button" hidden>立即更新</button><button class="secondary" id="open-release" type="button" hidden>发行说明</button></div></section>
         <section class="panel"><h2>常用入口</h2><div class="quick-links"><button id="open-home" type="button">打开 DSH Home</button><button id="open-workspace" type="button">打开工作目录</button><button id="open-settings" type="button">打开 settings.yaml</button></div></section>
         <section class="panel"><h2>桌面管理插件</h2><p class="hint">在 DSH Chat 中打开「设置 → 插件 → 桌面管理」，即可在同一个 DSH WebView 里控制桌面端。</p><button class="secondary" id="show-bridge-guide" type="button" style="margin-top:14px">查看安装命令</button></section>

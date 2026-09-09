@@ -25,14 +25,30 @@ func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 }
 
 func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
-	options := ManagementWindowOptions(url)
-	options.Width = 720
-	options.Height = 680
-	options.MinWidth = 640
-	options.MinHeight = 520
-	options.AlwaysOnTop = true
-	options.Hidden = true
-	options.Title = "桌面配置"
+	options := application.WebviewWindowOptions{
+		Name:                  "main",
+		Title:                 "桌面配置",
+		Width:                 720,
+		Height:                680,
+		MinWidth:              560,
+		MinHeight:             480,
+		URL:                   url,
+		AlwaysOnTop:           true,
+		Hidden:                true,
+		Frameless:             true,
+		DisableResize:         true,
+		CloseButtonState:      application.ButtonHidden,
+		MinimiseButtonState:   application.ButtonHidden,
+		MaximiseButtonState:   application.ButtonHidden,
+		FullscreenButtonState: application.ButtonHidden,
+		UseApplicationMenu:    true,
+		Windows:               application.WindowsWindow{Theme: application.SystemDefault},
+		DevToolsEnabled:       false,
+		JS:                    desktopModalChromeJS,
+	}
+	if runtime.GOOS == "darwin" {
+		options.Mac.InvisibleTitleBarHeight = 0
+	}
 	return options
 }
 
@@ -52,9 +68,12 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	return applyDesktopWindowChrome(options)
 }
 
+const desktopModalChromeJS = "(function(){document.documentElement.classList.add('dsh-desktop-config','dsh-desktop-config-modal');var content=document.querySelector('body > .app-shell');if(content){content.classList.add('dsh-window-content','dsh-window-management');content.style.setProperty('--dsh-window-top-inset','0px');}})();"
+
 const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.getElementById(id);if(!el){el=document.createElement('div');el.id=id;el.style.cssText='position:fixed;inset:0;background:rgba(15,18,24,.42);z-index:2147483646;cursor:pointer';document.documentElement.appendChild(el);}el.onclick=function(){var call=window.wails&&window.wails.Call&&window.wails.Call.ByName;if(typeof call==='function')void call('main.DSH.TryDismissConfig');};})();"
 const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 const showDiscardConfigJS = "var el=document.getElementById('discard-config');if(el)el.hidden=false;"
+const probeChatBusyJS = "(function(){var busy=false;try{busy=Boolean(document.querySelector('[aria-busy=\\'true\\']'))||Boolean(document.querySelector('[data-turn-process-answer]'));}catch(e){}var call=window.wails&&window.wails.Call&&window.wails.Call.ByName;if(typeof call==='function')void call('main.DSH.ConfirmQuitIfNeeded',busy);})();"
 
 func applyDesktopWindowChrome(options application.WebviewWindowOptions) application.WebviewWindowOptions {
 	if runtime.GOOS == "darwin" {

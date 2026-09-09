@@ -58,6 +58,7 @@ func (s *Service) InstallUpdate() error {
 	if err := s.updater.Prepare(ctx); err != nil {
 		return err
 	}
+	s.allowQuit.Store(true)
 	_ = s.Close()
 	if err := s.updater.ApplyAndRelaunch(); err != nil {
 		return err

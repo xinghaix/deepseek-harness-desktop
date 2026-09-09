@@ -89,7 +89,12 @@ func main() {
 		}
 	})
 	settingsMenu.AddSeparator()
-	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) { app.Quit() })
+	settingsMenu.Add("退出").SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) {
+		if err := manager.RequestQuit(); err != nil {
+			log.Printf("退出确认失败: %v", err)
+			app.Quit()
+		}
+	})
 	app.Menu.SetApplicationMenu(menu)
 
 	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))

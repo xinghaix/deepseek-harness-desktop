@@ -66,6 +66,10 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .46; }
 .app-shell { max-width: 1180px; margin: 0 auto; padding: 30px 34px 42px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 32px; }
+html.dsh-desktop-config-modal body { min-width: 0; min-height: 100%; }
+html.dsh-desktop-config-modal .app-shell { max-width: none; padding: 16px 18px 22px; }
+html.dsh-desktop-config-modal .topbar { --wails-draggable: drag; margin-bottom: 16px; }
+html.dsh-desktop-config-modal .topbar button, html.dsh-desktop-config-modal .topbar a { --wails-draggable: no-drag; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand-mark { width: 42px; height: 42px; object-fit: contain; flex: none; }
 .brand-copy { display: grid; gap: 2px; min-width: 0; }

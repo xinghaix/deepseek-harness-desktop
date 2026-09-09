@@ -23,12 +23,18 @@ func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
 
 func TestConfigModalStaysAboveChatWindow(t *testing.T) {
 	chat := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
-	modal := ConfigModalWindowOptions("/?manage=1")
+	modal := ConfigModalWindowOptions("/?manage=1&modal=1")
 	if chat.Name != "dsh" || modal.Name != "main" {
 		t.Fatal("Chat must be a separate WebView from the config modal")
 	}
 	if !modal.AlwaysOnTop || modal.Width >= chat.Width {
 		t.Fatal("config over Chat must be a smaller always-on-top modal")
+	}
+	if !modal.Frameless || modal.CloseButtonState != application.ButtonHidden {
+		t.Fatal("config modal over Chat must not show traffic lights or window chrome")
+	}
+	if runtime.GOOS == "darwin" && ManagementWindowOptions("/").Frameless {
+		t.Fatal("first-run setup window should keep native traffic lights")
 	}
 }
 
