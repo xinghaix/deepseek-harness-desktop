@@ -60,6 +60,13 @@ func (d *Service) forceQuit() {
 	d.allowQuit.Store(true)
 	d.quitPromptOpen.Store(false)
 	d.configDirty = false
+	// Stop the owned DSH tree before tearing down windows so a force-quit
+	// cannot leave an orphaned process group that blocks the next Start.
+	if d.Manager != nil {
+		if err := d.Close(); err != nil {
+			_ = err
+		}
+	}
 	app := application.Get()
 	if app == nil {
 		return

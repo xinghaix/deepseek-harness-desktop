@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -95,6 +96,13 @@ func resolveCLIExecutable(name string) (string, error) {
 }
 
 func cliSearchDirectories() []string {
+	searchDirsOnce.Do(func() {
+		searchDirsCache = computeCLISearchDirectories()
+	})
+	return searchDirsCache
+}
+
+func computeCLISearchDirectories() []string {
 	home, _ := os.UserHomeDir()
 	homeDirs := make([]string, 0, 20)
 	addHome := func(dir string) {
@@ -170,7 +178,27 @@ func pathEntries(value string) []string {
 	return strings.Split(value, string(os.PathListSeparator))
 }
 
+var (
+	shellPathOnce  sync.Once
+	shellPathCache []string
+	searchDirsOnce sync.Once
+	searchDirsCache []string
+)
+
+// warmCLISearchCache precomputes login-shell PATH and candidate dirs so the
+// first Start/Discover does not block on a slow interactive shell.
+func warmCLISearchCache() {
+	go func() { _ = cliSearchDirectories() }()
+}
+
 func shellPathEntries() []string {
+	shellPathOnce.Do(func() {
+		shellPathCache = loadShellPathEntries()
+	})
+	return shellPathCache
+}
+
+func loadShellPathEntries() []string {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
@@ -178,15 +206,23 @@ func shellPathEntries() []string {
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-	command := exec.CommandContext(ctx, shell, "-ilc", "printf %s \"$PATH\"")
-	command.Stderr = io.Discard
-	output, err := command.Output()
-	if err != nil {
-		return nil
+	// Prefer non-interactive -lc first (usually enough and faster). Fall back to
+	// login+interactive -ilc for GUI-launched apps whose non-interactive PATH is empty.
+	for _, args := range [][]string{
+		{"-lc", `printf %s "$PATH"`},
+		{"-ilc", `printf %s "$PATH"`},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+		command := exec.CommandContext(ctx, shell, args...)
+		command.Stderr = io.Discard
+		output, err := command.Output()
+		cancel()
+		if err != nil || strings.TrimSpace(string(output)) == "" {
+			continue
+		}
+		return pathEntries(string(output))
 	}
-	return pathEntries(string(output))
+	return nil
 }
 
 func isWithin(root, path string) bool {

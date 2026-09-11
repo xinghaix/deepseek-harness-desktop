@@ -202,6 +202,17 @@ func guardOwnedProcessMarker(home string) error {
 			continue
 		}
 		if ownedProcessTreeAlive(nil, marker.PID) {
+			// Desktop may have crashed after the CLI parent exited, leaving the
+			// process group (Node grandchildren) alive under the old PGID.
+			if !ownedProcessAlive(marker.PID) {
+				_ = reclaimOrphanedProcessGroup(marker.PID)
+				if !ownedProcessTreeAlive(nil, marker.PID) {
+					if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+						return fmt.Errorf("%s: %w", i18n.TActive("err.marker_cleanup"), err)
+					}
+					continue
+				}
+			}
 			return fmt.Errorf("%s", i18n.TActive("err.marker_still_running", strconv.Itoa(marker.PID)))
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -447,7 +458,10 @@ func joinPathDirectories(dirs []string) string {
 	return strings.Join(result, string(os.PathListSeparator))
 }
 
-func New() *Manager { return &Manager{state: "stopped"} }
+func New() *Manager {
+	warmCLISearchCache()
+	return &Manager{state: "stopped"}
+}
 
 // SetOpenManagement 注入打开配置窗口的实现。进程内核不能依赖 Wails。
 func (d *Manager) SetOpenManagement(fn func() error) {
@@ -702,7 +716,7 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	defer client.CloseIdleConnections()
-	ticker := time.NewTicker(150 * time.Millisecond)
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	candidate := ""
 	candidateBase := ""

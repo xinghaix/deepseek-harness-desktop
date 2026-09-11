@@ -241,3 +241,9 @@ func waitForOwnedProcessTree(owner *ownedProcess, pid int, timeout time.Duration
 	}
 	return !ownedProcessTreeAlive(owner, pid)
 }
+
+
+func reclaimOrphanedProcessGroup(pgid int) error {
+	_ = pgid
+	return nil
+}
