@@ -178,7 +178,7 @@
   "window.config_title": "桌面配置",
   "quit.title": "还有任务在执行",
   "quit.message": "现在退出会打断正在跑的对话和工具调用，未完成的结果可能没写完。确定要退出吗？",
-  "quit.stay": "继续等待",
+  "quit.stay": "取消退出",
   "quit.exit": "仍然退出",
   "dialog.choose_executable_title": "选择 dsh 可执行文件",
   "dialog.choose_executable_message": "请选择已经安装的 dsh；桌面端不会自动下载或安装",

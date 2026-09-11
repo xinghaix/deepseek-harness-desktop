@@ -178,7 +178,7 @@
   "window.config_title": "Desktop settings",
   "quit.title": "Tasks are still running",
   "quit.message": "Quitting now will interrupt active chats and tool calls; unfinished results may be lost. Quit anyway?",
-  "quit.stay": "Keep waiting",
+  "quit.stay": "Cancel quit",
   "quit.exit": "Quit anyway",
   "dialog.choose_executable_title": "Choose dsh executable",
   "dialog.choose_executable_message": "Select an already installed dsh; the desktop app will not download or install it",

@@ -178,7 +178,7 @@
   "window.config_title": "Desktop-Einstellungen",
   "quit.title": "Aufgaben laufen noch",
   "quit.message": "Beenden unterbricht aktive Chats und Tool-Aufrufe; unfertige Ergebnisse können verloren gehen. Trotzdem beenden?",
-  "quit.stay": "Weiter warten",
+  "quit.stay": "Beenden abbrechen",
   "quit.exit": "Trotzdem beenden",
   "dialog.choose_executable_title": "dsh-Executable wählen",
   "dialog.choose_executable_message": "Bereits installiertes dsh wählen; die Desktop-App lädt oder installiert es nicht",

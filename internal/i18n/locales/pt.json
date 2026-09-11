@@ -178,7 +178,7 @@
   "window.config_title": "Definições de ambiente de trabalho",
   "quit.title": "Ainda há tarefas em execução",
   "quit.message": "Sair agora interrompe chats e chamadas de ferramentas ativas; resultados incompletos podem perder-se. Sair mesmo assim?",
-  "quit.stay": "Continuar a esperar",
+  "quit.stay": "Cancelar saída",
   "quit.exit": "Sair mesmo assim",
   "dialog.choose_executable_title": "Escolher executável dsh",
   "dialog.choose_executable_message": "Selecione um dsh já instalado; a app não o descarrega nem instala",

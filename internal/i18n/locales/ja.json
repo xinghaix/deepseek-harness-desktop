@@ -178,7 +178,7 @@
   "window.config_title": "デスクトップ設定",
   "quit.title": "まだタスクが実行中です",
   "quit.message": "今終了すると進行中の会話とツール呼び出しが中断され、未完了の結果が失われる可能性があります。終了しますか？",
-  "quit.stay": "待ち続ける",
+  "quit.stay": "終了をやめる",
   "quit.exit": "それでも終了",
   "dialog.choose_executable_title": "dsh 実行ファイルを選択",
   "dialog.choose_executable_message": "すでにインストール済みの dsh を選択してください。デスクトップアプリはダウンロードやインストールをしません",

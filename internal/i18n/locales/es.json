@@ -178,7 +178,7 @@
   "window.config_title": "Ajustes de escritorio",
   "quit.title": "Todavía hay tareas en ejecución",
   "quit.message": "Salir ahora interrumpirá chats y llamadas a herramientas activos; pueden perderse resultados incompletos. ¿Salir de todos modos?",
-  "quit.stay": "Seguir esperando",
+  "quit.stay": "Cancelar salida",
   "quit.exit": "Salir de todos modos",
   "dialog.choose_executable_title": "Elegir ejecutable dsh",
   "dialog.choose_executable_message": "Seleccione un dsh ya instalado; la app no lo descarga ni instala",

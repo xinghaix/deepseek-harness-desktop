@@ -178,7 +178,7 @@
   "window.config_title": "Réglages bureau",
   "quit.title": "Des tâches sont encore en cours",
   "quit.message": "Quitter maintenant interrompra les chats et appels d’outils actifs ; des résultats incomplets peuvent être perdus. Quitter quand même ?",
-  "quit.stay": "Continuer d’attendre",
+  "quit.stay": "Annuler la fermeture",
   "quit.exit": "Quitter quand même",
   "dialog.choose_executable_title": "Choisir l’exécutable dsh",
   "dialog.choose_executable_message": "Sélectionnez un dsh déjà installé ; l’app bureau ne le télécharge ni ne l’installe",
