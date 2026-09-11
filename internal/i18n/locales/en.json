@@ -1,6 +1,6 @@
 {
-  "app.caption": "Desktop companion for DSH",
-  "app.caption_version": "Desktop companion for DSH · {0}",
+  "app.caption": "Desktop client for DSH",
+  "app.caption_version": "Desktop client for DSH · {0}",
   "btn.close_config": "Close and return to Chat",
   "btn.choose_file": "Choose file",
   "btn.choose_folder": "Choose folder",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "Keep editing",
   "btn.discard_confirm": "Discard and close",
   "btn.continue_edit": "Keep editing",
-  "loading.title": "Preparing Deepseek Harness Desktop",
+  "loading.title": "Preparing desktop client",
   "loading.message": "Checking local CLI, user directories, and Node global directories…",
   "loading.hint": "Will not download or modify your DSH configuration",
   "loading.opening_config": "Opening desktop settings…",

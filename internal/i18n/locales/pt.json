@@ -1,6 +1,6 @@
 {
-  "app.caption": "Companheiro de ambiente de trabalho para DSH",
-  "app.caption_version": "Companheiro de ambiente de trabalho para DSH · {0}",
+  "app.caption": "Cliente de ambiente de trabalho para DSH",
+  "app.caption_version": "Cliente de ambiente de trabalho para DSH · {0}",
   "btn.close_config": "Fechar e voltar ao Chat",
   "btn.choose_file": "Escolher ficheiro",
   "btn.choose_folder": "Escolher pasta",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "Continuar a editar",
   "btn.discard_confirm": "Descartar e fechar",
   "btn.continue_edit": "Continuar a editar",
-  "loading.title": "A preparar Deepseek Harness Desktop",
+  "loading.title": "A preparar o cliente de ambiente de trabalho",
   "loading.message": "A verificar CLI local, diretórios do utilizador e diretórios globais do Node…",
   "loading.hint": "Não descarrega nem altera a sua configuração DSH",
   "loading.opening_config": "A abrir definições de ambiente de trabalho…",

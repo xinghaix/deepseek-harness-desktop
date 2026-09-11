@@ -2,7 +2,7 @@
 
 [English](README.en.md) · 中文
 
-Deepseek Harness Desktop 是 DSH 的轻量桌面伴侣：复用本机已安装的 `dsh` CLI 与现有 DSH Home，在桌面 WebView 中打开 DSH Chat。它不复制 DSH、不另装 CLI、不迁移配置，也不接管其他进程。
+Deepseek Harness Desktop 是 DSH 的轻量桌面客户端：复用本机已安装的 `dsh` CLI 与现有 DSH Home，在桌面 WebView 中打开 DSH Chat。它不复制 DSH、不另装 CLI、不迁移配置，也不接管其他进程。
 
 更细的架构与边界见 [AGENTS.md](AGENTS.md)。
 

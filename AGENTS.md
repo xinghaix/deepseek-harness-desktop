@@ -4,7 +4,7 @@
 
 ## 产品定位
 
-轻量桌面伴侣：复用用户 **已安装**的 `dsh` CLI 与现有 DSH Home，在本应用的桌面 WebView 中打开 DSH Chat。
+轻量桌面客户端：复用用户 **已安装**的 `dsh` CLI 与现有 DSH Home，在本应用的桌面 WebView 中打开 DSH Chat。
 
 不做的事：
 

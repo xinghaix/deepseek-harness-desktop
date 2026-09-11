@@ -1,6 +1,6 @@
 {
-  "app.caption": "DSH のデスクトップコンパニオン",
-  "app.caption_version": "DSH のデスクトップコンパニオン · {0}",
+  "app.caption": "DSH デスクトップクライアント",
+  "app.caption_version": "DSH デスクトップクライアント · {0}",
   "btn.close_config": "閉じて Chat に戻る",
   "btn.choose_file": "ファイルを選択",
   "btn.choose_folder": "フォルダーを選択",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "編集を続ける",
   "btn.discard_confirm": "保存せずに閉じる",
   "btn.continue_edit": "編集を続ける",
-  "loading.title": "Deepseek Harness Desktop を準備しています",
+  "loading.title": "デスクトップクライアントを準備しています",
   "loading.message": "ローカル CLI、ユーザーディレクトリ、Node グローバルディレクトリを確認中…",
   "loading.hint": "DSH 設定のダウンロードや変更は行いません",
   "loading.opening_config": "デスクトップ設定を開いています…",

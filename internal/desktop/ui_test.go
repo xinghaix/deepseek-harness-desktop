@@ -80,7 +80,10 @@ func TestManagementUIContract(t *testing.T) {
 		t.Fatal("clicking outside a clean config modal must try to dismiss it")
 	}
 	if !strings.Contains(html, "dsh-desktop-config-modal") {
-		t.Fatal("reopened desktop config over Chat must use modal styling without first-run chrome")
+		t.Fatal("config modal page must mark itself for compact layout")
+	}
+	if !strings.Contains(html, "--wails-draggable: drag") {
+		t.Fatal("config modal topbar must be a Wails drag region")
 	}
 	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "退出时若有任务正在执行") {
 		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")

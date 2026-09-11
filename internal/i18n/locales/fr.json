@@ -1,6 +1,6 @@
 {
-  "app.caption": "Compagnon bureau pour DSH",
-  "app.caption_version": "Compagnon bureau pour DSH · {0}",
+  "app.caption": "Client bureau pour DSH",
+  "app.caption_version": "Client bureau pour DSH · {0}",
   "btn.close_config": "Fermer et revenir au Chat",
   "btn.choose_file": "Choisir un fichier",
   "btn.choose_folder": "Choisir un dossier",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "Continuer l’édition",
   "btn.discard_confirm": "Abandonner et fermer",
   "btn.continue_edit": "Continuer l’édition",
-  "loading.title": "Préparation de Deepseek Harness Desktop",
+  "loading.title": "Préparation du client bureau",
   "loading.message": "Vérification du CLI local, des dossiers utilisateur et des dossiers Node globaux…",
   "loading.hint": "Ne télécharge ni ne modifie votre configuration DSH",
   "loading.opening_config": "Ouverture des réglages bureau…",

@@ -1,6 +1,6 @@
 {
-  "app.caption": "DSH 的桌面伴侣",
-  "app.caption_version": "DSH 的桌面伴侣 · {0}",
+  "app.caption": "DSH 桌面客户端",
+  "app.caption_version": "DSH 桌面客户端 · {0}",
   "btn.close_config": "关闭并回到 Chat",
   "btn.choose_file": "选择文件",
   "btn.choose_folder": "选择文件夹",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "继续编辑",
   "btn.discard_confirm": "不保存并关闭",
   "btn.continue_edit": "继续编辑",
-  "loading.title": "正在准备 Deepseek Harness Desktop",
+  "loading.title": "正在准备桌面客户端",
   "loading.message": "正在检查本机 CLI、用户目录和 Node 全局目录…",
   "loading.hint": "不会下载或修改你的 DSH 配置",
   "loading.opening_config": "正在打开桌面配置…",

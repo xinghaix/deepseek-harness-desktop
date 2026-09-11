@@ -1,6 +1,6 @@
 {
-  "app.caption": "DSH 데스크톱 컴패니언",
-  "app.caption_version": "DSH 데스크톱 컴패니언 · {0}",
+  "app.caption": "DSH 데스크톱 클라이언트",
+  "app.caption_version": "DSH 데스크톱 클라이언트 · {0}",
   "btn.close_config": "닫고 Chat으로 돌아가기",
   "btn.choose_file": "파일 선택",
   "btn.choose_folder": "폴더 선택",
@@ -32,7 +32,7 @@
   "btn.discard_cancel": "계속 편집",
   "btn.discard_confirm": "저장하지 않고 닫기",
   "btn.continue_edit": "계속 편집",
-  "loading.title": "Deepseek Harness Desktop 준비 중",
+  "loading.title": "데스크톱 클라이언트 준비 중",
   "loading.message": "로컬 CLI, 사용자 디렉터리, Node 전역 디렉터리 확인 중…",
   "loading.hint": "DSH 구성을 다운로드하거나 수정하지 않습니다",
   "loading.opening_config": "데스크톱 설정 여는 중…",

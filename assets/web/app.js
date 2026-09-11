@@ -91,8 +91,8 @@ function renderErrorCard(status) {
   $("step-chat").dataset.state = "error";
   setHidden("error-card", false);
 }
-function showLoading(message) { clearErrorCard(); setHidden("loading-view", false); setHidden("onboarding-view", true); setHidden("dashboard-view", true); if (message) $("loading-message").textContent = message; }
-function hideLoading() { setHidden("loading-view", true); }
+function showLoading(message) { clearErrorCard(); document.documentElement.classList.add("is-loading"); setHidden("loading-view", false); setHidden("onboarding-view", true); setHidden("dashboard-view", true); if (message) $("loading-message").textContent = message; }
+function hideLoading() { document.documentElement.classList.remove("is-loading"); setHidden("loading-view", true); }
 function showOnboarding() { hideLoading(); setHidden("onboarding-view", false); setHidden("dashboard-view", true); }
 function showDashboard() { hideLoading(); setHidden("onboarding-view", true); setHidden("dashboard-view", false); }
 function setDetect(stateName, title, message) { $("detect-card").dataset.state = stateName; $("detect-title").textContent = title; $("detect-message").textContent = message; }
@@ -117,6 +117,7 @@ function renderStatus(status) {
   const labels = stateLabels();
   const dash = t("msg.em_dash");
   state = status.state || "stopped";
+  setRefreshDelay(state === "starting" || state === "stopping" ? 100 : 900);
   if (state === "stopped" || state === "failed") autoOpenStarted = false;
   if (state === "failed") { markStartupConfigStale(); void loadGuides(); }
   if (state === "running" && previousState !== "running") saveOptions(true);
@@ -394,15 +395,30 @@ $("open-release").onclick = () => run(() => api("OpenReleasePage"));
 ["executable", "workspace"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); }));
 $("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); syncConfigDirty(); });
 async function load() {
-  await loadLocaleBundle();
-  showLoading(manualManagement ? t("loading.opening_config") : t("loading.reading_saved"));
+  // Paint splash immediately; load locale in parallel with Defaults.
+  document.documentElement.classList.add("is-loading");
+  setHidden("loading-view", false);
+  setHidden("onboarding-view", true);
+  setHidden("dashboard-view", true);
+  const localeP = loadLocaleBundle();
   void loadDesktopPrefs();
   void api("AppVersion").then((v) => {
     const shown = formatAppVersion(v);
     if (shown) $("app-caption").textContent = t("app.caption_version", shown);
   }).catch(() => {});
   let saved = null;
-  try { defaultOptions = await api("Defaults"); fillOptions(defaultOptions); saved = loadSavedOptions(); } catch (error) { showOnboarding(); setMessage(errorText(error), true); return; }
+  try {
+    const [, defaults] = await Promise.all([localeP, api("Defaults")]);
+    defaultOptions = defaults;
+    fillOptions(defaultOptions);
+    saved = loadSavedOptions();
+    showLoading(manualManagement ? t("loading.opening_config") : t("loading.reading_saved"));
+  } catch (error) {
+    await localeP.catch(() => {});
+    showOnboarding();
+    setMessage(errorText(error), true);
+    return;
+  }
   if (manualManagement) {
     await loadGuides();
     const ready = await probeSelected();
@@ -434,4 +450,11 @@ async function load() {
   markBaseline();
 }
 window.addEventListener("DOMContentLoaded", load, { once: true });
-setInterval(refresh, 700);
+let refreshDelayMs = 900;
+let refreshTimer = setInterval(() => { void refresh(); }, refreshDelayMs);
+function setRefreshDelay(ms) {
+  if (refreshDelayMs === ms) return;
+  refreshDelayMs = ms;
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => { void refresh(); }, refreshDelayMs);
+}

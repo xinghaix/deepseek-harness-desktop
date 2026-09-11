@@ -14,17 +14,21 @@
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="/shared/app-icon.svg" alt="DSH">
-      <div class="brand-copy"><span class="brand-name">Deepseek Harness Desktop</span><span class="brand-caption" id="app-caption" data-i18n="app.caption">DSH 的桌面伴侣</span></div>
+      <div class="brand-copy"><span class="brand-name">Deepseek Harness Desktop</span><span class="brand-caption" id="app-caption" data-i18n="app.caption">DSH 桌面客户端</span></div>
     </div>
     <button class="secondary" id="close-config" type="button" hidden data-i18n="btn.close_config">关闭并回到 Chat</button>
   </header>
 
-  <section id="loading-view" class="loading-view">
+  <section id="loading-view" class="loading-view" aria-busy="true" aria-live="polite">
+    <div class="loading-backdrop" aria-hidden="true"></div>
     <div class="loading-card">
-      <div class="loading-mark"><img src="/shared/app-icon.svg" alt="DSH"></div>
-      <div class="loading-title" data-i18n="loading.title">正在准备 Deepseek Harness Desktop</div>
+      <div class="loading-mark-wrap">
+        <span class="loading-ring" aria-hidden="true"></span>
+        <div class="loading-mark"><img src="/shared/app-icon.svg" alt=""></div>
+      </div>
+      <div class="loading-title" data-i18n="loading.title">正在准备桌面客户端</div>
       <p class="loading-message" id="loading-message" data-i18n="loading.message">正在检查本机 CLI、用户目录和 Node 全局目录…</p>
-      <div class="loading-progress" aria-hidden="true"></div>
+      <div class="loading-progress" aria-hidden="true"><span></span></div>
       <p class="loading-hint" data-i18n="loading.hint">不会下载或修改你的 DSH 配置</p>
     </div>
   </section>
@@ -40,7 +44,7 @@
           <span class="advanced-head"><span class="advanced-mark" aria-hidden="true">⚙</span><span class="advanced-copy"><span class="advanced-title" data-i18n="advanced.title">DSH 运行配置与桌面配置</span><span class="advanced-summary-copy" data-i18n="advanced.summary">运行配置传给 dsh web；桌面配置只给桌面端。改完不必重启桌面应用。</span></span></span>
         </summary>
         <div class="advanced-body">
-          <h3 class="config-section-title" data-i18n="config.runtime_title">运行配置</h3>
+          <div class="config-block"><h3 class="config-section-title" data-i18n="config.runtime_title">运行配置</h3>
           <p class="hint" data-i18n="config.runtime_hint">这些会传给唯一的 dsh web 子进程。配置以模态盖在 Chat 上，不会把 Chat 藏起来。关掉本页即回到 Chat；若改了工作目录、Home 或 CLI，点「重新打开 Chat」才会重启 dsh web。不必重启桌面应用。</p>
           <div class="field">
             <label for="executable" data-i18n="field.executable">dsh 可执行文件</label>
@@ -57,7 +61,7 @@
             <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button" data-i18n="btn.choose_folder">选择文件夹</button></div>
             <p class="hint" data-i18n="field.workspace_hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录。监听端口由 dsh web 自行分配，桌面端从它的输出解析。</p>
           </div>
-          <h3 class="config-section-title" data-i18n="config.desktop_title">桌面配置</h3>
+          </div><div class="config-block"><h3 class="config-section-title" data-i18n="config.desktop_title">桌面配置</h3>
           <p class="hint" data-i18n="config.desktop_hint">只作用于桌面端，不会改 DSH 自己的 settings.yaml。更新检查在运行控制台里设置。</p>
           <div class="field">
             <label for="desktop-dir" data-i18n="field.desktop_dir">桌面端目录（固定）</label>
@@ -73,7 +77,7 @@
             <label class="update-toggle"><input id="confirm-quit-busy-setup" type="checkbox" checked> <span data-i18n="field.confirm_quit">退出时若有任务正在执行，先询问我</span></label>
             <p class="hint" data-i18n="field.confirm_quit_hint">窗口关闭按钮和退出快捷键会先弹出确认。关掉此项后，无论有没有任务都会直接退出。</p>
           </div>
-          <div class="button-row"><button class="secondary" id="check-cli" type="button" data-i18n="btn.recheck_cli">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button" data-i18n="btn.restore_defaults">恢复默认路径</button></div>
+          </div><div class="button-row config-actions"><button class="secondary" id="check-cli" type="button" data-i18n="btn.recheck_cli">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button" data-i18n="btn.restore_defaults">恢复默认路径</button></div>
         </div>
       </details>
 
