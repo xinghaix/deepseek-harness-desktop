@@ -1,6 +1,7 @@
 package dsh
 
 import (
+	"deepseek-harness-desktop/internal/i18n"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,8 +9,9 @@ import (
 )
 
 type CheckResult struct {
-	Version string  `json:"version"`
-	Options Options `json:"options"`
+	Version        string  `json:"version"`
+	Options        Options `json:"options"`
+	AlreadyRunning bool    `json:"alreadyRunning,omitempty"`
 }
 
 // DiscoveryResult 是首次启动引导需要的 CLI 探测结果。
@@ -60,7 +62,7 @@ func (d *Manager) DiscoverCLI() (DiscoveryResult, error) {
 		return DiscoveryResult{
 			Found:   true,
 			Options: options,
-			Message: "已有 DSH 实例运行；不会再次启动 dsh 检测进程",
+			Message: i18n.TActive("msg.dsh_already_running_skip_check"),
 		}, nil
 	}
 	d.mu.Unlock()
@@ -80,11 +82,11 @@ func (d *Manager) DiscoverCLI() (DiscoveryResult, error) {
 		result.Found = true
 		result.Version = version
 		result.Options = normalized
-		result.Message = "已找到并通过 dsh CLI 检测"
+		result.Message = i18n.TActive("msg.cli_found_ok")
 		d.commitCLIOptions(normalized)
 		return result, nil
 	}
-	result.Message = "未在 GUI 的 PATH 和常见 Node 全局目录中找到 dsh"
+	result.Message = i18n.TActive("msg.cli_not_found_path")
 	return result, nil
 }
 
@@ -100,7 +102,7 @@ func (d *Manager) CheckCLI(o Options) (CheckResult, error) {
 	busy := d.cmd != nil
 	d.mu.Unlock()
 	if busy {
-		return CheckResult{Version: "DSH 已运行", Options: normalized}, nil
+		return CheckResult{AlreadyRunning: true, Options: normalized}, nil
 	}
 	version, err := checkCLI(normalized)
 	if err != nil {
@@ -116,7 +118,7 @@ func (d *Manager) InstallGuide() InstallGuide {
 		NodeCheck:     "node --version",
 		InstallCLI:    "npm install --global @deepseek-ai/dsh",
 		VerifyCLI:     "dsh --version",
-		InstallBridge: "dsh plugin --profile web add file:<项目目录>/plugins/deepseek-harness-desktop-bridge",
+		InstallBridge: "dsh plugin --profile web add file:<project-dir>/plugins/deepseek-harness-desktop-bridge",
 	}
 }
 
@@ -190,7 +192,7 @@ func NormalizeLocationOptions(o Options) (Options, error) {
 	}
 	o.DesktopDir = desktopDataDirPath(o.Home)
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
-		return o, fmt.Errorf("工作目录: %w", err)
+		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
 	}
 	return o, nil
 }

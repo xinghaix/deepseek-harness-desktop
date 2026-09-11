@@ -6,28 +6,21 @@ import (
 	"log"
 	"runtime"
 
+	"deepseek-harness-desktop/internal/i18n"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const (
-	appMenuLabel  = "Deepseek Harness Desktop"
-	fileMenuLabel = "文件"
-
-	openManagementLabel = "打开桌面端配置"
-	openChatLabel       = "打开 DSH Chat"
-	quitLabel           = "退出"
-
-	aboutLabel      = "关于 Deepseek Harness Desktop"
-	servicesLabel   = "服务"
-	hideLabel       = "隐藏 Deepseek Harness Desktop"
-	hideOthersLabel = "隐藏其他"
-	showAllLabel    = "显示全部"
-)
+const appMenuLabel = "Deepseek Harness Desktop"
 
 type menuController interface {
 	OpenManagement() error
 	OpenDSH() error
 	RequestQuit() error
+}
+
+type localeResolver interface {
+	resolvedLocale() string
 }
 
 // ApplicationMenu 把桌面端动作放进各平台的宿主菜单，不再单独挂一个「设置」。
@@ -36,61 +29,69 @@ func ApplicationMenu(app *application.App, controller menuController) *applicati
 	if app == nil {
 		return nil
 	}
-	return newApplicationMenu(runtime.GOOS, app.NewMenu, controller, app.Quit)
+	locale := "en"
+	if lr, ok := controller.(localeResolver); ok {
+		if l := lr.resolvedLocale(); l != "" {
+			locale = l
+		}
+	}
+	return newApplicationMenu(runtime.GOOS, app.NewMenu, controller, app.Quit, locale)
 }
 
-func newApplicationMenu(goos string, newMenu func() *application.Menu, controller menuController, quitFallback func()) *application.Menu {
+func newApplicationMenu(goos string, newMenu func() *application.Menu, controller menuController, quitFallback func(), locale string) *application.Menu {
 	menu := newMenu()
-	host := menu.AddSubmenu(hostMenuLabel(goos))
+	host := menu.AddSubmenu(hostMenuLabel(goos, locale))
 	if goos == "darwin" {
 		if item := menu.FindByLabel(appMenuLabel); item != nil {
 			item.SetRole(application.AppMenu)
 		}
-		addRoleItem(host, aboutLabel, "", application.About)
+		addRoleItem(host, i18n.T(locale, "menu.about"), "", application.About)
 		host.AddSeparator()
 	}
-	addDesktopActions(host, controller)
+	addDesktopActions(host, controller, locale)
 	if goos == "darwin" {
 		host.AddSeparator()
 		host.AddRole(application.ServicesMenu)
 		if item := host.FindByRole(application.ServicesMenu); item != nil {
-			item.SetLabel(servicesLabel)
+			item.SetLabel(i18n.T(locale, "menu.services"))
 		}
 		host.AddSeparator()
-		addRoleItem(host, hideLabel, "CmdOrCtrl+h", application.Hide)
-		addRoleItem(host, hideOthersLabel, "CmdOrCtrl+OptionOrAlt+h", application.HideOthers)
-		addRoleItem(host, showAllLabel, "", application.ShowAll)
+		addRoleItem(host, i18n.T(locale, "menu.hide"), "CmdOrCtrl+h", application.Hide)
+		addRoleItem(host, i18n.T(locale, "menu.hide_others"), "CmdOrCtrl+OptionOrAlt+h", application.HideOthers)
+		addRoleItem(host, i18n.T(locale, "menu.show_all"), "", application.ShowAll)
 	}
 	host.AddSeparator()
-	addQuit(host, controller, quitFallback)
+	addQuit(host, controller, quitFallback, locale)
 	menu.AddRole(application.EditMenu)
 	return menu
 }
 
-func hostMenuLabel(goos string) string {
+func hostMenuLabel(goos, locale string) string {
 	if goos == "darwin" {
 		return appMenuLabel
 	}
-	return fileMenuLabel
+	return i18n.T(locale, "menu.file")
 }
 
-func addDesktopActions(menu *application.Menu, controller menuController) {
-	menu.Add(openManagementLabel).SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
+func addDesktopActions(menu *application.Menu, controller menuController, locale string) {
+	openManagement := i18n.T(locale, "menu.open_management")
+	openChat := i18n.T(locale, "menu.open_chat")
+	menu.Add(openManagement).SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
 		if err := controller.OpenManagement(); err != nil {
-			log.Printf("打开桌面端配置失败: %v", err)
+			log.Printf("open management failed: %v", err)
 		}
 	})
-	menu.Add(openChatLabel).OnClick(func(*application.Context) {
+	menu.Add(openChat).OnClick(func(*application.Context) {
 		if err := controller.OpenDSH(); err != nil {
-			log.Printf("打开 DSH Chat 失败: %v", err)
+			log.Printf("open chat failed: %v", err)
 		}
 	})
 }
 
-func addQuit(menu *application.Menu, controller menuController, quitFallback func()) {
-	menu.Add(quitLabel).SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) {
+func addQuit(menu *application.Menu, controller menuController, quitFallback func(), locale string) {
+	menu.Add(i18n.T(locale, "menu.quit")).SetAccelerator("CmdOrCtrl+q").OnClick(func(*application.Context) {
 		if err := controller.RequestQuit(); err != nil {
-			log.Printf("退出确认失败: %v", err)
+			log.Printf("quit confirm failed: %v", err)
 			if quitFallback != nil {
 				quitFallback()
 			}

@@ -102,9 +102,9 @@ h3 { font-size: 15px; line-height: 1.4; }
 .advanced { margin-top: 16px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 255, 255, .9); box-shadow: var(--shadow); }
 .advanced-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; cursor: pointer; padding: 18px; list-style: none; }
 .advanced-summary::-webkit-details-marker { display: none; }
-.advanced-summary::after { content: "展开"; flex: none; margin-top: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.advanced-summary::after { content: attr(data-expand); flex: none; margin-top: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; color: var(--muted); font-size: 11px; font-weight: 650; }
 .advanced[open] .advanced-summary { padding-bottom: 15px; border-bottom: 1px solid var(--line); }
-.advanced[open] .advanced-summary::after { content: "收起"; }
+.advanced[open] .advanced-summary::after { content: attr(data-collapse); }
 .advanced-head { display: flex; align-items: flex-start; gap: 11px; }
 .advanced-mark { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--blue); font-size: 16px; }
 .advanced-copy { display: block; min-width: 0; }
@@ -145,9 +145,9 @@ code { color: #323c4c; font-size: 11px; }
 .bridge-card { margin-top: 16px; box-shadow: none; }
 .bridge-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; cursor: pointer; padding: 18px; list-style: none; }
 .bridge-summary::-webkit-details-marker { display: none; }
-.bridge-summary::after { content: "展开"; flex: none; margin-top: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.bridge-summary::after { content: attr(data-expand); flex: none; margin-top: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; color: var(--muted); font-size: 11px; font-weight: 650; }
 .bridge-card[open] .bridge-summary { padding-bottom: 15px; border-bottom: 1px solid var(--line); }
-.bridge-card[open] .bridge-summary::after { content: "收起"; }
+.bridge-card[open] .bridge-summary::after { content: attr(data-collapse); }
 .bridge-body { display: grid; gap: 13px; padding: 0 18px 18px; }
 .bridge-head { display: flex; align-items: flex-start; gap: 11px; }
 .bridge-copy { display: block; min-width: 0; }

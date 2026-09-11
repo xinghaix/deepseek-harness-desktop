@@ -3,12 +3,14 @@ package update
 import (
 	"context"
 	"crypto/sha256"
+	"deepseek-harness-desktop/internal/i18n"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -21,7 +23,7 @@ func (u *Updater) Download(ctx context.Context) error {
 		if state == StateReady {
 			return nil
 		}
-		return fmt.Errorf("当前不能下载更新（%s）", state)
+		return fmt.Errorf("%s", i18n.TActive("update.download_not_allowed", state))
 	}
 	asset, sum := u.asset, u.sum
 	u.state = StateDownloading
@@ -56,7 +58,7 @@ func (u *Updater) Download(ctx context.Context) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return u.fail(fmt.Errorf("下载失败：HTTP %d", res.StatusCode))
+		return u.fail(fmt.Errorf("%s", i18n.TActive("update.download_http", strconv.Itoa(res.StatusCode))))
 	}
 	if res.ContentLength > 0 {
 		u.total.Store(res.ContentLength)
@@ -81,7 +83,7 @@ func (u *Updater) Download(ctx context.Context) error {
 	got := hex.EncodeToString(hash.Sum(nil))
 	if got != sum {
 		_ = os.Remove(tmp)
-		return u.fail(fmt.Errorf("校验和不匹配"))
+		return u.fail(i18n.ErrorfActive("update.checksum_mismatch"))
 	}
 	_ = os.Remove(dest)
 	if err := os.Rename(tmp, dest); err != nil {
@@ -111,7 +113,7 @@ func (u *Updater) stagedFile() (string, string, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if u.state != StateReady || u.file == "" {
-		return "", "", fmt.Errorf("还没有已校验的更新包")
+		return "", "", i18n.ErrorfActive("update.no_verified_package")
 	}
 	return u.file, u.asset.Name, nil
 }

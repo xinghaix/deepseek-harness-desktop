@@ -4,9 +4,9 @@ package desktop
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	"deepseek-harness-desktop/internal/i18n"
 	"deepseek-harness-desktop/internal/update"
 	"deepseek-harness-desktop/internal/version"
 
@@ -65,7 +65,7 @@ func (s *Service) InstallUpdate() error {
 	}
 	app := application.Get()
 	if app == nil {
-		return errors.New("桌面应用尚未就绪")
+		return i18n.ErrorfActive("err.app_not_ready")
 	}
 	app.Quit()
 	return nil

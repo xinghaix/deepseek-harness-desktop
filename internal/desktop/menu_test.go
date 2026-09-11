@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"deepseek-harness-desktop/internal/i18n"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -17,6 +19,17 @@ func (stubMenuController) OpenDSH() error        { return nil }
 func (stubMenuController) RequestQuit() error    { return nil }
 
 func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
+	locale := "zh-CN"
+	openManagementLabel := i18n.T(locale, "menu.open_management")
+	openChatLabel := i18n.T(locale, "menu.open_chat")
+	quitLabel := i18n.T(locale, "menu.quit")
+	aboutLabel := i18n.T(locale, "menu.about")
+	servicesLabel := i18n.T(locale, "menu.services")
+	hideLabel := i18n.T(locale, "menu.hide")
+	hideOthersLabel := i18n.T(locale, "menu.hide_others")
+	showAllLabel := i18n.T(locale, "menu.show_all")
+	fileMenuLabel := i18n.T(locale, "menu.file")
+
 	cases := []struct {
 		goos     string
 		host     string
@@ -46,7 +59,7 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.goos, func(t *testing.T) {
-			menu := newApplicationMenu(tc.goos, application.NewMenu, stubMenuController{}, func() {})
+			menu := newApplicationMenu(tc.goos, application.NewMenu, stubMenuController{}, func() {}, locale)
 			if got := menu.ItemAt(0); got == nil || got.Label() != tc.host || !got.IsSubmenu() {
 				t.Fatalf("host menu = %v, want submenu %q", labelOf(got), tc.host)
 			}
@@ -77,7 +90,7 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 
 func TestApplicationMenuDoesNotUseDefaultQuitRole(t *testing.T) {
 	for _, goos := range []string{"darwin", "windows", "linux"} {
-		menu := newApplicationMenu(goos, application.NewMenu, stubMenuController{}, func() {})
+		menu := newApplicationMenu(goos, application.NewMenu, stubMenuController{}, func() {}, "en")
 		if item := menu.FindByRole(application.Quit); item != nil {
 			t.Fatalf("%s must not use the Wails Quit role, which skips busy-task confirmation", goos)
 		}

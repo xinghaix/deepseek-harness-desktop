@@ -3,24 +3,10 @@
 package desktop
 
 import (
+	"deepseek-harness-desktop/internal/i18n"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
-
-type DesktopPrefs struct {
-	ConfirmQuitWhenBusy bool `json:"confirmQuitWhenBusy"`
-}
-
-func (d *Service) DesktopPrefs() DesktopPrefs {
-	return DesktopPrefs{ConfirmQuitWhenBusy: d.prefs.confirmQuitWhenBusy.Load()}
-}
-
-func (d *Service) SetConfirmQuitWhenBusy(enabled bool) (DesktopPrefs, error) {
-	d.prefs.confirmQuitWhenBusy.Store(enabled)
-	if err := d.prefs.save(); err != nil {
-		return d.DesktopPrefs(), err
-	}
-	return d.DesktopPrefs(), nil
-}
 
 func (d *Service) RequestQuit() error {
 	if !d.prefs.confirmQuitWhenBusy.Load() {
@@ -54,11 +40,12 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 		d.quitPromptOpen.Store(false)
 		return
 	}
+	locale := d.resolvedLocale()
 	dialog := app.Dialog.Question()
-	dialog.SetTitle("还有任务在执行")
-	dialog.SetMessage("现在退出会打断正在跑的对话和工具调用，未完成的结果可能没写完。确定要退出吗？")
-	stay := dialog.AddButton("继续等待")
-	quit := dialog.AddButton("仍然退出")
+	dialog.SetTitle(i18n.T(locale, "quit.title"))
+	dialog.SetMessage(i18n.T(locale, "quit.message"))
+	stay := dialog.AddButton(i18n.T(locale, "quit.stay"))
+	quit := dialog.AddButton(i18n.T(locale, "quit.exit"))
 	dialog.SetDefaultButton(stay)
 	dialog.SetCancelButton(stay)
 	stay.OnClick(func() { d.quitPromptOpen.Store(false) })

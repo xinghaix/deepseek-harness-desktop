@@ -48,7 +48,7 @@ func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	}
 
 	response, body := get("/v1/status", "wrong")
-	if response.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), "令牌") {
+	if response.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), "token") {
 		t.Fatalf("invalid token response: %d %s", response.StatusCode, body)
 	}
 	response, body = get("/v1/status", bridge.token)

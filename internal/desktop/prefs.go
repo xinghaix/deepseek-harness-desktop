@@ -11,24 +11,32 @@ import (
 const desktopPrefsFileName = "desktop-prefs.json"
 
 type desktopPrefsFile struct {
-	ConfirmQuitWhenBusy *bool `json:"confirmQuitWhenBusy"`
+	ConfirmQuitWhenBusy *bool   `json:"confirmQuitWhenBusy"`
+	Language            *string `json:"language,omitempty"`
 }
 
 type desktopPrefs struct {
 	confirmQuitWhenBusy atomic.Bool
+	language            atomic.Value // string; "" / "system" = follow system
 }
 
 func (p *desktopPrefs) load() {
 	p.confirmQuitWhenBusy.Store(true)
+	p.language.Store("")
 	data, err := os.ReadFile(desktopPrefsPath())
 	if err != nil {
 		return
 	}
 	var file desktopPrefsFile
-	if json.Unmarshal(data, &file) != nil || file.ConfirmQuitWhenBusy == nil {
+	if json.Unmarshal(data, &file) != nil {
 		return
 	}
-	p.confirmQuitWhenBusy.Store(*file.ConfirmQuitWhenBusy)
+	if file.ConfirmQuitWhenBusy != nil {
+		p.confirmQuitWhenBusy.Store(*file.ConfirmQuitWhenBusy)
+	}
+	if file.Language != nil {
+		p.language.Store(*file.Language)
+	}
 }
 
 func (p *desktopPrefs) save() error {
@@ -37,11 +45,25 @@ func (p *desktopPrefs) save() error {
 		return err
 	}
 	enabled := p.confirmQuitWhenBusy.Load()
-	data, err := json.MarshalIndent(desktopPrefsFile{ConfirmQuitWhenBusy: &enabled}, "", "  ")
+	file := desktopPrefsFile{ConfirmQuitWhenBusy: &enabled}
+	if lang := p.getLanguage(); lang != "" {
+		langCopy := lang
+		file.Language = &langCopy
+	}
+	data, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)
+}
+
+func (p *desktopPrefs) getLanguage() string {
+	v, _ := p.language.Load().(string)
+	return v
+}
+
+func (p *desktopPrefs) setLanguage(code string) {
+	p.language.Store(strings.TrimSpace(code))
 }
 
 func desktopPrefsPath() string {

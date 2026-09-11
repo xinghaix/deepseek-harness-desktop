@@ -18,6 +18,14 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if strings.Contains(script, "\n  color-scheme:") {
 		t.Fatal("窗口控制条不应覆盖 Chat 页面全局主题")
 	}
+	for _, title := range []string{"Open desktop settings", "Minimize", "Maximize / Restore", "Close"} {
+		if !strings.Contains(script, title) {
+			t.Fatalf("chrome control title missing %q", title)
+		}
+	}
+	if strings.Contains(script, "打开桌面设置") || strings.Contains(script, "最小化") {
+		t.Fatal("chrome control titles must not stay hard-coded Chinese")
+	}
 }
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {

@@ -9,8 +9,16 @@ import (
 func readManagementUI(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
-	for _, name := range []string{"index.html", "styles.css", "app.js"} {
+	for _, name := range []string{"index.html", "styles.css", "app.js", "i18n.js"} {
 		data, err := os.ReadFile(repoFile(t, "assets", "web", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Write(data)
+		b.WriteByte('\n')
+	}
+	for _, loc := range []string{"en", "zh-CN"} {
+		data, err := os.ReadFile(repoFile(t, "internal", "i18n", "locales", loc+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -47,6 +55,7 @@ func TestManagementUIContract(t *testing.T) {
 		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
+		"LocaleBundle", "SetLanguage",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)
@@ -75,6 +84,9 @@ func TestManagementUIContract(t *testing.T) {
 	}
 	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "退出时若有任务正在执行") {
 		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")
+	}
+	if !strings.Contains(html, `id="ui-language"`) || !strings.Contains(html, "data-i18n") || !strings.Contains(html, "DSHI18n") {
+		t.Fatal("desktop settings must expose language select and data-i18n / DSHI18n wiring")
 	}
 	if !strings.Contains(html, `api("ReloadChat"`) {
 		t.Fatal("runtime config changes must reopen Chat instead of restarting the desktop app")

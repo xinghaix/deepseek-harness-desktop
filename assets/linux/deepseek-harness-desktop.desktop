@@ -1,7 +1,14 @@
 [Desktop Entry]
 Type=Application
 Name=Deepseek Harness Desktop
-Comment=在桌面 WebView 中运行 DSH Chat
+Comment=Run DSH Chat in a desktop WebView
+Comment[zh_CN]=在桌面 WebView 中运行 DSH Chat
+Comment[de]=DSH Chat in einem Desktop-WebView ausführen
+Comment[fr]=Exécuter DSH Chat dans une WebView de bureau
+Comment[es]=Ejecutar DSH Chat en una WebView de escritorio
+Comment[ja]=デスクトップ WebView で DSH Chat を実行
+Comment[ko]=데스크톱 WebView에서 DSH Chat 실행
+Comment[pt]=Executar o DSH Chat numa WebView de ambiente de trabalho
 Exec=deepseek-harness-desktop
 Icon=deepseek-harness-desktop
 Terminal=false

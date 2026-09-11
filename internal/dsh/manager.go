@@ -3,6 +3,7 @@ package dsh
 import (
 	"bytes"
 	"context"
+	"deepseek-harness-desktop/internal/i18n"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,21 +99,21 @@ func desktopDataDirPath(home string) string {
 func ensurePrivateDirectory(directory string) (string, error) {
 	if info, err := os.Lstat(directory); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
-			return "", errors.New("桌面端目录不能是符号链接")
+			return "", i18n.ErrorfActive("err.desktop_dir_symlink")
 		}
 		if !info.IsDir() {
-			return "", errors.New("桌面端目录不是目录")
+			return "", i18n.ErrorfActive("err.desktop_dir_not_dir")
 		}
 	} else if os.IsNotExist(err) {
 		if err := os.MkdirAll(directory, 0700); err != nil {
-			return "", fmt.Errorf("创建桌面端目录: %w", err)
+			return "", fmt.Errorf("%s: %w", i18n.TActive("err.desktop_dir_create"), err)
 		}
 	} else {
-		return "", fmt.Errorf("检查桌面端目录: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.TActive("err.desktop_dir_stat"), err)
 	}
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(directory, 0700); err != nil {
-			return "", fmt.Errorf("设置桌面端目录权限: %w", err)
+			return "", fmt.Errorf("%s: %w", i18n.TActive("err.desktop_dir_chmod"), err)
 		}
 	}
 	return directory, nil
@@ -136,7 +137,7 @@ func desktopProcessDataDir() (string, error) {
 func ensureDesktopProcessDataDir() (string, error) {
 	directory, err := desktopProcessDataDir()
 	if err != nil {
-		return "", fmt.Errorf("桌面端进程目录: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.TActive("err.desktop_proc_dir"), err)
 	}
 	return ensurePrivateDirectory(directory)
 }
@@ -167,14 +168,14 @@ func readProcessMarker(path string) (ownedProcessMarker, bool, error) {
 		return ownedProcessMarker{}, false, nil
 	}
 	if err != nil {
-		return ownedProcessMarker{}, false, fmt.Errorf("读取 DSH 进程标记: %w", err)
+		return ownedProcessMarker{}, false, fmt.Errorf("%s: %w", i18n.TActive("err.marker_read"), err)
 	}
 	var marker ownedProcessMarker
 	if err := json.Unmarshal(raw, &marker); err != nil {
-		return ownedProcessMarker{}, false, fmt.Errorf("解析 DSH 进程标记: %w", err)
+		return ownedProcessMarker{}, false, fmt.Errorf("%s: %w", i18n.TActive("err.marker_parse"), err)
 	}
 	if marker.PID < 1 {
-		return ownedProcessMarker{}, false, errors.New("DSH 进程标记中的 PID 无效")
+		return ownedProcessMarker{}, false, i18n.ErrorfActive("err.marker_bad_pid")
 	}
 	return marker, true, nil
 }
@@ -187,7 +188,7 @@ func guardOwnedProcessMarker(home string) error {
 	paths := []string{ownedProcessMarkerPath(home)}
 	globalPath, err := globalOwnedProcessMarkerPath()
 	if err != nil {
-		return fmt.Errorf("定位全局 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_locate"), err)
 	}
 	if filepath.Clean(globalPath) != filepath.Clean(paths[0]) {
 		paths = append(paths, globalPath)
@@ -201,10 +202,10 @@ func guardOwnedProcessMarker(home string) error {
 			continue
 		}
 		if ownedProcessTreeAlive(nil, marker.PID) {
-			return fmt.Errorf("检测到桌面端仍有 DSH 进程（PID %d），禁止启动第二个实例", marker.PID)
+			return fmt.Errorf("%s", i18n.TActive("err.marker_still_running", strconv.Itoa(marker.PID)))
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("清理已退出的 DSH 进程标记: %w", err)
+			return fmt.Errorf("%s: %w", i18n.TActive("err.marker_cleanup"), err)
 		}
 	}
 	return nil
@@ -217,27 +218,27 @@ func writeProcessMarker(path string, marker ownedProcessMarker) error {
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".dsh-process-*.tmp")
 	if err != nil {
-		return fmt.Errorf("创建 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_create"), err)
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
 	if _, err := temporary.Write(raw); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("写入 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_write"), err)
 	}
 	if err := temporary.Chmod(0600); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("设置 DSH 进程标记权限: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_chmod"), err)
 	}
 	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("关闭 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_close"), err)
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
-		return fmt.Errorf("提交 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_commit"), err)
 	}
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(path, 0600); err != nil {
-			return fmt.Errorf("设置 DSH 进程标记权限: %w", err)
+			return fmt.Errorf("%s: %w", i18n.TActive("err.marker_chmod"), err)
 		}
 	}
 	return nil
@@ -252,7 +253,7 @@ func writeOwnedProcessMarker(home string, pid int, executable string) error {
 func writeGlobalOwnedProcessMarker(home string, pid int, executable string) error {
 	path, err := globalOwnedProcessMarkerPath()
 	if err != nil {
-		return fmt.Errorf("定位全局 DSH 进程标记: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_locate"), err)
 	}
 	return writeProcessMarker(path, ownedProcessMarker{
 		PID: pid, Executable: executable, Home: home, StartedAt: time.Now().UTC(),
@@ -265,7 +266,7 @@ func removeProcessMarker(path string, pid int) error {
 		return err
 	}
 	if marker.PID != pid {
-		return fmt.Errorf("DSH 进程标记属于 PID %d，不是当前 PID %d", marker.PID, pid)
+		return fmt.Errorf("%s", i18n.TActive("err.marker_wrong_pid", strconv.Itoa(marker.PID), strconv.Itoa(pid)))
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
@@ -292,7 +293,7 @@ func removeOwnedProcessMarker(home string, pid int) error {
 
 func absolutePath(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
-		return "", errors.New("路径不能为空")
+		return "", i18n.ErrorfActive("err.path_empty")
 	}
 	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
 		home, err := os.UserHomeDir()
@@ -310,7 +311,7 @@ func absolutePath(path string) (string, error) {
 
 func normalizeOptions(o Options) (Options, error) {
 	if o.Port < 0 || o.Port > 65535 {
-		return o, errors.New("端口必须在 0–65535 之间（0 表示自动选择空闲端口）")
+		return o, i18n.ErrorfActive("err.port_range")
 	}
 	var err error
 	if o.Home, err = absolutePath(o.Home); err != nil {
@@ -318,21 +319,21 @@ func normalizeOptions(o Options) (Options, error) {
 	}
 	o.DesktopDir = desktopDataDirPath(o.Home)
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
-		return o, fmt.Errorf("工作目录: %w", err)
+		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
 	}
 	info, err := os.Stat(o.Workspace)
 	if err != nil {
-		return o, fmt.Errorf("工作目录: %w", err)
+		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
 	}
 	if !info.IsDir() {
-		return o, errors.New("工作目录不是目录")
+		return o, i18n.ErrorfActive("err.workspace_not_dir")
 	}
 	info, err = os.Stat(o.Home)
 	if err != nil && !os.IsNotExist(err) {
 		return o, fmt.Errorf("DSH Home: %w", err)
 	}
 	if err == nil && !info.IsDir() {
-		return o, errors.New("DSH Home 不是目录")
+		return o, i18n.ErrorfActive("err.home_not_dir")
 	}
 	if strings.HasPrefix(o.Executable, "~") {
 		if o.Executable, err = absolutePath(o.Executable); err != nil {
@@ -341,7 +342,7 @@ func normalizeOptions(o Options) (Options, error) {
 	}
 	o.Executable, err = resolveCLIExecutable(o.Executable)
 	if err != nil {
-		return o, fmt.Errorf("找不到可执行的 dsh；请选择已安装的 CLI（不会自动下载）: %w", err)
+		return o, fmt.Errorf("%s: %w", i18n.TActive("err.cli_not_executable"), err)
 	}
 	o.Executable, err = filepath.Abs(o.Executable)
 	return o, err
@@ -386,7 +387,6 @@ func envValue(env []string, wanted string) string {
 	}
 	return ""
 }
-
 
 // withNodeMaxHTTPHeaderSize ensures the DSH Node child accepts long combo
 // request lines. Preserves an existing user-provided max-http-header-size.
@@ -461,7 +461,7 @@ func (d *Manager) callOpenManagement() error {
 	fn := d.openManagement
 	d.mu.Unlock()
 	if fn == nil {
-		return errors.New("桌面配置窗口仅在 Wails 桌面应用中可用")
+		return i18n.ErrorfActive("err.mgmt_wails_only")
 	}
 	return fn()
 }
@@ -516,15 +516,15 @@ func (d *Manager) start(o Options) error {
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
-		return errors.New("应用正在关闭")
+		return i18n.ErrorfActive("err.app_shutting_down")
 	}
 	if d.cmd != nil {
 		state := d.state
 		d.mu.Unlock()
 		if state == "stopping" || state == "failed" {
-			return errors.New("当前 DSH 进程树尚未确认退出，禁止启动新的实例")
+			return i18n.ErrorfActive("err.tree_not_exited_no_start")
 		}
-		return errors.New("已有 DSH 实例正在运行；不会启动第二个实例")
+		return i18n.ErrorfActive("err.dsh_already_running")
 	}
 	d.mu.Unlock()
 	if o.DesktopDir, err = ensureDesktopDataDir(o.Home); err != nil {
@@ -549,13 +549,13 @@ func (d *Manager) start(o Options) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
-		return errors.New("应用正在关闭")
+		return i18n.ErrorfActive("err.app_shutting_down")
 	}
 	if d.cmd != nil {
 		if d.state == "stopping" || d.state == "failed" {
-			return errors.New("当前 DSH 进程树尚未确认退出，禁止启动新的实例")
+			return i18n.ErrorfActive("err.tree_not_exited_no_start")
 		}
-		return errors.New("已有 DSH 实例正在运行；不会启动第二个实例")
+		return i18n.ErrorfActive("err.dsh_already_running")
 	}
 	if d.bridge == nil {
 		d.bridge, err = newDesktopBridge(d)
@@ -567,7 +567,7 @@ func (d *Manager) start(o Options) error {
 	if o.Port != 0 {
 		listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(o.Port)))
 		if err != nil {
-			return fmt.Errorf("端口不可用；不会接管或停止其他进程: %w", err)
+			return fmt.Errorf("%s: %w", i18n.TActive("err.port_unavailable"), err)
 		}
 		_ = listener.Close()
 	}
@@ -602,7 +602,7 @@ func (d *Manager) start(o Options) error {
 		_ = waitForOwnedProcessTree(nil, cmd.Process.Pid, 3*time.Second)
 		_ = removeOwnedProcessMarker(o.Home, cmd.Process.Pid)
 		output.finish()
-		return fmt.Errorf("无法接管 DSH 进程树；不会留下未管理的子进程: %w", err)
+		return fmt.Errorf("%s: %w", i18n.TActive("err.attach_tree_failed"), err)
 	}
 	if err := writeOwnedProcessMarker(o.Home, cmd.Process.Pid, o.Executable); err != nil {
 		_ = killOwnedProcessTree(owner, cmd)
@@ -639,9 +639,9 @@ func (d *Manager) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock 
 			d.state = "failed"
 			d.url = ""
 			if cleanupErr != nil {
-				d.lastError = "无法确认 DSH 子进程树已退出: " + cleanupErr.Error()
+				d.lastError = i18n.TActive("err.tree_exit_unconfirmed_prefix") + ": " + cleanupErr.Error()
 			} else {
-				d.lastError = "DSH 子进程树未确认退出；禁止启动新的实例"
+				d.lastError = i18n.TActive("err.tree_exit_unconfirmed")
 			}
 		}
 		d.mu.Unlock()
@@ -670,7 +670,7 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	cancel()
 	markerErr := removeOwnedProcessMarker(d.options.Home, cmd.Process.Pid)
 	if d.state != "stopping" && d.lastError == "" {
-		d.lastError = "DSH 意外退出"
+		d.lastError = i18n.TActive("err.dsh_unexpected_exit")
 		if exitErr != nil {
 			d.lastError += ": " + exitErr.Error()
 		}
@@ -678,13 +678,13 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	ownerErr := releaseOwnedProcess(owner)
 	lockErr := releaseOwnedProcessLock(processLock)
 	if cleanupErr != nil {
-		d.lastError = "无法清理 DSH 子进程: " + cleanupErr.Error()
+		d.lastError = i18n.TActive("err.cleanup_children") + ": " + cleanupErr.Error()
 	} else if markerErr != nil {
-		d.lastError = "无法清理 DSH 进程标记: " + markerErr.Error()
+		d.lastError = i18n.TActive("err.cleanup_marker") + ": " + markerErr.Error()
 	} else if ownerErr != nil {
-		d.lastError = "无法释放 DSH 进程接管句柄: " + ownerErr.Error()
+		d.lastError = i18n.TActive("err.release_owner") + ": " + ownerErr.Error()
 	} else if lockErr != nil {
-		d.lastError = "无法释放 DSH 单实例锁: " + lockErr.Error()
+		d.lastError = i18n.TActive("err.release_lock") + ": " + lockErr.Error()
 	}
 	d.state = "stopped"
 	if d.lastError != "" {
@@ -711,19 +711,19 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				d.failStartup(cmd, "启动超时：未收到匹配的就绪 URL 或本机服务未响应")
+				d.failStartup(cmd, i18n.TActive("err.startup_timeout"))
 			}
 			return
 		case announced := <-urls:
 			u, err := url.Parse(announced)
 			if err != nil || u == nil {
-				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
+				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
 				return
 			}
 			actualPort, portErr := strconv.Atoi(u.Port())
 			portMatches := requestedPort == 0 || actualPort == requestedPort
 			if u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || portErr != nil || actualPort < 1 || actualPort > 65535 || !portMatches || u.User != nil || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
+				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
 				return
 			}
 			candidate = announced
@@ -743,7 +743,7 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 			location := response.Header.Get("Location")
 			_ = response.Body.Close()
 			if redirect, err := url.Parse(location); err == nil && redirect.Host != "" && !loopbackHost(redirect.Hostname()) {
-				d.failStartup(cmd, "CLI 报告的 URL/监听范围不符合请求；检查 Home patch 是否覆盖了 host 或 port")
+				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
 				return
 			}
 			d.mu.Lock()
@@ -789,7 +789,7 @@ func (d *Manager) stop() error {
 		d.state = "stopping"
 		d.cancel()
 		if err := terminateOwnedProcess(owner, cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			d.lastError = "发送停止信号失败: " + err.Error()
+			d.lastError = i18n.TActive("err.stop_signal_failed") + ": " + err.Error()
 		}
 	}
 	d.mu.Unlock()
@@ -805,18 +805,18 @@ func (d *Manager) stop() error {
 	d.mu.Unlock()
 	if owned {
 		if err := killOwnedProcessTree(owner, cmd); err != nil {
-			return fmt.Errorf("强制停止失败: %w", err)
+			return fmt.Errorf("%s: %w", i18n.TActive("err.force_stop_failed"), err)
 		}
-		_, _ = fmt.Fprintln(d.output, "[desktop] 优雅停止超时，已强制结束本次进程树")
+		_, _ = fmt.Fprintln(d.output, i18n.TActive("log.force_killed_tree"))
 		if !waitForOwnedProcessTree(owner, cmd.Process.Pid, 3*time.Second) {
-			return errors.New("DSH 子进程树仍未退出；禁止启动新的实例")
+			return i18n.ErrorfActive("err.tree_still_alive")
 		}
 	}
 	select {
 	case <-done:
 		return nil
 	case <-time.After(3 * time.Second):
-		return errors.New("DSH 尚未退出；禁止启动新的实例")
+		return i18n.ErrorfActive("err.dsh_not_exited")
 	}
 }
 
@@ -860,12 +860,12 @@ func (d *Manager) restart() error {
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
-		return errors.New("应用正在关闭")
+		return i18n.ErrorfActive("err.app_shutting_down")
 	}
 	o := d.launchOptions
 	if strings.TrimSpace(o.Executable) == "" {
 		d.mu.Unlock()
-		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
+		return i18n.ErrorfActive("err.no_restart_config")
 	}
 	d.mu.Unlock()
 	return d.restartWithOptions(o)
@@ -873,7 +873,7 @@ func (d *Manager) restart() error {
 
 func (d *Manager) restartWithOptions(o Options) error {
 	if strings.TrimSpace(o.Executable) == "" {
-		return errors.New("还没有可重启的 DSH 配置；请先检测 CLI")
+		return i18n.ErrorfActive("err.no_restart_config")
 	}
 	if err := d.stop(); err != nil {
 		return err
@@ -905,7 +905,7 @@ func (d *Manager) BrowserURL() (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.state != "running" {
-		return "", errors.New("DSH 尚未就绪")
+		return "", i18n.ErrorfActive("err.dsh_not_ready")
 	}
 	if d.browserTokenUsed {
 		return "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(d.options.Port)) + "/", nil
@@ -940,7 +940,7 @@ func checkCLI(o Options) (string, error) {
 	}
 	output.finish()
 	if err != nil {
-		return "", fmt.Errorf("检测 CLI 失败（npm 安装还需要 Node 在 GUI PATH 中）: %w: %s", err, output.text())
+		return "", fmt.Errorf("%s: %w: %s", i18n.TActive("err.cli_check_failed"), err, output.text())
 	}
 	return strings.TrimSpace(output.text()), nil
 }
@@ -974,7 +974,7 @@ func (o *cliOutput) line(line string) {
 		default:
 		}
 	}
-	o.data += queryURL.ReplaceAllString(line, "$1?[凭据参数已隐藏]")
+	o.data += queryURL.ReplaceAllString(line, "$1?[credentials-redacted]")
 	if len(o.data) > maxLogBytes {
 		o.data = o.data[len(o.data)-maxLogBytes:]
 		if newline := strings.IndexByte(o.data, '\n'); newline >= 0 {
@@ -1005,7 +1005,7 @@ func (o *cliOutput) Write(p []byte) (int, error) {
 		}
 		if newline >= 0 {
 			if o.dropping {
-				o.line("[desktop] 已丢弃一条超过 16 KiB 的日志\n")
+				o.line(i18n.TActive("log.dropped_long_line") + "\n")
 			} else {
 				o.line(string(o.pending))
 			}

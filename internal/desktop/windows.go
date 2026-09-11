@@ -5,6 +5,8 @@ package desktop
 import (
 	"runtime"
 
+	"deepseek-harness-desktop/internal/i18n"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -30,10 +32,13 @@ func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 	return applyDesktopWindowChrome(options)
 }
 
-func ConfigModalWindowOptions(url string) application.WebviewWindowOptions {
+func ConfigModalWindowOptions(url string, locale string) application.WebviewWindowOptions {
+	if locale == "" {
+		locale = "en"
+	}
 	options := application.WebviewWindowOptions{
 		Name:                  configWindowName,
-		Title:                 "桌面配置",
+		Title:                 i18n.T(locale, "window.config_title"),
 		Width:                 720,
 		Height:                680,
 		MinWidth:              560,

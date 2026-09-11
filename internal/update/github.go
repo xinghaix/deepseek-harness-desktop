@@ -2,11 +2,13 @@ package update
 
 import (
 	"context"
+	"deepseek-harness-desktop/internal/i18n"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -57,14 +59,14 @@ func allowedDownloadURL(raw string) error {
 		return err
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("更新地址必须是 HTTPS")
+		return i18n.ErrorfActive("update.url_must_https")
 	}
 	host := strings.ToLower(u.Hostname())
 	switch host {
 	case "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "github-releases.githubusercontent.com":
 		return nil
 	default:
-		return fmt.Errorf("拒绝非 GitHub 更新地址：%s", host)
+		return fmt.Errorf("%s", i18n.TActive("update.reject_non_github", host))
 	}
 }
 
@@ -96,7 +98,7 @@ func (u *Updater) getBytes(ctx context.Context, raw string) ([]byte, error) {
 		return nil, errNoReleases
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return nil, fmt.Errorf("GitHub 返回 HTTP %d", res.StatusCode)
+		return nil, fmt.Errorf("%s", i18n.TActive("update.github_http", strconv.Itoa(res.StatusCode)))
 	}
 	return body, nil
 }

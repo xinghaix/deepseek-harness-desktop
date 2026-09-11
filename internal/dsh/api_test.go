@@ -28,7 +28,7 @@ func TestRunningDSHDoesNotSpawnDetectionCLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckCLI while running: %v", err)
 	}
-	if checked.Version != "DSH 已运行" {
+	if !checked.AlreadyRunning {
 		t.Fatalf("unexpected running CheckCLI result: %+v", checked)
 	}
 	if checked.Options.Workspace != next.Workspace {

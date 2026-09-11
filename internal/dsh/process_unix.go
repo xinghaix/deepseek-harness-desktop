@@ -3,6 +3,7 @@
 package dsh
 
 import (
+	"deepseek-harness-desktop/internal/i18n"
 	"errors"
 	"fmt"
 	"os"
@@ -20,22 +21,22 @@ type ownedProcessLock struct {
 func acquireOwnedProcessLock() (*ownedProcessLock, error) {
 	path, err := ownedProcessLockPath()
 	if err != nil {
-		return nil, fmt.Errorf("定位 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_locate"), err)
 	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("打开 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_open"), err)
 	}
 	if err := file.Chmod(0600); err != nil {
 		_ = file.Close()
-		return nil, fmt.Errorf("设置 DSH 单实例锁权限: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_chmod"), err)
 	}
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = file.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return nil, errors.New("已有桌面端 DSH 正在运行；不会启动第二个实例")
+			return nil, i18n.ErrorfActive("err.lock_held")
 		}
-		return nil, fmt.Errorf("获取 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_acquire"), err)
 	}
 	return &ownedProcessLock{file: file}, nil
 }

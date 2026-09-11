@@ -23,7 +23,7 @@ func TestApplicationMenuProvidesSystemEditShortcuts(t *testing.T) {
 
 func TestConfigModalStaysAboveChatWindow(t *testing.T) {
 	chat := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
-	modal := ConfigModalWindowOptions("/?manage=1&modal=1")
+	modal := ConfigModalWindowOptions("/?manage=1&modal=1", "zh-CN")
 	if chat.Name != chatWindowName || modal.Name != configWindowName {
 		t.Fatal("Chat must be a separate WebView from the config modal")
 	}
@@ -47,7 +47,7 @@ func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
 	}
 	chat := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
 	config := ManagementWindowOptions("/")
-	modal := ConfigModalWindowOptions("/?manage=1")
+	modal := ConfigModalWindowOptions("/?manage=1", "zh-CN")
 	if chat.Name != chatWindowName || config.Name != setupWindowName || modal.Name != configWindowName {
 		t.Fatal("Chat, first-run setup, and config modal must be separate windows")
 	}

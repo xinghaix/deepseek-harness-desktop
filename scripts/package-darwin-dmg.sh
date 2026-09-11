@@ -1,5 +1,7 @@
 #!/bin/sh
 # Build a drag-to-Applications DMG. No Finder, no attach, no Apple events.
+# Prefer hdiutil: newer macOS still has `diskutil image`, but its create-from
+# flags differ from what we used and break CI (unknown --volumeName).
 set -eu
 
 if [ $# -ne 2 ]; then
@@ -34,11 +36,13 @@ ln -s /Applications "$staging/Applications"
 rm -f "$out"
 mkdir -p "$(dirname "$out")"
 
-if diskutil help image >/dev/null 2>&1; then
-	diskutil image create from --format UDZO --volumeName "$volname" "$staging" "$out"
-else
-	# Older macOS (GitHub macos-13/14) still uses hdiutil.
-	hdiutil create -volname "$volname" -srcfolder "$staging" -ov -fs HFS+ -format UDZO -imagekey zlib-level=9 "$out" >/dev/null
-fi
+hdiutil create \
+	-volname "$volname" \
+	-srcfolder "$staging" \
+	-ov \
+	-fs HFS+ \
+	-format UDZO \
+	-imagekey zlib-level=9 \
+	"$out" >/dev/null
 
 echo "wrote $out"

@@ -11,10 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"deepseek-harness-desktop/internal/i18n"
 	"deepseek-harness-desktop/internal/version"
 )
 
-var errNoReleases = errors.New("还没有 GitHub Release")
+var errNoReleases = errors.New("no GitHub Release") // sentinel for errors.Is; UI uses update.no_releases
 
 type Updater struct {
 	mu        sync.Mutex
@@ -108,7 +109,7 @@ func (u *Updater) Check(ctx context.Context) (Snapshot, error) {
 	defer u.mu.Unlock()
 	if errors.Is(err, errNoReleases) {
 		u.state = StateUnavailable
-		u.errMsg = err.Error()
+		u.errMsg = i18n.TActive("update.no_releases")
 		return u.snapshotLocked(), nil
 	}
 	if err != nil {
@@ -139,12 +140,12 @@ func (u *Updater) Check(ctx context.Context) (Snapshot, error) {
 	}
 	if asset.Name == "" {
 		u.state = StateFailed
-		u.errMsg = "此平台还没有对应的 Release 产物（" + want + "）"
+		u.errMsg = i18n.TActive("update.no_asset_for_platform", want)
 		return u.snapshotLocked(), errors.New(u.errMsg)
 	}
 	if sumsURL == "" {
 		u.state = StateFailed
-		u.errMsg = "Release 缺少 SHA256SUMS，拒绝安装"
+		u.errMsg = i18n.TActive("update.missing_sha256sums")
 		return u.snapshotLocked(), errors.New(u.errMsg)
 	}
 	u.mu.Unlock()
@@ -152,13 +153,13 @@ func (u *Updater) Check(ctx context.Context) (Snapshot, error) {
 	u.mu.Lock()
 	if sumErr != nil {
 		u.state = StateFailed
-		u.errMsg = "读取 SHA256SUMS 失败: " + sumErr.Error()
+		u.errMsg = i18n.TActive("update.read_sha256sums_failed", sumErr.Error())
 		return u.snapshotLocked(), sumErr
 	}
 	sum, ok := parseChecksums(string(sumsBody))[want]
 	if !ok {
 		u.state = StateFailed
-		u.errMsg = "SHA256SUMS 中没有 " + want
+		u.errMsg = i18n.TActive("update.sha256sums_missing_file", want)
 		return u.snapshotLocked(), errors.New(u.errMsg)
 	}
 	if err := u.checkDownloadURL(asset.BrowserDownloadURL); err != nil {
@@ -228,7 +229,7 @@ func (u *Updater) Prepare(ctx context.Context) error {
 func messageFor(s Snapshot) string {
 	switch s.State {
 	case StateUpToDate:
-		return "已经是最新版本 " + s.CurrentVersion
+		return i18n.TActive("update.already_latest", s.CurrentVersion)
 	case StateUnavailable:
 		return s.Error
 	default:

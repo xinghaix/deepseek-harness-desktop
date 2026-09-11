@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"deepseek-harness-desktop/internal/i18n"
 	"fmt"
 	"strconv"
 	"strings"
@@ -307,10 +308,10 @@ const desktopChromeJS = `
     controls.appendChild(button);
     return button;
   };
-  if (!isManagement) addButton("settings", "打开桌面设置");
-  addButton("minimize", "最小化");
-  addButton("maximize", "最大化 / 还原");
-  addButton("close", "关闭");
+  if (!isManagement) addButton("settings", %s);
+  addButton("minimize", %s);
+  addButton("maximize", %s);
+  addButton("close", %s);
   chrome.append(drag, controls);
   document.documentElement.appendChild(chrome);
 
@@ -349,5 +350,13 @@ func desktopChromeScript(nativeMac bool) string {
 	if nativeMac {
 		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
 	}
-	return fmt.Sprintf(desktopChromeJS, desktopCustomTopInset, strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS))
+	return fmt.Sprintf(
+		desktopChromeJS,
+		desktopCustomTopInset,
+		strconv.Quote(desktopChromeCSS+desktopSidebarTransitionCSS+desktopWindowInsetCSS),
+		strconv.Quote(i18n.TActive("chrome.open_settings")),
+		strconv.Quote(i18n.TActive("chrome.minimize")),
+		strconv.Quote(i18n.TActive("chrome.maximize")),
+		strconv.Quote(i18n.TActive("chrome.close")),
+	)
 }

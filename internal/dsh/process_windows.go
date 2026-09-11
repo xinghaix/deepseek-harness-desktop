@@ -12,6 +12,7 @@ import (
 	"time"
 	"unsafe"
 
+	"deepseek-harness-desktop/internal/i18n"
 	"golang.org/x/sys/windows"
 )
 
@@ -26,15 +27,15 @@ type ownedProcessLock struct {
 func acquireOwnedProcessLock() (*ownedProcessLock, error) {
 	path, err := ownedProcessLockPath()
 	if err != nil {
-		return nil, fmt.Errorf("定位 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_locate"), err)
 	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("打开 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_open"), err)
 	}
 	if err := file.Chmod(0600); err != nil {
 		_ = file.Close()
-		return nil, fmt.Errorf("设置 DSH 单实例锁权限: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_chmod"), err)
 	}
 	var overlapped windows.Overlapped
 	err = windows.LockFileEx(
@@ -45,9 +46,9 @@ func acquireOwnedProcessLock() (*ownedProcessLock, error) {
 	if err != nil {
 		_ = file.Close()
 		if errors.Is(err, windows.ERROR_LOCK_VIOLATION) || errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
-			return nil, errors.New("已有桌面端 DSH 正在运行；不会启动第二个实例")
+			return nil, i18n.ErrorfActive("err.lock_held")
 		}
-		return nil, fmt.Errorf("获取 DSH 单实例锁: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.lock_acquire"), err)
 	}
 	return &ownedProcessLock{file: file}, nil
 }
@@ -66,11 +67,11 @@ func releaseOwnedProcessLock(lock *ownedProcessLock) error {
 // Windows 会自动结束仍属于该 Job 的后代，桌面端自身崩溃也不会遗留 DSH。
 func attachOwnedProcess(cmd *exec.Cmd) (*ownedProcess, error) {
 	if cmd == nil || cmd.Process == nil {
-		return nil, errors.New("DSH 进程尚未启动")
+		return nil, i18n.ErrorfActive("err.process_not_started")
 	}
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建 DSH Job Object: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.job_create"), err)
 	}
 	closeJob := true
 	defer func() {
@@ -86,7 +87,7 @@ func attachOwnedProcess(cmd *exec.Cmd) (*ownedProcess, error) {
 		uintptr(unsafe.Pointer(&limits)),
 		uint32(unsafe.Sizeof(limits)),
 	); err != nil {
-		return nil, fmt.Errorf("设置 DSH Job Object 回收策略: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.job_policy"), err)
 	}
 	process, err := windows.OpenProcess(
 		windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION,
@@ -94,11 +95,11 @@ func attachOwnedProcess(cmd *exec.Cmd) (*ownedProcess, error) {
 		uint32(cmd.Process.Pid),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("打开 DSH 进程句柄: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.process_open"), err)
 	}
 	defer windows.CloseHandle(process)
 	if err := windows.AssignProcessToJobObject(job, process); err != nil {
-		return nil, fmt.Errorf("接管 DSH 进程树: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.attach_tree"), err)
 	}
 	closeJob = false
 	return &ownedProcess{job: job}, nil
@@ -128,7 +129,7 @@ func killOwnedProcessTree(owner *ownedProcess, cmd *exec.Cmd) error {
 			if fallbackErr := taskkill(cmd, true); fallbackErr == nil {
 				return nil
 			} else {
-				return fmt.Errorf("结束 DSH Job Object: %w；taskkill 兜底失败: %v", err, fallbackErr)
+				return fmt.Errorf("%s", i18n.TActive("err.job_kill_fallback", err.Error(), fmt.Sprint(fallbackErr)))
 			}
 		}
 	}

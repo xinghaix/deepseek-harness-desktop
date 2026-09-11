@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"deepseek-harness-desktop/internal/dsh"
+	"deepseek-harness-desktop/internal/i18n"
 	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -39,6 +40,7 @@ func New() *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel}
 	s.prefs.load()
+	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
 	s.SetOpenManagement(s.OpenManagement)
 	go s.updater.RunPeriodic(ctx)
 	return s
@@ -49,24 +51,28 @@ func (d *Service) ChooseExecutable() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	locale := d.resolvedLocale()
 	return app.Dialog.OpenFile().
 		CanChooseFiles(true).
 		CanChooseDirectories(false).
-		SetTitle("选择 dsh 可执行文件").
-		SetMessage("请选择已经安装的 dsh；桌面端不会自动下载或安装").
+		SetTitle(i18n.T(locale, "dialog.choose_executable_title")).
+		SetMessage(i18n.T(locale, "dialog.choose_executable_message")).
 		PromptForSingleSelection()
 }
 
 func (d *Service) ChooseHome() (string, error) {
-	return d.chooseDirectory("选择 DSH Home", "请选择现有的 DSH Home 目录；不会创建新的配置目录")
+	locale := d.resolvedLocale()
+	return d.chooseDirectory(i18n.T(locale, "dialog.choose_home_title"), i18n.T(locale, "dialog.choose_home_message"))
 }
 
 func (d *Service) ChooseWorkspace() (string, error) {
-	return d.chooseDirectory("选择 Chat 工作目录", "请选择 DSH 启动时使用的 Chat 工作目录")
+	locale := d.resolvedLocale()
+	return d.chooseDirectory(i18n.T(locale, "dialog.choose_workspace_title"), i18n.T(locale, "dialog.choose_workspace_message"))
 }
 
 func (d *Service) ChooseBridgePlugin() (string, error) {
-	return d.chooseDirectory("选择 DSH 桥接插件目录", "请选择项目中的 plugins/deepseek-harness-desktop-bridge 目录")
+	locale := d.resolvedLocale()
+	return d.chooseDirectory(i18n.T(locale, "dialog.choose_bridge_title"), i18n.T(locale, "dialog.choose_bridge_message"))
 }
 
 func (d *Service) chooseDirectory(title, message string) (string, error) {
@@ -102,11 +108,11 @@ func (d *Service) ReloadChat(o dsh.Options) error {
 			if st.Error != "" {
 				return errors.New(st.Error)
 			}
-			return errors.New("重新打开 Chat 失败")
+			return i18n.ErrorfActive("err.reopen_chat_failed")
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	return errors.New("重新打开 Chat 超时")
+	return i18n.ErrorfActive("err.reopen_chat_timeout")
 }
 
 func (d *Service) OpenDSH() error {
@@ -157,7 +163,7 @@ func (d *Service) OpenManagement() error {
 		const modalURL = "/?manage=1&modal=1"
 		window, ok := app.Window.GetByName(configWindowName)
 		if !ok {
-			window = app.Window.NewWithOptions(ConfigModalWindowOptions(modalURL))
+			window = app.Window.NewWithOptions(ConfigModalWindowOptions(modalURL, d.resolvedLocale()))
 			d.configIsModal = true
 			d.configHooked = false
 			d.NoteManagementWindowURL(modalURL)
@@ -338,7 +344,7 @@ func (d *Service) OpenWorkspace(o dsh.Options) error {
 	if err != nil {
 		return err
 	}
-	if err := requireDirectory(o.Workspace, "工作目录"); err != nil {
+	if err := requireDirectory(o.Workspace, i18n.TActive("label.workspace")); err != nil {
 		return err
 	}
 	app, err := desktopApp()
@@ -367,7 +373,7 @@ func (d *Service) OpenSettings(o dsh.Options) error {
 func desktopApp() (*application.App, error) {
 	app := application.Get()
 	if app == nil {
-		return nil, errors.New("桌面应用尚未就绪")
+		return nil, i18n.ErrorfActive("err.app_not_ready")
 	}
 	return app, nil
 }
@@ -375,10 +381,10 @@ func desktopApp() (*application.App, error) {
 func requireDirectory(path, label string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("%s 不存在：%w", label, err)
+		return fmt.Errorf("%s", i18n.TActive("err.path_missing", label, err.Error()))
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%s 不是目录：%s", label, path)
+		return fmt.Errorf("%s", i18n.TActive("err.not_directory", label, path))
 	}
 	return nil
 }
@@ -386,10 +392,10 @@ func requireDirectory(path, label string) error {
 func requireFile(path, label string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("未找到 %s：%s", label, path)
+		return fmt.Errorf("%s", i18n.TActive("err.file_not_found", label, path))
 	}
 	if info.IsDir() {
-		return fmt.Errorf("%s 是目录而不是文件：%s", label, path)
+		return fmt.Errorf("%s", i18n.TActive("err.is_directory_not_file", label, path))
 	}
 	return nil
 }

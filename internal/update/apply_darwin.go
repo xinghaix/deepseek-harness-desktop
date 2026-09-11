@@ -4,6 +4,7 @@ package update
 
 import (
 	"archive/zip"
+	"deepseek-harness-desktop/internal/i18n"
 	"fmt"
 	"io"
 	"os"
@@ -38,7 +39,7 @@ func applyAndRelaunch(staged, _ string) error {
 	}
 	inner := filepath.Join(app, "Contents", "MacOS", filepath.Base(exe))
 	if _, err := os.Stat(inner); err != nil {
-		return fmt.Errorf("更新包里找不到可执行文件")
+		return i18n.ErrorfActive("update.no_executable_in_package")
 	}
 	if err := replaceFile(exe, inner); err != nil {
 		return err
@@ -87,7 +88,7 @@ func unzipApp(zipPath, dest string) (string, error) {
 		}
 		target := filepath.Join(dest, rel)
 		if !strings.HasPrefix(target, dest+string(os.PathSeparator)) && target != dest {
-			return "", fmt.Errorf("非法更新包路径")
+			return "", i18n.ErrorfActive("update.illegal_package_path")
 		}
 		if f.FileInfo().IsDir() || strings.HasSuffix(f.Name, "/") {
 			_ = os.MkdirAll(target, 0o755)
@@ -116,7 +117,7 @@ func unzipApp(zipPath, dest string) (string, error) {
 		}
 	}
 	if appRel == "" {
-		return "", fmt.Errorf("更新包里没有 .app")
+		return "", i18n.ErrorfActive("update.no_app_in_package")
 	}
 	return filepath.Join(dest, appRel), nil
 }

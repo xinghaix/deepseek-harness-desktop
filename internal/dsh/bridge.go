@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"deepseek-harness-desktop/internal/i18n"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -36,11 +37,11 @@ type desktopBridge struct {
 func newDesktopBridge(owner *Manager) (*desktopBridge, error) {
 	var rawToken [32]byte
 	if _, err := rand.Read(rawToken[:]); err != nil {
-		return nil, fmt.Errorf("生成桌面桥接令牌失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.bridge_token_gen"), err)
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("启动桌面桥接控制面失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.TActive("err.bridge_listen"), err)
 	}
 
 	bridge := &desktopBridge{
@@ -84,24 +85,24 @@ func (b *desktopBridge) env(base []string) []string {
 func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if subtle.ConstantTimeCompare([]byte(r.Header.Get(desktopBridgeTokenHeader)), []byte(b.token)) != 1 {
-		writeBridgeError(w, http.StatusUnauthorized, "桌面桥接令牌无效")
+		writeBridgeError(w, http.StatusUnauthorized, i18n.TActive("err.bridge_invalid_token"))
 		return
 	}
 	if r.URL.RawQuery != "" {
-		writeBridgeError(w, http.StatusBadRequest, "桌面桥接接口不接受查询参数")
+		writeBridgeError(w, http.StatusBadRequest, i18n.TActive("err.bridge_no_query"))
 		return
 	}
 
 	switch r.URL.Path {
 	case "/v1/status":
 		if r.Method != http.MethodGet {
-			writeBridgeError(w, http.StatusMethodNotAllowed, "状态接口只接受 GET")
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_status_get_only"))
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
 	case "/v1/restart":
 		if r.Method != http.MethodPost {
-			writeBridgeError(w, http.StatusMethodNotAllowed, "重启接口只接受 POST")
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_restart_post_only"))
 			return
 		}
 		if err := b.owner.Restart(); err != nil {
@@ -111,7 +112,7 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
 	case "/v1/stop":
 		if r.Method != http.MethodPost {
-			writeBridgeError(w, http.StatusMethodNotAllowed, "停止接口只接受 POST")
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_stop_post_only"))
 			return
 		}
 		if err := b.owner.Stop(); err != nil {
@@ -121,7 +122,7 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
 	case "/v1/open-management":
 		if r.Method != http.MethodPost {
-			writeBridgeError(w, http.StatusMethodNotAllowed, "打开桌面配置接口只接受 POST")
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_open_mgmt_post_only"))
 			return
 		}
 		if err := b.owner.callOpenManagement(); err != nil {
@@ -130,7 +131,7 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
-		writeBridgeError(w, http.StatusNotFound, "桌面桥接接口不存在")
+		writeBridgeError(w, http.StatusNotFound, i18n.TActive("err.bridge_not_found"))
 	}
 }
 

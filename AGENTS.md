@@ -44,6 +44,7 @@
 |--------------|-------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | 入口         | `main.go`                                 | Wails 应用、资源嵌入、单实例、`main.DSH` 服务包装、宿主菜单                                                                            |
 | 桌面 UI      | `internal/desktop`                        | 配置窗 / Chat 窗、标题栏与安全区、文件对话框、配置模态、菜单动作；依赖 Wails                                                           |
+| 国际化       | `internal/i18n`                           | 嵌入式 locales JSON、Resolve/Catalog/T/TActive；进程 Active 语言；桌面 prefs + LocaleBundle/SetLanguage                                  |
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
 | WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的一次性 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431 |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
@@ -92,7 +93,21 @@ Node 默认 16KiB header（HTTP 431）。
   `*_windows.go` / `*_linux.go` 或小范围分支隔离，而不是复制整条业务路径。
 - **共享内核优先**：生命周期、发现 CLI、桥接控制面、webview boot、配置模型放在 `internal/dsh` 等无 UI 层；平台差异下沉到薄适配层。
 - **改动自检**：触及进程、窗口、菜单、打包、WebView、更新时，想一遍三端；测不了的端在 PR/说明里标出风险，而不是默认“本机 OK 即可”。
-- **发版矩阵**：Release 打 darwin-arm64、darwin-amd64、linux-amd64、windows-amd64；改构建脚本或 workflow 时保持四者都能产出。
+- **发版矩阵**：Release 打 darwin-arm64、linux-amd64、windows-amd64（Intel Mac 用 Rosetta）；改构建脚本或 workflow 时保持四者都能产出。
+
+## 国际化
+
+支持语言：`zh-CN`、`en`、`de`、`fr`、`es`、`ja`、`ko`、`pt`。
+
+解析顺序：
+
+1. 用户在配置页保存的 `language`（`desktop-prefs.json`；空 / `system` = 跟随系统）
+2. 否则映射 OS/系统语言（`LANG`/`LC_ALL`，macOS `AppleLocale`，Windows `GetUserDefaultLocaleName`）到支持列表
+3. 否则回退 `en`
+
+目录：`internal/i18n/locales/*.json`（扁平 key；英文为源，zh-CN 对齐壳 UI）。Web 壳通过 `LocaleBundle` / `SetLanguage` 加载目录并用 `data-i18n` / `t()` 刷新。
+
+进程级 Active 语言：`i18n.SetActive` / `Active` / `TActive`（及 `ErrorfActive`）。默认 `en`；桌面在 prefs 解析后与 `SetLanguage` 时调用 `SetActive`。`internal/dsh`、`internal/update`、`internal/desktop` 的用户可见错误/状态/桥接响应体/窗口控制条 title 经 `TActive` 取文案。稳定协议哨兵仍用语言无关字段（例如 CheckCLI 的 `alreadyRunning`）；日志凭据脱敏标记固定为 `?[credentials-redacted]`。assets 中展开/收起等 CSS 文案经 `data-i18n-expand`/`data-collapse` + catalog。
 
 ## 版本与发版
 
@@ -131,4 +146,5 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 - 桥接控制面仅 `127.0.0.1`，无任意 shell；令牌不进页面/日志/状态 JSON。
 - 增量改动保持可测：`internal/dsh` 尽量无 Wails 依赖；桌面行为用 `internal/desktop` 测试与契约。
 - 跨平台：功能一致优先，允许端侧优化；改动默认评估 macOS / Windows / Linux 影响。
+- 改 UI 文案时同步更新 `internal/i18n/locales` 全部语言，并保持 key 集合与 `en.json` 一致。
 - 发版相关只动 tag + 已有 workflow/脚本；避免再引入易触发 GitHub API 限流的第三方 setup action 装 `task`。

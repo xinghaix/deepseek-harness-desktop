@@ -34,14 +34,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macos-13 is retired/scarce (amd64 jobs stay queued). Ship darwin-arm64;
+          # Intel Macs run it via Rosetta 2.
           - name: darwin-arm64
-            os: macos-14
+            os: macos-15
             goos: darwin
             goarch: arm64
-          - name: darwin-amd64
-            os: macos-13
-            goos: darwin
-            goarch: amd64
           - name: linux-amd64
             os: ubuntu-24.04
             goos: linux
