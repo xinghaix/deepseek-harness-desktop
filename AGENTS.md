@@ -48,7 +48,7 @@
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
 | WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的一次性 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431 |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
-| 版本         | `internal/version`                        | `Version` 默认 `"dev"`；发布包用 `-ldflags` 从 tag 注入                                                                                |
+| 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
 | 桥接插件     | `plugins/deepseek-harness-desktop-bridge` | 可选 DSH profile bundle，在 Chat 里暴露桌面管理 UI                                                                                     |
 | 构建         | `scripts/build.sh`、`Taskfile.yml`        | 本地/CI 打包与自签名；CI 优先 `scripts/build.sh`                                                                                       |
 
@@ -111,12 +111,19 @@ Node 默认 16KiB header（HTTP 431）。
 
 ## 版本与发版
 
-基线： **0.1.0**（git tag `v0.1.0`）。
+基线： **0.1.0**（git tag `v0.1.0`）。当前最新发布见 git tag / GitHub Releases。
 
 | 变更类型           | 版本怎么动          | 例子              |
 |--------------------|---------------------|-------------------|
 | 小 bugfix、小特性  | 补丁号 +1           | `0.1.0` → `0.1.1` |
 | 较大改动或重要修复 | 次版本 +1，补丁归 0 | `0.1.3` → `0.2.0` |
+
+开发构建版本号（未显式传 `VERSION` / 参数时，由 `scripts/app-version.sh` 决定）：
+
+- 正好停在某个 release tag 上 → 正式号，如 `0.1.1`
+- 其它提交 → **最新发布号 + `-dev`**，如 `0.1.1-dev`
+- 仓库尚无 tag → `0.0.0-dev`
+- Release CI 仍从 tag 注入正式号（如 `0.1.1`），不会带 `-dev`
 
 流程：
 
@@ -133,7 +140,8 @@ Node 默认 16KiB header（HTTP 431）。
 ```bash
 go test -race ./...
 go test -race -tags wails ./...
-./scripts/build.sh 0.1.1 # 或省略参数：最近 tag / dev
+./scripts/build.sh            # 省略参数 → 如 0.1.1-dev
+./scripts/build.sh 0.1.1     # 显式正式号
 GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 ```
 

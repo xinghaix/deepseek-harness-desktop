@@ -7,15 +7,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-version=${1:-${VERSION:-}}
-version=${version#v}
-if [ -z "$version" ]; then
-	version=$(git describe --tags --abbrev=0 2>/dev/null || true)
-	version=${version#v}
-fi
-if [ -z "$version" ]; then
-	version=dev
-fi
+version=$(sh "$root/scripts/app-version.sh" "${1:-${VERSION:-}}")
 
 goos=${GOOS:-$(go env GOOS)}
 goarch=${GOARCH:-$(go env GOARCH)}

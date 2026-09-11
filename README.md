@@ -42,7 +42,7 @@ go test -race ./...
 ./scripts/build.sh 0.2.0
 ```
 
-版本会写进 `internal/version.Version`。省略参数时用最近的 git tag，没有 tag 则为 `dev`。如果要用 Taskfile，先安装 [go-task](https://taskfile.dev)：`brew install go-task`，然后 `task build VERSION=0.2.0`。
+版本会写进 `internal/version.Version`。省略参数时：停在 release tag 上用正式号；否则用**最新发布号 + `-dev`**（如 `0.1.1-dev`）；尚无 tag 则为 `0.0.0-dev`。显式传参 / `VERSION=` 覆盖。如果要用 Taskfile，先安装 [go-task](https://taskfile.dev)：`brew install go-task`，然后 `task build VERSION=0.2.0`。
 
 产物输出到 `dist/`（已 git 忽略）。macOS 还会额外生成 `dist/deepseek-harness-desktop-darwin-<arch>.dmg`（应用 + Applications 快捷方式，打开后拖进去即可安装）。`task build` 会按当前平台做自签名，同一套脚本在 macOS / Linux / Windows 上都能跑：
 

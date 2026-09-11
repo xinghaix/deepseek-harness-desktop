@@ -1,7 +1,7 @@
 #!/bin/sh
 # Stamp internal/version.Version then exec go build.
 # Usage: scripts/go-build.sh [version] -- [go build args...]
-# Version comes from the first arg, VERSION, APP_VERSION, git tag, or "dev".
+# Version via scripts/app-version.sh (explicit, exact tag, or latest-tag-dev).
 set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 ver=${1:-}
