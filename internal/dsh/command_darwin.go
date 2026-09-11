@@ -12,7 +12,7 @@ const superviseFlag = "-dsh-supervise"
 
 func newCLICommand(executable string, args ...string) *exec.Cmd {
 	cmd := exec.Command(executable, args...)
-	if len(args) > 0 && args[0] == "web" {
+	if isWebSubcommand(args) {
 		return wrapSupervisedCommand(cmd)
 	}
 	return cmd

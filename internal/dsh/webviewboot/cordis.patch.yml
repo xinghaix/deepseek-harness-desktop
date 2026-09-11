@@ -1,0 +1,6 @@
+# Desktop-only: WKWebView fails on long combo <script src>. Fast path is one
+# combo XHR (Node max-http-header-size raised by the desktop); on 431, expand
+# to per-package ?? URLs with bounded concurrency.
+- insert:
+    - id: desktop-webview-boot
+      name: ./index.js

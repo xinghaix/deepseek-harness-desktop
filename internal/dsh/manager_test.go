@@ -50,12 +50,16 @@ func TestMain(m *testing.M) {
 		fmt.Println("test-fixture-dsh")
 		os.Exit(0)
 	}
-	if len(os.Args) != 7 {
+	args := os.Args[1:]
+	if len(args) >= 3 && args[0] == "web" && args[1] == "--patch" {
+		args = append([]string{"web"}, args[3:]...)
+	}
+	if len(args) != 6 {
 		os.Exit(21)
 	}
-	port := os.Args[5]
+	port := args[4]
 	want := []string{"web", "--host", "127.0.0.1", "--port", port, "--no-open"}
-	if !reflect.DeepEqual(os.Args[1:], want) {
+	if !reflect.DeepEqual(args, want) {
 		os.Exit(22)
 	}
 	home := os.Getenv("DSH_HOME")
@@ -261,13 +265,17 @@ func TestDSH(t *testing.T) {
 		if err := json.Unmarshal(raw, &observed); err != nil {
 			t.Fatal(err)
 		}
-		want := []string{"web", "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open"}
+		patch := filepath.Join(o.Home, desktopDataDirName, webviewBootDirName, "cordis.patch.yml")
+		want := []string{"web", "--patch", patch, "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open"}
 		resolvedWorkspace, err := filepath.EvalSymlinks(o.Workspace)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(observed.Args, want) || observed.Home != o.Home || observed.Cwd != resolvedWorkspace || observed.Inherited != "kept" {
 			t.Fatalf("%+v", observed)
+		}
+		if _, err := os.Stat(patch); err != nil {
+			t.Fatalf("webview boot overlay was not written: %v", err)
 		}
 		if os.Getenv("DSH_HOME") != "  " {
 			t.Fatal("mutated parent environment")

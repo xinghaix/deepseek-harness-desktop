@@ -89,4 +89,4 @@ git push origin v0.1.0
 
 ## 数据与进程边界
 
-桌面端只向子进程显式传入 `DSH_HOME`，并在该目录下预留固定的桌面端专属目录 `DSH_HOME/.deepseek-harness-desktop`；首次启动时按 0700 权限创建，但它不作为 DSH 的当前目录。Chat 的 workspace 仍是独立、可配置的 DSH `cwd`，默认沿用系统用户目录，也可以选择项目目录或桌面端专属目录。桌面端通过单实例应用锁、跨进程 DSH 锁、生命周期串行化和进程标记，确保同一用户下同一时刻只有一个由桌面端拥有的 DSH；重复打开配置或 Chat 只复用已有窗口，不重复刷新或启动 CLI。异常退出时会清理自己拥有的整个进程树；在进程树未确认退出前禁止再次启动。Windows 使用 Job Object 的关闭即回收策略，并以 `taskkill /T` 作为兼容性兜底；Unix 使用独立进程组。桌面端不会递归扫描任一 workspace，不会读取或重写凭据，也不会生成第二份 YAML。`settings.yaml` 入口只打开用户已经存在的文件。端口被占用时直接失败，不接管或停止其他进程。
+桌面端只向子进程显式传入 `DSH_HOME`，并在该目录下预留固定的桌面端专属目录 `DSH_HOME/.deepseek-harness-desktop`；首次启动时按 0700 权限创建，但它不作为 DSH 的当前目录。启动 DSH 时会为 Node 子进程抬高 max-http-header-size，并写入仅作用于本次进程的 `--patch` 覆盖（`webview-boot`）：用一次 XHR 加载 client combo（遇 431 再并发拉单包），不修改用户 profile。Chat 的 workspace 仍是独立、可配置的 DSH `cwd`，默认沿用系统用户目录，也可以选择项目目录或桌面端专属目录。桌面端通过单实例应用锁、跨进程 DSH 锁、生命周期串行化和进程标记，确保同一用户下同一时刻只有一个由桌面端拥有的 DSH；重复打开配置或 Chat 只复用已有窗口，不重复刷新或启动 CLI。异常退出时会清理自己拥有的整个进程树；在进程树未确认退出前禁止再次启动。Windows 使用 Job Object 的关闭即回收策略，并以 `taskkill /T` 作为兼容性兜底；Unix 使用独立进程组。桌面端不会递归扫描任一 workspace，不会读取或重写凭据，也不会生成第二份 YAML。`settings.yaml` 入口只打开用户已经存在的文件。端口被占用时直接失败，不接管或停止其他进程。

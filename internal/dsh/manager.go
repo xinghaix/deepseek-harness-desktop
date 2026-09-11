@@ -371,7 +371,10 @@ func cliEnv(home, executable string) []string {
 	if pathValue != "" {
 		dirs = append(dirs, strings.Split(pathValue, string(os.PathListSeparator))...)
 	}
-	return withEnvValue(env, "PATH", joinPathDirectories(dirs))
+	env = withEnvValue(env, "PATH", joinPathDirectories(dirs))
+	// DSH client-modules combo URLs grow with installed plugins; Node's default
+	// 16KiB max header size returns HTTP 431 once Cookie + Request-Line overflow.
+	return withNodeMaxHTTPHeaderSize(env, 128<<10)
 }
 
 func envValue(env []string, wanted string) string {
@@ -382,6 +385,26 @@ func envValue(env []string, wanted string) string {
 		}
 	}
 	return ""
+}
+
+
+// withNodeMaxHTTPHeaderSize ensures the DSH Node child accepts long combo
+// request lines. Preserves an existing user-provided max-http-header-size.
+func withNodeMaxHTTPHeaderSize(env []string, size int) []string {
+	if size <= 0 {
+		return env
+	}
+	flag := fmt.Sprintf("--max-http-header-size=%d", size)
+	cur := strings.TrimSpace(envValue(env, "NODE_OPTIONS"))
+	if cur == "" {
+		return withEnvValue(env, "NODE_OPTIONS", flag)
+	}
+	for _, part := range strings.Fields(cur) {
+		if strings.HasPrefix(part, "--max-http-header-size=") || part == "--max-http-header-size" {
+			return env
+		}
+	}
+	return withEnvValue(env, "NODE_OPTIONS", cur+" "+flag)
 }
 
 func withEnvValue(env []string, wanted, value string) []string {
@@ -549,7 +572,11 @@ func (d *Manager) start(o Options) error {
 		_ = listener.Close()
 	}
 	output := newOutput()
-	cmd := newCLICommand(o.Executable, "web", "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open")
+	patch, err := writeWebviewBootOverlay(o.DesktopDir)
+	if err != nil {
+		return err
+	}
+	cmd := newCLICommand(o.Executable, webCLIArgs(patch, o.Port)...)
 	cmd.Dir, cmd.Env = o.Workspace, d.bridge.env(cliEnv(o.Home, o.Executable))
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr = output, output

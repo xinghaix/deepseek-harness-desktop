@@ -1,0 +1,5 @@
+{
+  "name": "desktop-webview-boot",
+  "private": true,
+  "type": "module"
+}
