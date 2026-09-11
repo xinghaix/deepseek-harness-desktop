@@ -36,16 +36,20 @@ jobs:
         include:
           - name: darwin-arm64
             os: macos-14
-            task: darwin:build
+            goos: darwin
+            goarch: arm64
           - name: darwin-amd64
             os: macos-13
-            task: darwin:build
+            goos: darwin
+            goarch: amd64
           - name: linux-amd64
             os: ubuntu-24.04
-            task: linux:build
+            goos: linux
+            goarch: amd64
           - name: windows-amd64
             os: windows-latest
-            task: windows:build
+            goos: windows
+            goarch: amd64
     steps:
       - uses: actions/checkout@v4
 
@@ -53,10 +57,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - uses: arduino/setup-task@v2
-        with:
-          version: 3.x
 
       - name: Install Linux WebView build deps
         if: runner.os == 'Linux'
@@ -66,23 +66,33 @@ jobs:
 
       - name: Build
         shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
         run: |
           ver="${GITHUB_REF_NAME#v}"
-          task ${{ matrix.task }} VERSION="$ver"
+          ./scripts/build.sh "$ver"
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          arch=$(go env GOARCH)
-          os=$(go env GOOS)
+          arch="${{ matrix.goarch }}"
+          os="${{ matrix.goos }}"
           case "$os" in
             darwin)
               ditto -c -k --keepParent "dist/Deepseek Harness Desktop.app" \
                 "release/deepseek-harness-desktop-darwin-${arch}.zip"
-              sh scripts/package-darwin-dmg.sh "dist/Deepseek Harness Desktop.app" \
-                "release/deepseek-harness-desktop-darwin-${arch}.dmg"
+              # build.sh already wrote a DMG under dist/; copy or recreate.
+              if [ -f "dist/deepseek-harness-desktop-darwin-${arch}.dmg" ]; then
+                cp "dist/deepseek-harness-desktop-darwin-${arch}.dmg" \
+                  "release/deepseek-harness-desktop-darwin-${arch}.dmg"
+              else
+                sh scripts/package-darwin-dmg.sh "dist/Deepseek Harness Desktop.app" \
+                  "release/deepseek-harness-desktop-darwin-${arch}.dmg"
+              fi
               ;;
             linux)
               cp dist/deepseek-harness-desktop "release/deepseek-harness-desktop-linux-${arch}"

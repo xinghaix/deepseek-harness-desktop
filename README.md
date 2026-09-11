@@ -78,14 +78,19 @@ Linux 安装包可使用 `assets/linux/deepseek-harness-desktop.desktop`，并�
 
 ### 发布
 
-只对 **main 上的版本 tag** 打包。在已经合入 main 的提交上打 `vX.Y.Z` 并推送后，GitHub Actions 会在对应系统上构建并自签名，然后创建 GitHub Release（含 SHA256SUMS）：
+只对 **main 上的版本 tag** 打包。在已经合入 main 的提交上打 `vX.Y.Z` 并推送后，GitHub Actions（`.github/workflows/release.yml`）会在 darwin/linux/windows 上构建并自签名，然后创建 GitHub Release（含 SHA256SUMS）。
+
+版本约定（从 `0.1.0` 起）：
+
+- 小 bugfix / 小特性：升补丁号（`0.1.1`、`0.1.2`…）
+- 较大改动或重要修复：升次版本号，补丁归零（`0.2.0`、`0.3.0`…）
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-不在 main 上的 tag 会被 workflow 拒绝。
+不在 main 上的 tag 会被 workflow 拒绝。运行时版本由构建 `-ldflags` 从 tag 注入，不必改 `internal/version.Version`。
 
 ## 数据与进程边界
 
