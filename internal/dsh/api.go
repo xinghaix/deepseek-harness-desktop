@@ -3,9 +3,6 @@ package dsh
 import (
 	"deepseek-harness-desktop/internal/i18n"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type CheckResult struct {
@@ -25,22 +22,10 @@ type DiscoveryResult struct {
 
 // InstallGuide 描述不会自动执行的安装步骤，方便用户复制到终端确认执行。
 type InstallGuide struct {
-	NodeCheck     string `json:"nodeCheck"`
-	InstallCLI    string `json:"installCLI"`
-	VerifyCLI     string `json:"verifyCLI"`
-	InstallBridge string `json:"installBridge"`
+	NodeCheck  string `json:"nodeCheck"`
+	InstallCLI string `json:"installCLI"`
+	VerifyCLI  string `json:"verifyCLI"`
 }
-
-// BridgeGuide 是本项目内桥接插件的安装提示。
-type BridgeGuide struct {
-	PluginPath        string `json:"pluginPath"`
-	DirectoryExists   bool   `json:"directoryExists"`
-	InstallCommand    string `json:"installCommand"`
-	PowerShellCommand string `json:"powerShellCommand"`
-	VerifyCommand     string `json:"verifyCommand"`
-}
-
-const bridgePluginDirectory = "plugins/deepseek-harness-desktop-bridge"
 
 // Defaults 返回用户现有的 DSH_HOME、桌面端专属目录和 GUI 可见的 Chat 工作目录。
 func (d *Manager) Defaults() (Options, error) {
@@ -115,73 +100,10 @@ func (d *Manager) CheckCLI(o Options) (CheckResult, error) {
 // InstallGuide 返回首次启动页展示的 CLI 安装命令；调用方必须显式复制并执行。
 func (d *Manager) InstallGuide() InstallGuide {
 	return InstallGuide{
-		NodeCheck:     "node --version",
-		InstallCLI:    "npm install --global @deepseek-ai/dsh",
-		VerifyCLI:     "dsh --version",
-		InstallBridge: "dsh plugin --profile web add file:<project-dir>/plugins/deepseek-harness-desktop-bridge",
+		NodeCheck:  "node --version",
+		InstallCLI: "npm install --global @deepseek-ai/dsh",
+		VerifyCLI:  "dsh --version",
 	}
-}
-
-// BridgeGuide 生成适合当前系统 shell 的本地插件安装命令，不会写入 profile。
-func (d *Manager) BridgeGuide(pluginPath string) (BridgeGuide, error) {
-	if strings.TrimSpace(pluginPath) == "" {
-		pluginPath = defaultBridgePluginPath()
-	}
-	path, err := absolutePath(pluginPath)
-	if err != nil {
-		return BridgeGuide{}, err
-	}
-	info, statErr := os.Stat(path)
-	exists := statErr == nil && info.IsDir()
-	return BridgeGuide{
-		PluginPath:        path,
-		DirectoryExists:   exists,
-		InstallCommand:    "dsh plugin --profile web add " + shellQuote("file:"+path),
-		PowerShellCommand: "dsh plugin --profile web add " + powerShellQuote("file:"+path),
-		VerifyCommand:     "dsh --profile web --dump-config",
-	}, nil
-}
-
-func defaultBridgePluginPath() string {
-	if configured := strings.TrimSpace(os.Getenv("DSH_DESKTOP_BRIDGE_PATH")); configured != "" {
-		return configured
-	}
-	candidates := make([]string, 0, 4)
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, bridgePluginDirectory))
-	}
-	if executable, err := os.Executable(); err == nil {
-		if resolved, resolveErr := filepath.EvalSymlinks(executable); resolveErr == nil {
-			executable = resolved
-		}
-		dir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(dir, "..", bridgePluginDirectory),
-			filepath.Join(dir, "..", "Resources", bridgePluginDirectory),
-		)
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(filepath.Join(candidate, "package.json")); err == nil && !info.IsDir() {
-			if absolute, err := filepath.Abs(candidate); err == nil {
-				return absolute
-			}
-		}
-	}
-	if len(candidates) > 0 {
-		if absolute, err := filepath.Abs(candidates[0]); err == nil {
-			return absolute
-		}
-	}
-	return bridgePluginDirectory
-}
-
-func shellQuote(value string) string {
-	replacement := string([]byte{39, 34, 39, 34, 39})
-	return "'" + strings.ReplaceAll(value, "'", replacement) + "'"
-}
-
-func powerShellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
 // NormalizeLocationOptions 规范化 Home/Workspace 的绝对路径，供打开目录等桌面操作使用。

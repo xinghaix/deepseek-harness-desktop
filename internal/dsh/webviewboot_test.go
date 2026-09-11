@@ -46,10 +46,13 @@ func TestWriteWebviewBootOverlay(t *testing.T) {
 }
 
 func TestWebCLIArgs(t *testing.T) {
-	got := webCLIArgs("/tmp/cordis.patch.yml", 0)
-	want := []string{"web", "--patch", "/tmp/cordis.patch.yml", "--host", "127.0.0.1", "--port", "0", "--no-open"}
+	got := webCLIArgs([]string{"/tmp/boot.patch.yml", "/tmp/bridge.patch.yml"}, 0)
+	want := []string{"web", "--patch", "/tmp/boot.patch.yml", "--patch", "/tmp/bridge.patch.yml", "--host", "127.0.0.1", "--port", "0", "--no-open"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
+	}
+	if !reflect.DeepEqual(webCLIArgs(nil, 1), []string{"web", "--host", "127.0.0.1", "--port", "1", "--no-open"}) {
+		t.Fatal("empty patches should omit --patch")
 	}
 	if !isWebSubcommand(got) {
 		t.Fatal("patched web launch must still be recognized as web")

@@ -10,12 +10,12 @@ Architecture and process boundaries: [AGENTS.md](AGENTS.md) (Chinese; agent-orie
 
 1. On start, the app checks the home directory, login-shell `PATH`, and common global Node locations, and passes those paths to the CLI child process.
 2. If `dsh` is found, it starts and opens Chat. Otherwise you get the setup page; after a successful start, Chat opens and setup closes.
-3. To change `DSH Home`, Chat workspace, or the local port, reopen setup from the app menu (macOS) / File menu (Windows, Linux), the Chat settings control, or the bridge plugin. Port `0` means an OS-assigned free loopback port.
+3. To change `DSH Home`, Chat workspace, or the local port, reopen setup from the app menu (macOS) / File menu (Windows, Linux), the Chat settings control, or Chat Desktop settings. Port `0` means an OS-assigned free loopback port.
 4. A successful start is remembered so the next cold start can skip repeating CLI discovery. Setup can still change paths and ports.
 5. On failure, setup shows a redacted error and lets you copy the full log; use **Retry start** after fixing the issue.
 6. UI follows the system light/dark appearance. macOS uses native traffic lights; Windows / Linux use in-page floating window controls and never jump to the system browser.
 
-Setup can optionally install the desktop management bridge plugin. In DSH Chat under **Settings → Plugins → Desktop management**, you can view status and start / stop / restart the DSH process **owned by this desktop app**.
+In DSH Chat under **Settings → Desktop settings**, you can manage the DSH process **owned by this desktop app** (bridge is built in).
 
 ## Repository layout
 
@@ -27,19 +27,20 @@ Setup can optionally install the desktop management bridge plugin. In DSH Chat u
 | `assets/web` | Setup UI |
 | `assets/shared` | Shared icon source |
 | `assets/{darwin,linux,windows}` | Per-platform packaging inputs |
-| `plugins/deepseek-harness-desktop-bridge` | Optional desktop management bridge |
+| `internal/dsh/desktopbridge` | Built-in desktop bridge (`--patch` overlay) |
 | `dist/` | Build output (gitignored) |
 | `scripts/` | Build, signing, version helpers |
 
-## Bridge plugin
+## Bridge plugin (built-in)
 
-Source: [plugins/deepseek-harness-desktop-bridge](plugins/deepseek-harness-desktop-bridge). From the repo root:
+Each time the desktop app starts its owned `dsh web`, it injects the built-in bridge via Cordis `--patch`
+(source: [`internal/dsh/desktopbridge/`](internal/dsh/desktopbridge/)), same class as `webview-boot`,
+**without changing the user profile**. In DSH Chat open **Settings → Desktop settings** (top-level left nav, same level as Models / Plugins) to manage the DSH process owned by this app.
 
-```sh
-dsh plugin --profile web add file:./plugins/deepseek-harness-desktop-bridge
-```
+Do **not** run `dsh plugin --profile web add file:./plugins/...` anymore. If a profile copy remains, the built-in patch removes the same id; you can also `dsh plugin --profile web remove @deepseek-ai/deepseek-harness-desktop-bridge`.
 
-The plugin talks to a limited control plane that listens only on `127.0.0.1`, over DSH’s authenticated RPC. Each run gets a random token injected only into the DSH child this app started. The token never appears in the page, logs, or status payloads, and there is no arbitrary shell endpoint.
+The control plane listens only on `127.0.0.1`, with a whitelisted RPC surface and a random token (constant-time compare). The token never appears in the page, logs, or status payloads, and there is no arbitrary shell endpoint. If the listener dies it is recreated (new token) and written to an endpoint file so the plugin can reconnect.
+
 
 ## Build and test
 

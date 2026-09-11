@@ -32,9 +32,12 @@ func writeWebviewBootOverlay(desktopDir string) (string, error) {
 	return filepath.Join(dir, "cordis.patch.yml"), nil
 }
 
-func webCLIArgs(patch string, port int) []string {
+func webCLIArgs(patches []string, port int) []string {
 	args := []string{"web"}
-	if patch != "" {
+	for _, patch := range patches {
+		if patch == "" {
+			continue
+		}
 		args = append(args, "--patch", patch)
 	}
 	return append(args, "--host", "127.0.0.1", "--port", strconv.Itoa(port), "--no-open")

@@ -13,24 +13,21 @@ func (d *Service) RequestQuit() error {
 		d.forceQuit()
 		return nil
 	}
-	app, err := desktopApp()
-	if err != nil {
-		d.forceQuit()
-		return nil
-	}
-	chat, ok := app.Window.GetByName(chatWindowName)
-	if !ok {
-		d.forceQuit()
-		return nil
-	}
 	if !d.quitPromptOpen.CompareAndSwap(false, true) {
 		return nil
 	}
-	chat.ExecJS(probeChatBusyJS)
+	d.quitProbeSettled.Store(false)
+	// Official source: Chat bridge reports SessionSummary.running via
+	// /v1/report-chat-busy. Unknown (no feed yet) ⇒ treat as not busy.
+	busy := d.chatBusyKnown.Load() && d.chatBusy.Load()
+	d.ConfirmQuitIfNeeded(busy)
 	return nil
 }
 
 func (d *Service) ConfirmQuitIfNeeded(busy bool) {
+	if !d.quitProbeSettled.CompareAndSwap(false, true) {
+		return
+	}
 	if !d.prefs.confirmQuitWhenBusy.Load() || !busy {
 		d.forceQuit()
 		return
@@ -59,6 +56,7 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 func (d *Service) forceQuit() {
 	d.allowQuit.Store(true)
 	d.quitPromptOpen.Store(false)
+	d.quitProbeSettled.Store(true)
 	d.configDirty = false
 	// Stop the owned DSH tree before tearing down windows so a force-quit
 	// cannot leave an orphaned process group that blocks the next Start.

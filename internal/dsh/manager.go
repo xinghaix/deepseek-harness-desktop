@@ -27,27 +27,38 @@ const ownedProcessMarkerName = "dsh-process.json"
 const ownedProcessLockName = "dsh.lock"
 const desktopStateDirEnv = "DSH_DESKTOP_STATE_DIR"
 
+const (
+	autoRelaunchMaxAttempts = 5
+	autoRelaunchBaseDelay   = time.Second
+	autoRelaunchMaxDelay    = 30 * time.Second
+	autoRelaunchReadyWait   = 45 * time.Second
+)
+
 // DSH 只管理自己接管的进程树，并通过全局锁和进程标记保证同一用户下
 // 同时只有一个桌面端拥有的 DSH；Unix 使用进程组，Windows 使用 Job Object。
 type Manager struct {
-	mu                  sync.Mutex
-	lifecycleMu         sync.Mutex
-	cmd                 *exec.Cmd
-	done                chan struct{}
-	cancel              context.CancelFunc
-	state               string
-	options             Options
-	launchOptions       Options
-	output              *cliOutput
-	url, lastError      string
-	browserTokenUsed    bool
-	chatWindowURL       string
-	managementWindowURL string
-	openManagement      func() error
-	owner               *ownedProcess
-	processLock         *ownedProcessLock
-	bridge              *desktopBridge
-	closed              bool
+	mu                   sync.Mutex
+	lifecycleMu          sync.Mutex
+	cmd                  *exec.Cmd
+	done                 chan struct{}
+	cancel               context.CancelFunc
+	state                string
+	options              Options
+	launchOptions        Options
+	output               *cliOutput
+	url, lastError       string
+	browserTokenUsed     bool
+	chatWindowURL        string
+	managementWindowURL  string
+	host                 BridgeHost
+	owner                *ownedProcess
+	processLock          *ownedProcessLock
+	bridge               *desktopBridge
+	closed               bool
+	userStop             bool
+	autoRelaunch         bool
+	autoRelaunchAttempts int
+	autoRelaunchGen      uint64
 }
 
 type Options struct {
@@ -463,21 +474,38 @@ func New() *Manager {
 	return &Manager{state: "stopped"}
 }
 
-// SetOpenManagement 注入打开配置窗口的实现。进程内核不能依赖 Wails。
-func (d *Manager) SetOpenManagement(fn func() error) {
+// SetBridgeHost 注入桌面宿主实现（配置窗、选路径、偏好、更新等）。
+// 进程内核不能依赖 Wails。
+func (d *Manager) SetBridgeHost(host BridgeHost) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.openManagement = fn
+	d.host = host
+}
+
+func (d *Manager) getBridgeHost() (BridgeHost, error) {
+	d.mu.Lock()
+	host := d.host
+	d.mu.Unlock()
+	if host == nil {
+		return nil, i18n.ErrorfActive("err.mgmt_wails_only")
+	}
+	return host, nil
 }
 
 func (d *Manager) callOpenManagement() error {
-	d.mu.Lock()
-	fn := d.openManagement
-	d.mu.Unlock()
-	if fn == nil {
-		return i18n.ErrorfActive("err.mgmt_wails_only")
+	host, err := d.getBridgeHost()
+	if err != nil {
+		return err
 	}
-	return fn()
+	return host.OpenManagement()
+}
+
+func (d *Manager) callReloadChat(o Options) error {
+	host, err := d.getBridgeHost()
+	if err != nil {
+		return err
+	}
+	return host.ReloadChat(o)
 }
 
 // NoteChatWindowURL 记录 Chat 窗口当前加载的 URL；返回是否需要重新加载。
@@ -519,6 +547,12 @@ func (d *Manager) commitCLIOptions(o Options) {
 func (d *Manager) Start(o Options) error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
+	d.mu.Lock()
+	d.autoRelaunchGen++
+	d.autoRelaunch = false
+	d.autoRelaunchAttempts = 0
+	d.userStop = false
+	d.mu.Unlock()
 	return d.start(o)
 }
 
@@ -572,8 +606,15 @@ func (d *Manager) start(o Options) error {
 		return i18n.ErrorfActive("err.dsh_already_running")
 	}
 	if d.bridge == nil {
-		d.bridge, err = newDesktopBridge(d)
+		d.bridge, err = newDesktopBridge(d, bridgeEndpointPath(o.DesktopDir))
 		if err != nil {
+			return err
+		}
+	} else {
+		d.bridge.mu.Lock()
+		d.bridge.endpointFile = bridgeEndpointPath(o.DesktopDir)
+		d.bridge.mu.Unlock()
+		if err := d.bridge.writeEndpointFile(); err != nil {
 			return err
 		}
 	}
@@ -586,11 +627,15 @@ func (d *Manager) start(o Options) error {
 		_ = listener.Close()
 	}
 	output := newOutput()
-	patch, err := writeWebviewBootOverlay(o.DesktopDir)
+	bootPatch, err := writeWebviewBootOverlay(o.DesktopDir)
 	if err != nil {
 		return err
 	}
-	cmd := newCLICommand(o.Executable, webCLIArgs(patch, o.Port)...)
+	bridgePatch, err := writeDesktopBridgeOverlay(o.DesktopDir)
+	if err != nil {
+		return err
+	}
+	cmd := newCLICommand(o.Executable, webCLIArgs([]string{bootPatch, bridgePatch}, o.Port)...)
 	cmd.Dir, cmd.Env = o.Workspace, d.bridge.env(cliEnv(o.Home, o.Executable))
 	configureProcess(cmd)
 	cmd.Stdout, cmd.Stderr = output, output
@@ -630,6 +675,8 @@ func (d *Manager) start(o Options) error {
 	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
 	d.browserTokenUsed = false
 	d.chatWindowURL = ""
+	d.userStop = false
+	d.autoRelaunch = true
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	d.cmd, d.done, d.cancel, d.state = cmd, make(chan struct{}), cancel, "starting"
 	d.owner, d.processLock = owner, processLock
@@ -707,6 +754,11 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	d.cmd, d.url, d.chatWindowURL = nil, "", ""
 	d.owner, d.processLock = nil, nil
 	close(done)
+	shouldRelaunch := !d.closed && d.autoRelaunch && !d.userStop && strings.TrimSpace(d.launchOptions.Executable) != ""
+	gen := d.autoRelaunchGen
+	if shouldRelaunch {
+		go d.scheduleAutoRelaunch(gen)
+	}
 }
 
 func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
@@ -783,12 +835,20 @@ func (d *Manager) failStartup(cmd *exec.Cmd, message string) {
 	}
 	d.lastError = message
 	d.mu.Unlock()
-	_ = d.Stop()
+	// Use stop() (not Stop()) so userStop stays clear and auto-relaunch can continue.
+	d.lifecycleMu.Lock()
+	defer d.lifecycleMu.Unlock()
+	_ = d.stop()
 }
 
 func (d *Manager) Stop() error {
 	d.lifecycleMu.Lock()
 	defer d.lifecycleMu.Unlock()
+	d.mu.Lock()
+	d.userStop = true
+	d.autoRelaunch = false
+	d.autoRelaunchGen++
+	d.mu.Unlock()
 	return d.stop()
 }
 
@@ -839,6 +899,9 @@ func (d *Manager) Close() error {
 	defer d.lifecycleMu.Unlock()
 	d.mu.Lock()
 	d.closed = true
+	d.userStop = true
+	d.autoRelaunch = false
+	d.autoRelaunchGen++
 	d.mu.Unlock()
 	stopErr := d.stop()
 	d.mu.Lock()
@@ -889,6 +952,13 @@ func (d *Manager) restartWithOptions(o Options) error {
 	if strings.TrimSpace(o.Executable) == "" {
 		return i18n.ErrorfActive("err.no_restart_config")
 	}
+	// Intentional restart under lifecycleMu: cancel pending auto-relaunch for the stop phase.
+	d.mu.Lock()
+	d.autoRelaunchGen++
+	d.autoRelaunch = false
+	d.autoRelaunchAttempts = 0
+	d.userStop = false
+	d.mu.Unlock()
 	if err := d.stop(); err != nil {
 		return err
 	}

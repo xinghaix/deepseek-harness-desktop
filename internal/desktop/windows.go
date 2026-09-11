@@ -87,7 +87,6 @@ const desktopModalChromeJS = "(function(){document.documentElement.classList.add
 const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.getElementById(id);if(!el){el=document.createElement('div');el.id=id;el.style.cssText='position:fixed;inset:0;background:rgba(15,18,24,.42);z-index:2147483646;cursor:pointer';document.documentElement.appendChild(el);}el.onclick=function(){var call=window.wails&&window.wails.Call&&window.wails.Call.ByName;if(typeof call==='function')void call('main.DSH.TryDismissConfig');};})();"
 const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 const showDiscardConfigJS = "var el=document.getElementById('discard-config');if(el)el.hidden=false;"
-const probeChatBusyJS = "(function(){var busy=false;try{busy=Boolean(document.querySelector('[aria-busy=\\'true\\']'))||Boolean(document.querySelector('[data-turn-process-answer]'));}catch(e){}var call=window.wails&&window.wails.Call&&window.wails.Call.ByName;if(typeof call==='function')void call('main.DSH.ConfirmQuitIfNeeded',busy);})();"
 
 func applyDesktopWindowChrome(options application.WebviewWindowOptions) application.WebviewWindowOptions {
 	if runtime.GOOS == "darwin" {

@@ -33,7 +33,10 @@ type Service struct {
 	configDirty    bool
 	configIsModal  bool
 	allowQuit      atomic.Bool
-	quitPromptOpen atomic.Bool
+	quitPromptOpen   atomic.Bool
+	quitProbeSettled atomic.Bool
+	chatBusy         atomic.Bool
+	chatBusyKnown    atomic.Bool
 }
 
 func New() *Service {
@@ -41,9 +44,18 @@ func New() *Service {
 	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel}
 	s.prefs.load()
 	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
-	s.SetOpenManagement(s.OpenManagement)
+	s.SetBridgeHost(bridgeHostAdapter{service: s})
 	go s.updater.RunPeriodic(ctx)
 	return s
+}
+
+func (d *Service) ReportChatBusy(busy bool) {
+	d.chatBusy.Store(busy)
+	d.chatBusyKnown.Store(true)
+}
+
+func (d *Service) ChatBusy() (busy bool, known bool) {
+	return d.chatBusy.Load(), d.chatBusyKnown.Load()
 }
 
 func (d *Service) ChooseExecutable() (string, error) {
@@ -68,11 +80,6 @@ func (d *Service) ChooseHome() (string, error) {
 func (d *Service) ChooseWorkspace() (string, error) {
 	locale := d.resolvedLocale()
 	return d.chooseDirectory(i18n.T(locale, "dialog.choose_workspace_title"), i18n.T(locale, "dialog.choose_workspace_message"))
-}
-
-func (d *Service) ChooseBridgePlugin() (string, error) {
-	locale := d.resolvedLocale()
-	return d.chooseDirectory(i18n.T(locale, "dialog.choose_bridge_title"), i18n.T(locale, "dialog.choose_bridge_message"))
 }
 
 func (d *Service) chooseDirectory(title, message string) (string, error) {
@@ -147,6 +154,52 @@ func (d *Service) OpenDSH() error {
 	d.dismissConfigModal(app, chat)
 	chat.Show()
 	chat.Focus()
+	return nil
+}
+
+// OpenChat refreshes/opens Chat after a successful auto-relaunch (port may change).
+func (d *Service) OpenChat() error {
+	d.windowMu.Lock()
+	d.openedChatURL = ""
+	d.NoteChatWindowURL("")
+	d.windowMu.Unlock()
+	return d.OpenDSH()
+}
+
+// PresentRecoverySettings shows the standalone cold-start settings window after
+// auto-relaunch is exhausted. Never uses the modal-over-chat path.
+func (d *Service) PresentRecoverySettings() error {
+	app, err := desktopApp()
+	if err != nil {
+		return err
+	}
+	d.windowMu.Lock()
+	defer d.windowMu.Unlock()
+	d.configHooked = false
+	d.configIsModal = false
+	d.configDirty = false
+	if config, ok := app.Window.GetByName(configWindowName); ok {
+		config.SetAlwaysOnTop(false)
+		config.Close()
+	}
+	// Hide Chat (do not Close — that would trip the quit confirmation hook).
+	if chat, ok := app.Window.GetByName(chatWindowName); ok {
+		chat.ExecJS(undimChatJS)
+		chat.Hide()
+	}
+	d.openedChatURL = ""
+	d.NoteChatWindowURL("")
+	const managementURL = "/?manage=1"
+	window, ok := app.Window.GetByName(setupWindowName)
+	if !ok {
+		window = app.Window.NewWithOptions(ManagementWindowOptions(managementURL))
+		d.NoteManagementWindowURL(managementURL)
+	} else if d.NoteManagementWindowURL(managementURL) {
+		window.SetURL(managementURL)
+	}
+	d.hookConfigWindow(window)
+	window.Show()
+	window.Focus()
 	return nil
 }
 

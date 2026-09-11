@@ -27,14 +27,14 @@
 │  │ internal/dsh       │  启动 dsh web ─┘                │
 │  │ Manager + 发现 CLI  │  --patch webview-boot           │
 │  │ 进程树 / 锁 / 监督  │  NODE_OPTIONS max-header-size   │
-│  │ 127.0.0.1 桥接 HTTP │                                │
+│  │ 127.0.0.1 桥接 HTTP │  --patch desktop-bridge         │
 │  └─────────┬──────────┘                                 │
 │            │ 仅注入给自己拉起的子进程                     │
 └────────────┼────────────────────────────────────────────┘
              ▼
       本机 dsh CLI  ──►  DSH Cordis Host + client-modules
              ▲
-             │ 可选：plugins/deepseek-harness-desktop-bridge
+             │ 内置：--patch desktop-bridge（嵌入覆盖）
              └──── 经已认证 RPC 调桌面回环控制面（令牌不落日志）
 ```
 
@@ -46,10 +46,10 @@
 | 桌面 UI      | `internal/desktop`                        | 配置窗 / Chat 窗、标题栏与安全区、文件对话框、配置模态、菜单动作；依赖 Wails                                                           |
 | 国际化       | `internal/i18n`                           | 嵌入式 locales JSON、Resolve/Catalog/T/TActive；进程 Active 语言；桌面 prefs + LocaleBundle/SetLanguage                                  |
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
-| WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的一次性 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431 |
+| WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431       |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
 | 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
-| 桥接插件     | `plugins/deepseek-harness-desktop-bridge` | 可选 DSH profile bundle，在 Chat 里暴露桌面管理 UI                                                                                     |
+| 桌面桥接     | `internal/dsh/desktopbridge*`             | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/desktop-bridge/` 的 `--patch`；Chat 设置左侧一级「桌面设置」（`settings.section`）；与 webview-boot 并列 |
 | 构建         | `scripts/build.sh`、`Taskfile.yml`        | 本地/CI 打包与自签名；CI 优先 `scripts/build.sh`                                                                                       |
 
 ### 进程与数据边界

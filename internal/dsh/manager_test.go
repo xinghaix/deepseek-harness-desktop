@@ -51,9 +51,20 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	args := os.Args[1:]
-	if len(args) >= 3 && args[0] == "web" && args[1] == "--patch" {
-		args = append([]string{"web"}, args[3:]...)
+	cleaned := make([]string, 0, len(args))
+	skipPatchValue := false
+	for _, arg := range args {
+		if skipPatchValue {
+			skipPatchValue = false
+			continue
+		}
+		if arg == "--patch" {
+			skipPatchValue = true
+			continue
+		}
+		cleaned = append(cleaned, arg)
 	}
+	args = cleaned
 	if len(args) != 6 {
 		os.Exit(21)
 	}
@@ -265,8 +276,9 @@ func TestDSH(t *testing.T) {
 		if err := json.Unmarshal(raw, &observed); err != nil {
 			t.Fatal(err)
 		}
-		patch := filepath.Join(o.Home, desktopDataDirName, webviewBootDirName, "cordis.patch.yml")
-		want := []string{"web", "--patch", patch, "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open"}
+		bootPatch := filepath.Join(o.Home, desktopDataDirName, webviewBootDirName, "cordis.patch.yml")
+		bridgePatch := filepath.Join(o.Home, desktopDataDirName, desktopBridgeDirName, "cordis.patch.yml")
+		want := []string{"web", "--patch", bootPatch, "--patch", bridgePatch, "--host", "127.0.0.1", "--port", strconv.Itoa(o.Port), "--no-open"}
 		resolvedWorkspace, err := filepath.EvalSymlinks(o.Workspace)
 		if err != nil {
 			t.Fatal(err)
@@ -274,8 +286,11 @@ func TestDSH(t *testing.T) {
 		if !reflect.DeepEqual(observed.Args, want) || observed.Home != o.Home || observed.Cwd != resolvedWorkspace || observed.Inherited != "kept" {
 			t.Fatalf("%+v", observed)
 		}
-		if _, err := os.Stat(patch); err != nil {
+		if _, err := os.Stat(bootPatch); err != nil {
 			t.Fatalf("webview boot overlay was not written: %v", err)
+		}
+		if _, err := os.Stat(bridgePatch); err != nil {
+			t.Fatalf("desktop bridge overlay was not written: %v", err)
 		}
 		if os.Getenv("DSH_HOME") != "  " {
 			t.Fatal("mutated parent environment")

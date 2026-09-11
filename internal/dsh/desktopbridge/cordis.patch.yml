@@ -1,0 +1,7 @@
+# Built-in desktop bridge (process-local --patch). Remove any leftover
+# profile-installed copy with the same id so menus are not duplicated.
+- remove:
+    - deepseek-harness-desktop-bridge
+- insert:
+    - id: deepseek-harness-desktop-bridge
+      name: ./lib/index.js

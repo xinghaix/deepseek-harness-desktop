@@ -74,8 +74,8 @@
             <p class="hint" data-i18n="field.language_hint">跟随系统语言，或选择固定语言。保存在 desktop-prefs.json。</p>
           </div>
           <div class="field">
-            <label class="update-toggle"><input id="confirm-quit-busy-setup" type="checkbox" checked> <span data-i18n="field.confirm_quit">退出时若有任务正在执行，先询问我</span></label>
-            <p class="hint" data-i18n="field.confirm_quit_hint">窗口关闭按钮和退出快捷键会先弹出确认。关掉此项后，无论有没有任务都会直接退出。</p>
+            <label class="update-toggle"><input id="confirm-quit-busy-setup" type="checkbox" checked> <span data-i18n="field.confirm_quit">有任务在运行时退出先确认</span></label>
+            <p class="hint" data-i18n="field.confirm_quit_hint">开启后：仅当会话里有任务在跑时，关窗或退出快捷键会二次确认；空闲时直接退出。关闭此项则无论是否有任务都直接退出。</p>
           </div>
           </div><div class="button-row config-actions"><button class="secondary" id="check-cli" type="button" data-i18n="btn.recheck_cli">重新检测 CLI</button><button class="secondary" id="restore-defaults" type="button" data-i18n="btn.restore_defaults">恢复默认路径</button></div>
         </div>
@@ -87,19 +87,6 @@
         <ol class="install-steps"><li><span data-i18n="install.step_node_prefix">确认 Node.js 可用：</span> <code id="node-command">node --version</code></li><li><span data-i18n="install.step_cli_prefix">安装 DSH CLI：</span> <code id="cli-install-command">npm install --global @deepseek-ai/dsh</code></li><li><span data-i18n="install.step_verify_prefix">验证安装：</span> <code id="cli-verify-command">dsh --version</code></li></ol>
         <div class="button-row" style="margin-top:14px"><button class="secondary" id="copy-cli-command" type="button" data-i18n="btn.copy_install">复制安装命令</button><button class="secondary" id="choose-executable-missing" type="button" data-i18n="btn.choose_installed_dsh">选择已安装的 dsh</button></div>
       </section>
-
-      <details class="bridge-card" id="bridge-card">
-        <summary class="bridge-summary" data-i18n-expand="ui.expand" data-i18n-collapse="ui.collapse" data-expand="Expand" data-collapse="Collapse">
-          <span class="bridge-head"><img class="bridge-mark" src="/shared/app-icon.svg" alt=""><span class="bridge-copy"><span class="bridge-title" data-i18n="bridge.title">可选：安装桌面管理桥接插件</span><span class="bridge-summary-copy" data-i18n="bridge.summary">让 DSH Chat 能控制桌面端；不安装也可以继续使用 DSH Chat。</span></span></span>
-        </summary>
-        <div class="bridge-body">
-          <p class="hint" data-i18n="bridge.hint">安装后，DSH Chat 的「设置 → 插件 → 桌面管理」会提供状态、启动、停止、重启和打开桌面配置按钮。</p>
-          <div class="bridge-path"><input id="bridge-path" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-bridge" type="button" data-i18n="btn.choose_dir">选择目录</button></div>
-          <div class="bridge-status" id="bridge-status" data-i18n="bridge.status_preparing">正在准备本地插件安装提示…</div>
-          <pre class="command" id="bridge-command"></pre>
-          <div class="button-row"><button class="secondary" id="copy-bridge-command" type="button" data-i18n="btn.copy_system_command">复制当前系统命令</button></div>
-        </div>
-      </details>
 
       <div class="detect-card" id="detect-card" data-state="checking">
         <div class="detect-icon"><img class="bridge-mark" src="/shared/app-icon.svg" alt=""></div>
@@ -129,11 +116,10 @@
     </div>
 
     <aside class="steps-panel">
-      <h2 data-i18n="steps.title">三步完成设置</h2>
+      <h2 data-i18n="steps.title">两步完成设置</h2>
       <ol class="steps">
         <li class="step" id="step-cli" data-active="true"><span class="step-number">1</span><div><div class="step-title" data-i18n="steps.cli_title">检查 CLI</div><p class="step-copy" data-i18n="steps.cli_copy">找到并验证本机 dsh</p></div></li>
-        <li class="step" id="step-bridge"><span class="step-number">2</span><div><div class="step-title" data-i18n="steps.bridge_title">可选桥接</div><p class="step-copy" data-i18n="steps.bridge_copy">让 DSH 设置可管理桌面端</p></div></li>
-        <li class="step" id="step-chat"><span class="step-number">3</span><div><div class="step-title" data-i18n="steps.chat_title">打开 Chat</div><p class="step-copy" data-i18n="steps.chat_copy">在桌面 WebView 中开始工作</p></div></li>
+        <li class="step" id="step-chat"><span class="step-number">2</span><div><div class="step-title" data-i18n="steps.chat_title">打开 Chat</div><p class="step-copy" data-i18n="steps.chat_copy">在桌面 WebView 中开始工作</p></div></li>
       </ol>
       <p class="privacy-note" data-i18n="steps.privacy">桌面端只管理自己启动的一个 DSH 进程。凭据不会显示在引导页、日志或桥接响应中。</p>
     </aside>
@@ -147,10 +133,10 @@
         <section class="panel log-panel"><div class="panel-heading"><h2 data-i18n="dashboard.logs_title">启动日志</h2><span class="panel-caption" data-i18n="dashboard.logs_caption">最近 64 KiB</span></div><pre id="logs" data-i18n="dashboard.no_logs">暂无日志</pre></section>
       </div>
       <aside>
-        <section class="panel"><div class="panel-heading"><h2 data-i18n="dashboard.behavior_title">桌面行为</h2></div><div class="field"><label for="ui-language-dashboard" data-i18n="field.language">界面语言</label><select id="ui-language-dashboard"></select><p class="hint" data-i18n="field.language_hint">跟随系统语言，或选择固定语言。保存在 desktop-prefs.json。</p></div><label class="update-toggle"><input id="confirm-quit-busy" type="checkbox" checked> <span data-i18n="field.confirm_quit">退出时若有任务正在执行，先询问我</span></label><p class="hint" data-i18n="field.confirm_quit_hint_dashboard">窗口关闭按钮和 ⌘Q / Ctrl+Q 会先确认。关掉后始终直接退出。</p></section>
+        <section class="panel"><div class="panel-heading"><h2 data-i18n="dashboard.behavior_title">桌面行为</h2></div><div class="field"><label for="ui-language-dashboard" data-i18n="field.language">界面语言</label><select id="ui-language-dashboard"></select><p class="hint" data-i18n="field.language_hint">跟随系统语言，或选择固定语言。保存在 desktop-prefs.json。</p></div><label class="update-toggle"><input id="confirm-quit-busy" type="checkbox" checked> <span data-i18n="field.confirm_quit">有任务在运行时退出先确认</span></label><p class="hint" data-i18n="field.confirm_quit_hint_dashboard">开启后：仅当有任务在跑时，关窗或 ⌘Q / Ctrl+Q 会二次确认；空闲时直接退出。关掉后始终直接退出。</p></section>
         <section class="panel" id="update-panel"><div class="panel-heading"><h2 data-i18n="dashboard.update_title">桌面端更新</h2><span class="panel-caption" id="update-version">—</span></div><p class="hint" id="update-message" data-i18n="dashboard.update_hint">发现新版本后由你决定是否安装。</p><label class="update-toggle"><input id="auto-check-update" type="checkbox" checked> <span data-i18n="dashboard.auto_check">启动成功后每天自动检查更新</span></label><div class="update-progress" id="update-progress" hidden><span id="update-progress-bar"></span></div><pre class="update-notes" id="update-notes" hidden></pre><div class="update-actions"><button class="secondary" id="check-update" type="button" data-i18n="btn.check_update">检查更新</button><button class="primary" id="install-update" type="button" hidden data-i18n="btn.install_update">立即更新</button><button class="secondary" id="open-release" type="button" hidden data-i18n="btn.open_release">发行说明</button></div></section>
         <section class="panel"><h2 data-i18n="dashboard.quick_links">常用入口</h2><div class="quick-links"><button id="open-home" type="button" data-i18n="btn.open_home">打开 DSH Home</button><button id="open-workspace" type="button" data-i18n="btn.open_workspace">打开工作目录</button><button id="open-settings" type="button" data-i18n="btn.open_settings">打开 settings.yaml</button></div></section>
-        <section class="panel"><h2 data-i18n="dashboard.bridge_title">桌面管理插件</h2><p class="hint" data-i18n="dashboard.bridge_hint">在 DSH Chat 中打开「设置 → 插件 → 桌面管理」，即可在同一个 DSH WebView 里控制桌面端。</p><button class="secondary" id="show-bridge-guide" type="button" style="margin-top:14px" data-i18n="btn.show_bridge_guide">查看安装命令</button></section>
+        <section class="panel"><h2 data-i18n="dashboard.bridge_title">桌面设置（Chat 内）</h2><p class="hint" data-i18n="dashboard.bridge_hint">桌面桥接已内置：在 DSH Chat 打开「设置 → 插件 → 桌面设置」，即可管理本桌面端拉起的 DSH。冷启动与无 CLI 场景仍使用本页。</p></section>
       </aside>
     </div>
     <p class="footer-note" data-i18n="dashboard.footer">DSH Chat 使用独立的桌面 WebView 窗口打开，不会跳转到系统默认浏览器。</p>

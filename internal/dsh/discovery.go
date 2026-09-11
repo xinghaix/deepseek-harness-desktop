@@ -132,6 +132,9 @@ func computeCLISearchDirectories() []string {
 			filepath.Join(home, ".nvm", "versions", "node", "*", "bin"),
 			filepath.Join(home, ".fnm", "node-versions", "*", "installation", "bin"),
 			filepath.Join(home, "Library", "Application Support", "fnm", "node-versions", "*", "installation", "bin"),
+			// Homebrew Node keeps npm globals under Cellar; /opt/homebrew/bin/dsh is often absent.
+			"/opt/homebrew/Cellar/node/*/bin",
+			"/usr/local/Cellar/node/*/bin",
 		} {
 			matches, _ := filepath.Glob(pattern)
 			for _, match := range matches {
@@ -206,23 +209,28 @@ func loadShellPathEntries() []string {
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	// Prefer non-interactive -lc first (usually enough and faster). Fall back to
-	// login+interactive -ilc for GUI-launched apps whose non-interactive PATH is empty.
-	for _, args := range [][]string{
-		{"-lc", `printf %s "$PATH"`},
-		{"-ilc", `printf %s "$PATH"`},
+	// Merge -lc and -ilc PATH. A fast non-empty -lc (common after cold-start
+	// tuning) is often incomplete for GUI apps and must NOT skip -ilc — that
+	// regression dropped first-install auto-detect for Homebrew Cellar dsh.
+	var merged []string
+	for _, attempt := range []struct {
+		args    []string
+		timeout time.Duration
+	}{
+		{[]string{"-lc", `printf %s "$PATH"`}, 800 * time.Millisecond},
+		{[]string{"-ilc", `printf %s "$PATH"`}, 1500 * time.Millisecond},
 	} {
-		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
-		command := exec.CommandContext(ctx, shell, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), attempt.timeout)
+		command := exec.CommandContext(ctx, shell, attempt.args...)
 		command.Stderr = io.Discard
 		output, err := command.Output()
 		cancel()
 		if err != nil || strings.TrimSpace(string(output)) == "" {
 			continue
 		}
-		return pathEntries(string(output))
+		merged = append(merged, pathEntries(string(output))...)
 	}
-	return nil
+	return uniqueDirectories(merged)
 }
 
 func isWithin(root, path string) bool {

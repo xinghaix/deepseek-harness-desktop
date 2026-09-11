@@ -34,7 +34,7 @@ func TestManagementUIContract(t *testing.T) {
 		"dsh 可执行文件", "DSH Home", "桌面端目录（固定）", "Chat 工作目录", "运行配置", "桌面配置",
 		"选择文件", "恢复默认路径", "选择文件夹", "重新检测 CLI",
 		"启动并打开 DSH Chat", "停止 DSH", "在桌面 WebView 打开 Chat", "打开 DSH Home",
-		"打开工作目录", "打开 settings.yaml", "可选：安装桌面管理桥接插件",
+		"打开工作目录", "打开 settings.yaml", "桌面设置（Chat 内）",
 		"DSH 启动失败", "复制错误信息", "查看原始错误", "桌面端更新", "检查更新", "每天自动检查更新",
 	} {
 		if !strings.Contains(html, label) {
@@ -50,9 +50,9 @@ func TestManagementUIContract(t *testing.T) {
 		}
 	}
 	for _, method := range []string{
-		"Defaults", "DiscoverCLI", "InstallGuide", "BridgeGuide", "CheckCLI",
+		"Defaults", "DiscoverCLI", "InstallGuide", "CheckCLI",
 		"Start", "Stop", "Status", "OpenDSH", "ChooseExecutable",
-		"ChooseHome", "ChooseWorkspace", "ChooseBridgePlugin", "OpenHome",
+		"ChooseHome", "ChooseWorkspace", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
 		"LocaleBundle", "SetLanguage",
@@ -85,7 +85,7 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, "--wails-draggable: drag") {
 		t.Fatal("config modal topbar must be a Wails drag region")
 	}
-	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "退出时若有任务正在执行") {
+	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "有任务在运行时退出先确认") {
 		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")
 	}
 	if !strings.Contains(html, `id="ui-language"`) || !strings.Contains(html, "data-i18n") || !strings.Contains(html, "DSHI18n") {
@@ -99,16 +99,13 @@ func TestManagementUIContract(t *testing.T) {
 			t.Fatalf("UI is missing startup/theme/config fragment %q", fragment)
 		}
 	}
-	if !strings.Contains(html, "navigator.platform") || !strings.Contains(html, "document.execCommand(\"copy\")") {
-		t.Fatal("UI must choose the platform command and provide a clipboard fallback")
-	}
-	if !strings.Contains(html, "bridgeGuide.verifyCommand") {
-		t.Fatal("UI must show how to verify the bridge installation")
+	if !strings.Contains(html, "document.execCommand(\"copy\")") {
+		t.Fatal("UI must provide a clipboard fallback")
 	}
 	if !strings.Contains(html, `if (!manualManagement && state === "running"`) {
 		t.Fatal("manual configuration must not reopen or refresh the existing Chat window")
 	}
-	for _, fragment := range []string{"scrollbar-color", "navigator.userAgentData", "Windows PowerShell", "macOS 终端", "Linux 终端", "DSH cwd", "DSH_HOME/.deepseek-harness-desktop", "desktopDir", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", `aria-readonly="true"`} {
+	for _, fragment := range []string{"scrollbar-color", "DSH cwd", "DSH_HOME/.deepseek-harness-desktop", "desktopDir", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", `aria-readonly="true"`, "桌面桥接已内置"} {
 		if !strings.Contains(html, fragment) {
 			t.Fatalf("UI is missing platform/workspace fragment %q", fragment)
 		}

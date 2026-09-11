@@ -20,7 +20,6 @@ let cliReady = false;
 let defaultOptions = null;
 let lastVersion = "";
 let autoOpenStarted = false;
-let bridgeGuide = null;
 let guidesPromise = null;
 let closeAfterChat = !manualManagement;
 let lastErrorReport = "";
@@ -260,24 +259,8 @@ function loadGuides() {
   if (guidesPromise) return guidesPromise;
   guidesPromise = (async () => {
     try { const guide = await api("InstallGuide"); $("node-command").textContent = guide.nodeCheck; $("cli-install-command").textContent = guide.installCLI; $("cli-verify-command").textContent = guide.verifyCLI; } catch (error) { setMessage(errorText(error), true); }
-    await refreshBridgeGuide();
   })();
   return guidesPromise;
-}
-function currentBridgePlatform() {
-  const platform = String((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "").toLowerCase();
-  if (platform.includes("win")) return { label: t("bridge.platform_win"), command: bridgeGuide && bridgeGuide.powerShellCommand };
-  if (platform.includes("mac")) return { label: t("bridge.platform_mac"), command: bridgeGuide && bridgeGuide.installCommand };
-  return { label: t("bridge.platform_linux"), command: bridgeGuide && bridgeGuide.installCommand };
-}
-function renderBridgeCommand() {
-  if (!bridgeGuide) return;
-  const platform = currentBridgePlatform();
-  $("bridge-command").textContent = t("bridge.command_block", platform.label, platform.command || "", bridgeGuide.verifyCommand || "");
-  $("copy-bridge-command").textContent = t("bridge.copy_platform", platform.label);
-}
-async function refreshBridgeGuide() {
-  try { bridgeGuide = await api("BridgeGuide", $("bridge-path").value.trim()); $("bridge-path").value = bridgeGuide.pluginPath; renderBridgeCommand(); $("bridge-status").textContent = bridgeGuide.directoryExists ? t("bridge.status_found") : t("bridge.status_missing"); $("step-bridge").dataset.done = bridgeGuide.directoryExists ? "true" : "false"; } catch (error) { $("bridge-status").textContent = errorText(error); }
 }
 async function copyText(value, successText) {
   try {
@@ -308,7 +291,6 @@ async function applyLocaleBundle(bundle) {
   updateButtons();
   void refresh();
   void refreshDesktopUpdate();
-  if (bridgeGuide) renderBridgeCommand();
 }
 async function loadLocaleBundle() {
   try {
@@ -340,10 +322,7 @@ $("restore-defaults").onclick = () => { fillOptions(defaultOptions); cliReady = 
 $("choose-executable").onclick = $("choose-executable-missing").onclick = () => run(async () => { const path = await api("ChooseExecutable"); if (path) { $("executable").value = path; $("advanced-settings").open = true; await probeSelected(); } });
 $("choose-home").onclick = () => run(async () => { const path = await api("ChooseHome"); if (path) { $("home").value = path; syncDesktopDir(); cliReady = false; syncConfigDirty(); } });
 $("choose-workspace").onclick = () => run(async () => { const path = await api("ChooseWorkspace"); if (path) { $("workspace").value = path; cliReady = false; syncConfigDirty(); } });
-$("choose-bridge").onclick = () => run(async () => { const path = await api("ChooseBridgePlugin"); if (path) { $("bridge-path").value = path; await refreshBridgeGuide(); } });
-$("bridge-path").addEventListener("change", refreshBridgeGuide);
 $("copy-cli-command").onclick = () => copyText($("cli-install-command").textContent, t("msg.copy_cli_ok"));
-$("copy-bridge-command").onclick = () => { const platform = currentBridgePlatform(); const command = platform.command || $("bridge-command").textContent.split("\n", 1)[0]; return copyText(command, t("msg.copy_bridge_ok", platform.label)); };
 $("copy-error").onclick = async () => {
   if (!lastErrorReport) return;
   const copied = await copyText(lastErrorReport, "");
@@ -368,7 +347,6 @@ $("reconfigure").onclick = () => { localStorage.removeItem(onboardingKey); close
 $("close-config").onclick = () => run(() => requestCloseConfig());
 $("discard-cancel").onclick = () => hideDiscardDialog();
 $("discard-confirm").onclick = () => run(async () => { if (baselineOptions) fillOptions(baselineOptions); markBaseline(); hideDiscardDialog(); await api("DismissConfig"); });
-$("show-bridge-guide").onclick = () => { showOnboarding(); $("bridge-card").open = true; void loadGuides(); $("bridge-card").scrollIntoView({ behavior: "smooth", block: "center" }); };
 $("check-update").onclick = () => run(() => api("CheckUpdate"));
 $("auto-check-update").onchange = () => run(() => api("SetAutoCheckUpdate", $("auto-check-update").checked));
 function applyConfirmQuitPref(enabled) {

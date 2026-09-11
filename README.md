@@ -10,12 +10,12 @@ Deepseek Harness Desktop 是 DSH 的轻量桌面客户端：复用本机已安�
 
 1. 启动后检查用户目录、登录 shell 的 `PATH` 和常见 Node 全局目录，并把这些路径传给 CLI 子进程。
 2. 找到 `dsh` 后自动启动并打开 Chat；找不到则进入配置页，配置成功后打开 Chat 并关闭配置窗。
-3. 需要改 `DSH Home`、Chat 工作目录或本机端口时，可从应用菜单（macOS）/「文件」菜单（Windows、Linux）、Chat 顶部设置，或桥接插件再开配置页。端口 `0` 表示由系统分配空闲 loopback 端口。
+3. 需要改 `DSH Home`、Chat 工作目录或本机端口时，可从应用菜单（macOS）/「文件」菜单（Windows、Linux）、Chat 顶部设置，或 Chat 内「桌面设置」再开配置页。端口 `0` 表示由系统分配空闲 loopback 端口。
 4. 成功启动后会记住配置；下次冷启动优先直接起 DSH。配置页仍可改路径与端口并重新检测。
 5. 启动失败时配置页展示已脱敏错误，可复制完整日志；修好后点「重试启动」。
 6. 界面跟随系统深浅色。macOS 用原生 traffic lights，Chat 对齐 DSH 折叠轨道；Windows / Linux 用页面内悬浮窗控，不跳系统浏览器。
 
-首页可选择安装桌面管理桥接插件。装好后在 DSH Chat「设置 → 插件 → 桌面管理」里查看状态，以及启动 / 停止 / 重启**本桌面端拥有**的 DSH 进程。
+桌面管理桥接已内置：每次由本应用拉起的 `dsh web` 都会通过 `--patch` 注入。在 DSH Chat「设置 → 桌面设置」查看状态，以及启动 / 停止 / 重启**本桌面端拥有**的 DSH 进程。
 
 ## 仓库布局
 
@@ -27,19 +27,19 @@ Deepseek Harness Desktop 是 DSH 的轻量桌面客户端：复用本机已安�
 | `assets/web` | 配置页 |
 | `assets/shared` | 跨平台图标源 |
 | `assets/{darwin,linux,windows}` | 各平台打包输入 |
-| `plugins/deepseek-harness-desktop-bridge` | 可选桌面管理桥接 |
+| `internal/dsh/desktopbridge` | 内置桌面桥接（`--patch` 覆盖） |
 | `dist/` | 构建产物（git 忽略） |
 | `scripts/` | 构建、签名、版本号等脚本 |
 
-## 桥接插件
+## 桥接插件（已内置）
 
-源码：[plugins/deepseek-harness-desktop-bridge](plugins/deepseek-harness-desktop-bridge)。在仓库根目录：
+桌面端每次启动自己拥有的 `dsh web` 时，会经 Cordis `--patch` 注入内置桥接（源码：[`internal/dsh/desktopbridge/`](internal/dsh/desktopbridge/)），
+与 `webview-boot` 同类，**不改用户 profile**。在 DSH Chat 打开「设置 → 桌面设置」（设置左侧一级导航）即可管理本桌面端拉起的 DSH。
 
-```sh
-dsh plugin --profile web add file:./plugins/deepseek-harness-desktop-bridge
-```
+不必再执行 `dsh plugin --profile web add file:./plugins/...`。若以前装过 profile 副本，内置 patch 会移除同 id；也可手动 `dsh plugin --profile web remove @deepseek-ai/deepseek-harness-desktop-bridge`。
 
-插件经 DSH 已认证 RPC 调用桌面端仅监听 `127.0.0.1` 的有限控制面。每次运行生成随机令牌，只注入本端拉起的 DSH 子进程；令牌不进页面、日志或状态响应，也没有任意 shell 接口。
+控制面仅监听 `127.0.0.1`，白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面、日志或状态 JSON，也没有任意 shell 端点。监听异常退出时会重建（新令牌）并写入端点文件供插件重连。
+
 
 ## 构建与测试
 
