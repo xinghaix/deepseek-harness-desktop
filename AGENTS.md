@@ -1,6 +1,6 @@
 # AGENTS.md — Deepseek Harness Desktop
 
-给在本仓库工作的编码助手用的项目说明。人类可读总览仍以 `README.md` 为准；这里偏架构、边界和发版约定。
+给在本仓库工作的编码助手用的项目说明。人类可读总览见 [`README.md`](README.md)（中文）与 [`README.en.md`](README.en.md)（English）；这里偏架构、边界和发版约定。
 
 ## 产品定位
 
