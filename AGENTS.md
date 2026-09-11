@@ -93,7 +93,7 @@ Node 默认 16KiB header（HTTP 431）。
   `*_windows.go` / `*_linux.go` 或小范围分支隔离，而不是复制整条业务路径。
 - **共享内核优先**：生命周期、发现 CLI、桥接控制面、webview boot、配置模型放在 `internal/dsh` 等无 UI 层；平台差异下沉到薄适配层。
 - **改动自检**：触及进程、窗口、菜单、打包、WebView、更新时，想一遍三端；测不了的端在 PR/说明里标出风险，而不是默认“本机 OK 即可”。
-- **发版矩阵**：Release 打 darwin-arm64、linux-amd64、windows-amd64（Intel Mac 用 Rosetta）；改构建脚本或 workflow 时保持四者都能产出。
+- **发版矩阵**：Release 打 darwin-arm64、linux-amd64、linux-arm64、windows-amd64、windows-arm64（Intel Mac 用 Rosetta 跑 darwin-arm64）；改构建脚本或 workflow 时保持矩阵都能产出。
 
 ## 国际化
 
@@ -122,8 +122,8 @@ Node 默认 16KiB header（HTTP 431）。
 
 1. 改动合入 **main**。
 2. 在 main 尖端打 annotated tag：`git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`。
-3. `.github/workflows/release.yml` 校验 tag 祖先在 `origin/main`，用 `scripts/build.sh` 打 darwin-arm64 / darwin-amd64 /
-   linux-amd64 / windows-amd64，上传制品并创建 GitHub Release（含 `SHA256SUMS`）。
+3. `.github/workflows/release.yml` 校验 tag 祖先在 `origin/main`，用 `scripts/build.sh` 打 darwin-arm64 / linux-amd64 / linux-arm64 /
+   windows-amd64 / windows-arm64，上传制品并创建 GitHub Release（含 `SHA256SUMS`）。
 4. **不必**为发版改 `internal/version.Version`；CI/脚本用 ldflags 写入。
 
 不在 main 上的 tag 会被 workflow 拒绝。自签名非 Developer ID / EV，未公证。

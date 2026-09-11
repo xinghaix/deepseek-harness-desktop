@@ -34,8 +34,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-13 is retired/scarce (amd64 jobs stay queued). Ship darwin-arm64;
-          # Intel Macs run it via Rosetta 2.
+          # macos-13 is retired/scarce. Ship darwin-arm64; Intel Macs use Rosetta 2.
           - name: darwin-arm64
             os: macos-15
             goos: darwin
@@ -44,10 +43,20 @@ jobs:
             os: ubuntu-24.04
             goos: linux
             goarch: amd64
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
           - name: windows-amd64
             os: windows-latest
             goos: windows
             goarch: amd64
+          # Wails Windows builds use CGO_ENABLED=0, so arm64 can cross-compile
+          # on the amd64 runner without a Windows ARM host.
+          - name: windows-arm64
+            os: windows-latest
+            goos: windows
+            goarch: arm64
     steps:
       - uses: actions/checkout@v4
 

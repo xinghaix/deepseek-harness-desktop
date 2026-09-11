@@ -60,6 +60,8 @@ go test -race ./...
 GOOS=windows GOARCH=amd64 ./scripts/build.sh 0.2.0
 GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.2.0
 GOOS=linux GOARCH=amd64 ./scripts/build.sh 0.2.0
+GOOS=linux GOARCH=arm64 ./scripts/build.sh 0.2.0
+GOOS=windows GOARCH=arm64 ./scripts/build.sh 0.2.0
 ```
 
 Linux 构建需要 GTK 4 / WebKitGTK 6，macOS 构建需要 Xcode，Windows 构建使用 WebView2。未在目标系统实际构建或运行的组合，不宣称已验收。
