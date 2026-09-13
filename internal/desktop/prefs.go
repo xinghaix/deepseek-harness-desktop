@@ -12,16 +12,22 @@ const desktopPrefsFileName = "desktop-prefs.json"
 
 type desktopPrefsFile struct {
 	ConfirmQuitWhenBusy *bool   `json:"confirmQuitWhenBusy"`
+	CloseToTray         *bool   `json:"closeToTray"`
+	TraySessionLimit    *int    `json:"traySessionLimit"`
 	Language            *string `json:"language,omitempty"`
 }
 
 type desktopPrefs struct {
 	confirmQuitWhenBusy atomic.Bool
+	closeToTray         atomic.Bool
+	traySessionLimit    atomic.Int32
 	language            atomic.Value // string; "" / "system" = follow system
 }
 
 func (p *desktopPrefs) load() {
 	p.confirmQuitWhenBusy.Store(true)
+	p.closeToTray.Store(false)
+	p.traySessionLimit.Store(defaultTraySessionLimit)
 	p.language.Store("")
 	data, err := os.ReadFile(desktopPrefsPath())
 	if err != nil {
@@ -34,6 +40,12 @@ func (p *desktopPrefs) load() {
 	if file.ConfirmQuitWhenBusy != nil {
 		p.confirmQuitWhenBusy.Store(*file.ConfirmQuitWhenBusy)
 	}
+	if file.CloseToTray != nil {
+		p.closeToTray.Store(*file.CloseToTray)
+	}
+	if file.TraySessionLimit != nil {
+		p.traySessionLimit.Store(int32(clampTraySessionLimit(*file.TraySessionLimit)))
+	}
 	if file.Language != nil {
 		p.language.Store(*file.Language)
 	}
@@ -44,8 +56,10 @@ func (p *desktopPrefs) save() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	enabled := p.confirmQuitWhenBusy.Load()
-	file := desktopPrefsFile{ConfirmQuitWhenBusy: &enabled}
+	confirm := p.confirmQuitWhenBusy.Load()
+	closeToTray := p.closeToTray.Load()
+	limit := int(p.traySessionLimit.Load())
+	file := desktopPrefsFile{ConfirmQuitWhenBusy: &confirm, CloseToTray: &closeToTray, TraySessionLimit: &limit}
 	if lang := p.getLanguage(); lang != "" {
 		langCopy := lang
 		file.Language = &langCopy

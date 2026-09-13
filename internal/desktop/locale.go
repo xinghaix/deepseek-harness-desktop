@@ -13,6 +13,8 @@ import (
 // DesktopPrefs is the JSON shape exposed to the config UI.
 type DesktopPrefs struct {
 	ConfirmQuitWhenBusy bool   `json:"confirmQuitWhenBusy"`
+	CloseToTray         bool   `json:"closeToTray"`
+	TraySessionLimit    int    `json:"traySessionLimit"`
 	Language            string `json:"language"`
 	ResolvedLocale      string `json:"resolvedLocale"`
 	SystemLocale        string `json:"systemLocale"`
@@ -40,6 +42,8 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 	resolved, source := i18n.ResolveWithSource(pref, system)
 	return DesktopPrefs{
 		ConfirmQuitWhenBusy: d.prefs.confirmQuitWhenBusy.Load(),
+		CloseToTray:         d.prefs.closeToTray.Load(),
+		TraySessionLimit:    int(d.prefs.traySessionLimit.Load()),
 		Language:            pref,
 		ResolvedLocale:      resolved,
 		SystemLocale:        i18n.Normalize(system),
@@ -52,6 +56,29 @@ func (d *Service) SetConfirmQuitWhenBusy(enabled bool) (DesktopPrefs, error) {
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetCloseToTray(enabled bool) (DesktopPrefs, error) {
+	d.prefs.closeToTray.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	if enabled {
+		d.ensureTray()
+	} else {
+		d.destroyTray()
+		d.revealHiddenChat()
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
+	d.prefs.traySessionLimit.Store(int32(clampTraySessionLimit(n)))
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	d.refreshTrayMenu()
 	return d.DesktopPrefs(), nil
 }
 
@@ -112,4 +139,5 @@ func (d *Service) rebuildApplicationMenu() {
 		return
 	}
 	app.Menu.SetApplicationMenu(ApplicationMenu(app, d))
+	d.refreshTrayMenu()
 }

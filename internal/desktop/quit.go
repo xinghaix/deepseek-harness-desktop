@@ -54,6 +54,7 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 }
 
 func (d *Service) forceQuit() {
+	d.destroyTray()
 	d.allowQuit.Store(true)
 	d.quitPromptOpen.Store(false)
 	d.quitProbeSettled.Store(true)

@@ -54,6 +54,13 @@ func (h *recordingBridgeHost) ReportChatBusy(bool) {}
 func (h *recordingBridgeHost) SetConfirmQuitWhenBusy(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) SetCloseToTray(bool) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
+func (h *recordingBridgeHost) SetTraySessionLimit(int) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
+func (h *recordingBridgeHost) ReportSessions([]BridgeSession)   {}
 func (h *recordingBridgeHost) BridgeUpdateStatus() BridgeUpdate { return BridgeUpdate{} }
 func (h *recordingBridgeHost) CheckUpdate() (BridgeUpdate, error) {
 	return BridgeUpdate{}, nil
@@ -143,7 +150,6 @@ func TestUserStopSkipsAutoRelaunch(t *testing.T) {
 		t.Fatalf("auto-relaunch should stay idle after user Stop: attempts=%d enabled=%v", attempts, enabled)
 	}
 }
-
 
 func TestWaitRunningThenOpenChat(t *testing.T) {
 	d := New()

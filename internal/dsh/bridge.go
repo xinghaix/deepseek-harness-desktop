@@ -44,7 +44,10 @@ type BridgeHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
 	SetConfirmQuitWhenBusy(enabled bool) (BridgePrefs, error)
+	SetCloseToTray(enabled bool) (BridgePrefs, error)
+	SetTraySessionLimit(n int) (BridgePrefs, error)
 	ReportChatBusy(busy bool)
+	ReportSessions(sessions []BridgeSession)
 	BridgeUpdateStatus() BridgeUpdate
 	CheckUpdate() (BridgeUpdate, error)
 	InstallUpdate() error
@@ -56,6 +59,8 @@ type BridgeHost interface {
 // BridgePrefs is the JSON shape returned on /v1/prefs.
 type BridgePrefs struct {
 	ConfirmQuitWhenBusy bool                 `json:"confirmQuitWhenBusy"`
+	CloseToTray         bool                 `json:"closeToTray"`
+	TraySessionLimit    int                  `json:"traySessionLimit"`
 	Language            string               `json:"language"`
 	ResolvedLocale      string               `json:"resolvedLocale"`
 	SystemLocale        string               `json:"systemLocale"`
@@ -67,6 +72,14 @@ type BridgePrefs struct {
 type BridgeLocaleOption struct {
 	Code       string `json:"code"`
 	NativeName string `json:"nativeName"`
+}
+
+// BridgeSession is one Chat session summary for the desktop tray list.
+type BridgeSession struct {
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	UpdatedAt int64  `json:"updatedAt"`
+	Running   bool   `json:"running"`
 }
 
 // BridgeUpdate mirrors update.Snapshot for the bridge JSON surface.
@@ -391,6 +404,52 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-close-to-tray":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetCloseToTray(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-tray-session-limit":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Limit int `json:"limit"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetTraySessionLimit(body.Limit)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
 	case "/v1/report-chat-busy":
 		// Official SessionSummary.running feed from the Chat bridge client.
 		if r.Method != http.MethodPost {
@@ -411,6 +470,28 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		host.ReportChatBusy(body.Busy)
 		writeBridgeJSON(w, http.StatusOK, map[string]bool{"busy": body.Busy})
+	case "/v1/report-sessions":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Sessions []BridgeSession `json:"sessions"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if body.Sessions == nil {
+			body.Sessions = []BridgeSession{}
+		}
+		host.ReportSessions(body.Sessions)
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true, "count": len(body.Sessions)})
 	case "/v1/update-status":
 		if r.Method != http.MethodGet {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,25 +24,37 @@ import (
 
 type Service struct {
 	*dsh.Manager
-	windowMu       sync.Mutex
-	updater        *update.Updater
-	stopAuto       context.CancelFunc
-	prefs          desktopPrefs
-	configHooked   bool
-	chatHooked     bool
-	openedChatURL  string
-	configDirty    bool
-	configIsModal  bool
-	allowQuit      atomic.Bool
-	quitPromptOpen   atomic.Bool
-	quitProbeSettled atomic.Bool
-	chatBusy         atomic.Bool
-	chatBusyKnown    atomic.Bool
+	windowMu           sync.Mutex
+	updater            *update.Updater
+	stopAuto           context.CancelFunc
+	prefs              desktopPrefs
+	configHooked       bool
+	chatHookedID       uint
+	openedChatURL      string
+	configDirty        bool
+	configIsModal      bool
+	allowQuit          atomic.Bool
+	quitPromptOpen     atomic.Bool
+	quitProbeSettled   atomic.Bool
+	chatBusy           atomic.Bool
+	chatBusyKnown      atomic.Bool
+	icon               []byte
+	trayMu             sync.Mutex
+	tray               *application.SystemTray
+	trayRebuildTimer   *time.Timer
+	trayIconIdle       []byte
+	trayIconBusyFrames [][]byte
+	trayAnimTimer      *time.Ticker
+	trayAnimStop       chan struct{}
+	trayAnimFrame      int
+	trayIconRunning    bool
+	sessionsMu         sync.Mutex
+	sessions           []dsh.BridgeSession
 }
 
-func New() *Service {
+func New(icon []byte) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel}
+	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel, icon: icon}
 	s.prefs.load()
 	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
 	s.SetBridgeHost(bridgeHostAdapter{service: s})
@@ -52,6 +65,19 @@ func New() *Service {
 func (d *Service) ReportChatBusy(busy bool) {
 	d.chatBusy.Store(busy)
 	d.chatBusyKnown.Store(true)
+	d.scheduleTrayMenuRefresh()
+}
+
+// ToggleChatZoom toggles Chat work-area maximise/restore (not system fullscreen).
+// Bound for JS fallbacks when window.wails.Window.ToggleMaximise is unavailable.
+func (d *Service) ToggleChatZoom() {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	if chat, ok := app.Window.GetByName(chatWindowName); ok && chat != nil {
+		chat.ToggleMaximise()
+	}
 }
 
 func (d *Service) ChatBusy() (busy bool, known bool) {
@@ -139,7 +165,6 @@ func (d *Service) OpenDSH() error {
 	chat, ok := app.Window.GetByName(chatWindowName)
 	if !ok {
 		chat = app.Window.NewWithOptions(ChatWindowOptions(chatURL))
-		d.hookChatWindow(app, chat)
 		d.MarkBrowserOpened()
 		d.openedChatURL = chatURL
 		d.NoteChatWindowURL(chatURL)
@@ -151,6 +176,8 @@ func (d *Service) OpenDSH() error {
 		d.openedChatURL = chatURL
 		d.NoteChatWindowURL(chatURL)
 	}
+	// Always (re)bind close hooks — Chat can be recreated after a real close.
+	d.hookChatWindow(app, chat)
 	d.dismissConfigModal(app, chat)
 	chat.Show()
 	chat.Focus()
@@ -213,6 +240,7 @@ func (d *Service) OpenManagement() error {
 	defer d.windowMu.Unlock()
 	chat, chatOK := app.Window.GetByName(chatWindowName)
 	if chatOK {
+		chat.Show()
 		const modalURL = "/?manage=1&modal=1"
 		window, ok := app.Window.GetByName(configWindowName)
 		if !ok {
@@ -344,13 +372,19 @@ func (d *Service) DismissConfig() error {
 }
 
 func (d *Service) hookChatWindow(app *application.App, window application.Window) {
-	if d.chatHooked || window == nil {
+	if window == nil {
 		return
 	}
-	d.chatHooked = true
-	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+	wid := window.ID()
+	if d.chatHookedID == wid {
+		return
+	}
+	d.chatHookedID = wid
+
+	onClosing := func(event *application.WindowEvent) {
 		if d.allowQuit.Load() {
 			d.configDirty = false
+			d.chatHookedID = 0
 			if config, ok := app.Window.GetByName(configWindowName); ok {
 				config.Close()
 			}
@@ -359,9 +393,27 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 			}
 			return
 		}
+		// Always cancel the native close; either hide-to-tray or confirm quit.
 		event.Cancel()
+		if d.prefs.closeToTray.Load() {
+			// Hide before ensuring tray so "last window" logic sees a hidden window.
+			d.hideToTray(app, window)
+			d.ensureTray()
+			return
+		}
 		_ = d.RequestQuit()
-	})
+	}
+	// Bind Common + platform-native close signals so Cancel cannot race the
+	// mapped async listener (same pattern on macOS / Windows / Linux).
+	window.RegisterHook(events.Common.WindowClosing, onClosing)
+	switch runtime.GOOS {
+	case "darwin":
+		window.RegisterHook(events.Mac.WindowShouldClose, onClosing)
+	case "windows":
+		window.RegisterHook(events.Windows.WindowClosing, onClosing)
+	case "linux":
+		window.RegisterHook(events.Linux.WindowDeleteEvent, onClosing)
+	}
 }
 
 func sameHTTPOrigin(a, b string) bool {

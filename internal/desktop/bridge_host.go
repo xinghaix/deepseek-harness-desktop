@@ -64,6 +64,8 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 	}
 	return dsh.BridgePrefs{
 		ConfirmQuitWhenBusy: prefs.ConfirmQuitWhenBusy,
+		CloseToTray:         prefs.CloseToTray,
+		TraySessionLimit:    prefs.TraySessionLimit,
 		Language:            prefs.Language,
 		ResolvedLocale:      prefs.ResolvedLocale,
 		SystemLocale:        prefs.SystemLocale,
@@ -84,6 +86,24 @@ func (a bridgeHostAdapter) SetConfirmQuitWhenBusy(enabled bool) (dsh.BridgePrefs
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetCloseToTray(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetCloseToTray(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetTraySessionLimit(n int) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetTraySessionLimit(n); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) ReportSessions(sessions []dsh.BridgeSession) {
+	a.service.ReportSessions(sessions)
 }
 
 func snapshotToBridge(s update.Snapshot) dsh.BridgeUpdate {

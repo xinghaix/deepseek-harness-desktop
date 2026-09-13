@@ -83,6 +83,8 @@ Node 默认 16KiB header（HTTP 431）。
 - Windows / Linux：页面内悬浮窗控 + 内容安全区。
 - 宿主菜单承载「打开配置 / 打开 Chat / 退出」等（macOS 应用菜单；Win/Linux「文件」），不单独挂「设置」菜单。
 - 配置盖在 Chat 上的模态：有未保存改动时关闭需确认。
+- 可选「关闭到托盘」：`closeToTray`（`desktop-prefs.json`，默认 false）。开启后关闭 Chat 窗口会隐藏到系统托盘而非退出；⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。托盘图标仅在该偏好开启时存在。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
+- Chat 顶栏空白双击：铺满当前屏工作区或还原（`ToggleChatZoom` → `ToggleMaximise`，非系统全屏）。macOS：`InvisibleTitleBarHeight` 负责拖拽；顶栏 `no-drag` 命中带用 **click-timing** 调 Go 缩放（不依赖 `AppleActionOnDoubleClick` / Wails `wails:drag:doubleclick`）。Windows/Linux 用自绘拖区 + 同宽顶栏命中带。三端用户可见行为一致。
 
 ## 跨平台
 

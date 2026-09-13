@@ -41,7 +41,8 @@ func main() {
 	mux.Handle("/shared/", http.StripPrefix("/shared/", http.FileServer(http.FS(shared))))
 	mux.Handle("/", application.BundledAssetFileServer(web))
 
-	service := desktop.New()
+	icon := appIcon()
+	service := desktop.New(icon)
 	manager := &DSH{Service: service}
 	app := application.New(application.Options{
 		Name:        "Deepseek Harness Desktop",
@@ -55,7 +56,7 @@ func main() {
 				}
 			},
 		},
-		Icon: appIcon(),
+		Icon: icon,
 		Services: []application.Service{
 			application.NewService(manager),
 		},
@@ -63,7 +64,7 @@ func main() {
 			Handler: mux,
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			ApplicationShouldTerminateAfterLastWindowClosed: false, // close-to-tray: Hide must not quit the app
 		},
 		OnShutdown: func() {
 			if err := manager.Close(); err != nil {
@@ -77,6 +78,7 @@ func main() {
 	app.Menu.SetApplicationMenu(desktop.ApplicationMenu(app, manager))
 
 	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
+	service.StartTrayIfEnabled()
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

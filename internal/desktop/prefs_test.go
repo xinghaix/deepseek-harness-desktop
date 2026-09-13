@@ -74,3 +74,52 @@ func TestLanguagePreferencePersists(t *testing.T) {
 		t.Fatalf("system follow should omit language, got %v", file.Language)
 	}
 }
+
+func TestCloseToTrayDefaultsOffAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	var p desktopPrefs
+	p.load()
+	if p.closeToTray.Load() {
+		t.Fatal("close-to-tray must default to off")
+	}
+	if got := p.traySessionLimit.Load(); got != defaultTraySessionLimit {
+		t.Fatalf("tray session limit default = %d, want %d", got, defaultTraySessionLimit)
+	}
+	p.closeToTray.Store(true)
+	p.traySessionLimit.Store(int32(clampTraySessionLimit(99)))
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, desktopPrefsFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file desktopPrefsFile
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	if file.CloseToTray == nil || !*file.CloseToTray {
+		t.Fatal("closeToTray was not persisted as true")
+	}
+	if file.TraySessionLimit == nil || *file.TraySessionLimit != maxTraySessionLimit {
+		t.Fatalf("traySessionLimit persisted = %v, want %d", file.TraySessionLimit, maxTraySessionLimit)
+	}
+	var p2 desktopPrefs
+	p2.load()
+	if !p2.closeToTray.Load() {
+		t.Fatal("enabled close-to-tray was not reloaded")
+	}
+	if p2.traySessionLimit.Load() != maxTraySessionLimit {
+		t.Fatalf("reloaded traySessionLimit = %d", p2.traySessionLimit.Load())
+	}
+	p2.traySessionLimit.Store(0)
+	if err := p2.save(); err != nil {
+		t.Fatal(err)
+	}
+	var p3 desktopPrefs
+	p3.load()
+	if p3.traySessionLimit.Load() != 0 {
+		t.Fatal("zero traySessionLimit (hide list) was not persisted")
+	}
+}

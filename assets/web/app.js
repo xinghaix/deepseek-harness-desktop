@@ -352,10 +352,19 @@ $("auto-check-update").onchange = () => run(() => api("SetAutoCheckUpdate", $("a
 function applyConfirmQuitPref(enabled) {
   ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
 }
+function applyCloseToTrayPref(enabled) {
+  ["close-to-tray", "close-to-tray-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
+}
+function applyTraySessionLimitPref(n) {
+  const value = String(Number.isFinite(n) ? n : 5);
+  ["tray-session-limit", "tray-session-limit-setup"].forEach((id) => { const el = $(id); if (el) el.value = value; });
+}
 async function loadDesktopPrefs() {
   try {
     const prefs = await api("DesktopPrefs");
     if (prefs && typeof prefs.confirmQuitWhenBusy === "boolean") applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
+    if (prefs && typeof prefs.closeToTray === "boolean") applyCloseToTrayPref(prefs.closeToTray);
+    if (prefs && typeof prefs.traySessionLimit === "number") applyTraySessionLimitPref(prefs.traySessionLimit);
   } catch (_) {}
 }
 ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => {
@@ -364,6 +373,22 @@ async function loadDesktopPrefs() {
   el.onchange = () => run(async () => {
     const prefs = await api("SetConfirmQuitWhenBusy", el.checked);
     applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
+  });
+});
+["close-to-tray", "close-to-tray-setup"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.onchange = () => run(async () => {
+    const prefs = await api("SetCloseToTray", el.checked);
+    applyCloseToTrayPref(prefs.closeToTray);
+  });
+});
+["tray-session-limit", "tray-session-limit-setup"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.onchange = () => run(async () => {
+    const prefs = await api("SetTraySessionLimit", Number(el.value));
+    applyTraySessionLimitPref(prefs.traySessionLimit);
   });
 });
 bindLanguageSelect("ui-language");

@@ -79,6 +79,11 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 		Windows:            application.WindowsWindow{Theme: application.SystemDefault},
 		DevToolsEnabled:    false,
 	}
+	// applyDesktopWindowChrome already sets MacTitleBarHiddenInsetUnified, traffic
+	// lights, and InvisibleTitleBarHeight = desktopNativeTopInset (Wails macOS
+	// invisible native drag strip). Do NOT override Height to 0 — that kills
+	// native drag. Zoom uses JS click-timing → ToggleChatZoom (not AppleActionOnDoubleClick).
+	// Docs: https://v3.wails.io/features/windows/frameless/
 	return applyDesktopWindowChrome(options)
 }
 

@@ -26,6 +26,15 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if strings.Contains(script, "打开桌面设置") || strings.Contains(script, "最小化") {
 		t.Fatal("chrome control titles must not stay hard-coded Chinese")
 	}
+	if !strings.Contains(script, "zoomBand") || !strings.Contains(script, "lastZoomClickTs") || !strings.Contains(script, "onZoomBandMouseDown") {
+		t.Fatal("非 macOS Chat 必须用顶栏 click-timing 触发缩放")
+	}
+	if !strings.Contains(script, `drag.addEventListener("dblclick"`) || !strings.Contains(script, "ToggleMaximise") {
+		t.Fatal("非 macOS Chat 仍应保留 dblclick + ToggleMaximise 回退")
+	}
+	if !strings.Contains(script, "main.DSH.ToggleChatZoom") {
+		t.Fatal("非 macOS Chat 缩放必须优先走 Go ToggleChatZoom")
+	}
 }
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {
@@ -59,6 +68,30 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	}
 	if strings.Contains(script, "dsh-desktop-chrome__controls") {
 		t.Fatal("macOS 不应注入自绘控制按钮")
+	}
+	if !strings.Contains(script, "trafficLightClearance") || !strings.Contains(script, "dsh-desktop-native-drag") {
+		t.Fatal("macOS Chat 必须保留顶栏缩放命中带（避让交通灯）")
+	}
+	if !strings.Contains(script, "lastZoomClickTs") || !strings.Contains(script, "onZoomBandMouseDown") || !strings.Contains(script, "400") {
+		t.Fatal("macOS Chat 必须用 click-timing 缩放（不依赖 WebKit dblclick / AppleActionOnDoubleClick）")
+	}
+	if !strings.Contains(script, `setProperty("--wails-draggable", "no-drag")`) {
+		t.Fatal("macOS 缩放命中带必须 no-drag，避免 Wails drag.ts 劫持为 AppleActionOnDoubleClick")
+	}
+	if strings.Contains(script, `setProperty("--wails-draggable", "drag")`) {
+		t.Fatal("macOS 缩放命中带不得再设 --wails-draggable: drag（会走系统双击偏好）")
+	}
+	if !strings.Contains(script, "ensureDragOverlay") || !strings.Contains(script, "MutationObserver") || !strings.Contains(script, "setInterval") {
+		t.Fatal("macOS 命中带必须在 SPA 移除后可重建（MutationObserver / 周期检查）")
+	}
+	if !strings.Contains(script, "main.DSH.ToggleChatZoom") {
+		t.Fatal("macOS Chat 缩放必须优先走 Go ToggleChatZoom")
+	}
+	if !strings.Contains(desktopNativeWindowInsetCSS, "dsh-desktop-native-drag") || !strings.Contains(desktopNativeWindowInsetCSS, "--wails-draggable: no-drag") {
+		t.Fatal("macOS 必须注入 no-drag 缩放命中带 CSS")
+	}
+	if !strings.Contains(desktopNativeWindowInsetCSS, "height: 52px") {
+		t.Fatal("macOS 命中带高度应对齐实用顶栏 zoomBand")
 	}
 }
 

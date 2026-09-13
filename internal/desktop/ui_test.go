@@ -55,6 +55,7 @@ func TestManagementUIContract(t *testing.T) {
 		"ChooseHome", "ChooseWorkspace", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
+		"SetCloseToTray", "SetTraySessionLimit",
 		"LocaleBundle", "SetLanguage",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
@@ -87,6 +88,12 @@ func TestManagementUIContract(t *testing.T) {
 	}
 	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "有任务在运行时退出先确认") {
 		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")
+	}
+	if !strings.Contains(html, `id="close-to-tray"`) || !strings.Contains(html, "关闭窗口后在后台运行") {
+		t.Fatal("desktop settings must expose close-to-tray")
+	}
+	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "托盘最近会话数量") {
+		t.Fatal("desktop settings must expose tray session limit")
 	}
 	if !strings.Contains(html, `id="ui-language"`) || !strings.Contains(html, "data-i18n") || !strings.Contains(html, "DSHI18n") {
 		t.Fatal("desktop settings must expose language select and data-i18n / DSHI18n wiring")

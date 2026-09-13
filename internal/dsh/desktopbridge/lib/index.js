@@ -28,13 +28,16 @@ const routes = Object.freeze({
 	prefs: Object.freeze({ method: "GET", path: "/v1/prefs" }),
 	setLanguage: Object.freeze({ method: "POST", path: "/v1/set-language" }),
 	setConfirmQuitWhenBusy: Object.freeze({ method: "POST", path: "/v1/set-confirm-quit" }),
+	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
+	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),
 	installUpdate: Object.freeze({ method: "POST", path: "/v1/install-update" }),
 	openReleasePage: Object.freeze({ method: "POST", path: "/v1/open-release-page" }),
 	setAutoCheckUpdate: Object.freeze({ method: "POST", path: "/v1/set-auto-check-update" }),
 	appVersion: Object.freeze({ method: "GET", path: "/v1/app-version" }),
-	reportChatBusy: Object.freeze({ method: "POST", path: "/v1/report-chat-busy" })
+	reportChatBusy: Object.freeze({ method: "POST", path: "/v1/report-chat-busy" }),
+	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" })
 });
 
 function validateURL(base) {

@@ -59,6 +59,41 @@ func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
 		t.Fatalf("macOS Chat 应使用紧凑 unified 标题栏，得到 %v", options.Mac.TitleBar.ToolbarStyle)
 	}
 	if options.Mac.InvisibleTitleBarHeight != desktopNativeTopInset {
-		t.Fatalf("macOS 注入安全区与原生标题栏高度不一致：%d != %d", options.Mac.InvisibleTitleBarHeight, desktopNativeTopInset)
+		t.Fatalf("macOS Chat 必须保留 InvisibleTitleBarHeight=%d（原生拖拽条，见 Wails frameless 文档），得到 %d", desktopNativeTopInset, options.Mac.InvisibleTitleBarHeight)
+	}
+	if config.Mac.InvisibleTitleBarHeight != desktopNativeTopInset {
+		t.Fatalf("macOS 配置窗仍应保留 InvisibleTitleBarHeight=%d，得到 %d", desktopNativeTopInset, config.Mac.InvisibleTitleBarHeight)
+	}
+	rawService, err := os.ReadFile(repoFile(t, "internal", "desktop", "service.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rawService), "func (d *Service) ToggleChatZoom()") {
+		t.Fatal("must expose ToggleChatZoom for JS titlebar double-click fallback")
+	}
+}
+
+func TestCloseToTrayHookHidesInsteadOfQuit(t *testing.T) {
+	raw, err := os.ReadFile(repoFile(t, "internal", "desktop", "service.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	if !strings.Contains(src, "closeToTray") || !strings.Contains(src, "hideToTray") {
+		t.Fatal("Chat WindowClosing must hide to tray when closeToTray is enabled")
+	}
+	if !strings.Contains(src, "Mac.WindowShouldClose") || !strings.Contains(src, "Windows.WindowClosing") || !strings.Contains(src, "Linux.WindowDeleteEvent") {
+		t.Fatal("close-to-tray must bind platform-native close events on darwin/windows/linux")
+	}
+	tray, err := os.ReadFile(repoFile(t, "internal", "desktop", "tray.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	traySrc := string(tray)
+	if !strings.Contains(traySrc, "app.SystemTray.New()") {
+		t.Fatal("must create the tray with Wails SystemTray.New")
+	}
+	if !strings.Contains(traySrc, "SetIcon") {
+		t.Fatal("tray must use SetIcon for the colorful app icon")
 	}
 }
