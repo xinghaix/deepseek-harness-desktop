@@ -86,6 +86,9 @@ type BridgeSession struct {
 	Running   bool   `json:"running"`
 	// Error is a bridge sticky failure bit (turn error/interrupted or api-session/error).
 	Error bool `json:"error,omitempty"`
+	// Blank mirrors Chat SessionSummary.blank (empty-log "新会话"). Tray recent
+	// lists drop these: displayTitle falls back to the workspace basename.
+	Blank bool `json:"blank,omitempty"`
 }
 
 // BridgeUpdate mirrors update.Snapshot for the bridge JSON surface.

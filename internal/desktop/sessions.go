@@ -40,7 +40,19 @@ func selectTraySessions(all []dsh.BridgeSession, limit int) []dsh.BridgeSession 
 	if limit <= 0 || len(all) == 0 {
 		return nil
 	}
-	cp := append([]dsh.BridgeSession(nil), all...)
+	cp := make([]dsh.BridgeSession, 0, len(all))
+	for _, s := range all {
+		// Chat SessionSummary.blank: empty-log "新会话". Sidebar only shows the
+		// current one (localized title); displayTitle is the workspace basename
+		// (e.g. "dsh-sol-pi"), which is not a useful tray jump target.
+		if s.Blank {
+			continue
+		}
+		cp = append(cp, s)
+	}
+	if len(cp) == 0 {
+		return nil
+	}
 	sort.SliceStable(cp, func(i, j int) bool {
 		ri, rj := traySessionListRank(cp[i]), traySessionListRank(cp[j])
 		if ri != rj {

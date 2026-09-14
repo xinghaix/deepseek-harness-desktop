@@ -1412,7 +1412,9 @@ window.__ModuleLoader__.load({
 					title,
 					updatedAt: typeof s.updatedAt === "number" ? s.updatedAt : 0,
 					running,
-					error: !running && stickySessionErrors.has(sid)
+					error: !running && stickySessionErrors.has(sid),
+					// Chat empty-log bit. Tray drops these; displayTitle is the cwd basename.
+					blank: Boolean(s.blank)
 				});
 			}
 			return { sessions: out, clearErrors };

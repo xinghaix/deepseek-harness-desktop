@@ -66,6 +66,7 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"/desktop-bridge", "/v1/status", "/v1/restart", "/v1/reload-chat", "/v1/open-management", "/v1/report-chat-busy",
 		"/v1/prefs", "/v1/check-update",
 		"configFromEndpointFile", "desktop-bridge/unavailable",
+		"blank: Boolean(raw.blank)",
 	} {
 		if !strings.Contains(host, fragment) {
 			t.Fatalf("host bridge missing %q", fragment)
@@ -90,6 +91,7 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"anySessionRunning",
 		"sessions",
 		"role: \"switch\"",
+		"blank: Boolean(s.blank)",
 	} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client bridge missing %q", fragment)

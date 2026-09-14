@@ -47,6 +47,27 @@ func TestSelectTraySessionsSortsAndTruncates(t *testing.T) {
 	}
 }
 
+func TestSelectTraySessionsDropsBlank(t *testing.T) {
+	all := []dsh.BridgeSession{
+		{ID: "blank-new", Title: "dsh-sol-pi", UpdatedAt: 200, Blank: true},
+		{ID: "real-new", Title: "接入快手", UpdatedAt: 150},
+		{ID: "blank-run", Title: "workspace", UpdatedAt: 180, Blank: true, Running: true},
+		{ID: "real-old", Title: "SoL-Pi", UpdatedAt: 10},
+		{ID: "blank-err", Title: "empty", UpdatedAt: 190, Blank: true, Error: true},
+	}
+	got := selectTraySessions(all, 5)
+	if len(got) != 2 || got[0].ID != "real-new" || got[1].ID != "real-old" {
+		ids := make([]string, len(got))
+		for i, s := range got {
+			ids[i] = s.ID
+		}
+		t.Fatalf("blank sessions must be dropped, got %v", ids)
+	}
+	if selectTraySessions([]dsh.BridgeSession{{ID: "b", Title: "dsh-sol-pi", Blank: true}}, 5) != nil {
+		t.Fatal("blank-only list must hide the recent-sessions section")
+	}
+}
+
 func TestSelectTraySessionsPrefersRunningAndError(t *testing.T) {
 	all := []dsh.BridgeSession{
 		{ID: "idle-new", Title: "IdleNew", UpdatedAt: 100},

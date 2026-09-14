@@ -76,7 +76,8 @@ function mergeTraySessionErrors(sessions, clearErrors) {
 			title: typeof raw.title === "string" ? raw.title : "",
 			updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
 			running,
-			error: !running && (Boolean(raw.error) || stickySessionErrors.has(id))
+			error: !running && (Boolean(raw.error) || stickySessionErrors.has(id)),
+			blank: Boolean(raw.blank)
 		});
 	}
 	return out;
