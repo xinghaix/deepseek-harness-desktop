@@ -543,3 +543,14 @@ func TestRealDSH(t *testing.T) {
 	}
 	t.Logf("real DSH version %s: authenticated readiness, stop/restart and byte-for-byte Home patch preservation passed", version)
 }
+
+func TestDesktopDataDirPathNoNest(t *testing.T) {
+	home := filepath.Join(t.TempDir(), ".dsh")
+	want := filepath.Join(home, desktopDataDirName)
+	if got := desktopDataDirPath(home); got != want {
+		t.Fatalf("normal = %q, want %q", got, want)
+	}
+	if got := desktopDataDirPath(want); got != want {
+		t.Fatalf("already desktop dir nested to %q", got)
+	}
+}

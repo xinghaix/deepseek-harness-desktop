@@ -5,12 +5,14 @@ package desktop
 import (
 	"testing"
 
+	"deepseek-harness-desktop/internal/desktopstate"
 	"deepseek-harness-desktop/internal/i18n"
 )
 
 func TestSetLanguagePersistsAndLocaleBundle(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
 	s := &Service{}
 	s.prefs.load()
 
@@ -31,6 +33,7 @@ func TestSetLanguagePersistsAndLocaleBundle(t *testing.T) {
 		t.Fatalf("pref = %q", got)
 	}
 
+	desktopstate.ResetCacheForTest()
 	var reloaded Service
 	reloaded.prefs.load()
 	again := reloaded.LocaleBundle()

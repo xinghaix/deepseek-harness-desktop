@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"deepseek-harness-desktop/internal/desktopstate"
 )
 
 func TestPrefsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
 	u := New()
 	if !u.AutoCheckEnabled() {
 		t.Fatal("default auto-check")
@@ -18,9 +21,10 @@ func TestPrefsRoundTrip(t *testing.T) {
 	if err := u.SetAutoCheck(false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, prefsFileName)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, desktopstate.FileName)); err != nil {
 		t.Fatal(err)
 	}
+	desktopstate.ResetCacheForTest()
 	u2 := New()
 	if u2.AutoCheckEnabled() {
 		t.Fatal("expected persisted off")

@@ -336,11 +336,11 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "/v1/choose-executable":
-		b.handleChoose(w, r, func(host BridgeHost) (string, error) { return host.ChooseExecutable() })
+		b.handleChoose(w, r, "executable", func(host BridgeHost) (string, error) { return host.ChooseExecutable() })
 	case "/v1/choose-home":
-		b.handleChoose(w, r, func(host BridgeHost) (string, error) { return host.ChooseHome() })
+		b.handleChoose(w, r, "home", func(host BridgeHost) (string, error) { return host.ChooseHome() })
 	case "/v1/choose-workspace":
-		b.handleChoose(w, r, func(host BridgeHost) (string, error) { return host.ChooseWorkspace() })
+		b.handleChoose(w, r, "workspace", func(host BridgeHost) (string, error) { return host.ChooseWorkspace() })
 	case "/v1/open-home":
 		b.handleOpenPath(w, r, func(host BridgeHost, o Options) error { return host.OpenHome(o) })
 	case "/v1/open-workspace":
@@ -588,7 +588,7 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (b *desktopBridge) handleChoose(w http.ResponseWriter, r *http.Request, fn func(BridgeHost) (string, error)) {
+func (b *desktopBridge) handleChoose(w http.ResponseWriter, r *http.Request, field string, fn func(BridgeHost) (string, error)) {
 	if r.Method != http.MethodPost {
 		writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
 		return
@@ -602,6 +602,20 @@ func (b *desktopBridge) handleChoose(w http.ResponseWriter, r *http.Request, fn 
 	if err != nil {
 		writeBridgeError(w, http.StatusConflict, err.Error())
 		return
+	}
+	if strings.TrimSpace(path) != "" {
+		o := b.owner.Status().Options
+		switch field {
+		case "executable":
+			o.Executable = path
+		case "home":
+			o.Home = path
+			o.DesktopDir = desktopDataDirPath(path)
+		case "workspace":
+			o.Workspace = path
+		}
+		succeeded, _, ok, _ := loadPersistedLaunchOptions()
+		_ = b.owner.SaveLaunchOptions(o, ok && succeeded)
 	}
 	writeBridgeJSON(w, http.StatusOK, map[string]any{"path": path})
 }

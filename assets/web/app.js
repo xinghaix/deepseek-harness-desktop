@@ -41,9 +41,19 @@ function setMessage(text, isError = false) {
   $("dashboard-message").textContent = text || t("dashboard.ready_message");
 }
 function setHidden(id, hidden) { $(id).hidden = hidden; }
-function desktopDirForHome(home) { const value = String(home || "").trim(); if (!value) return ""; const separator = value.includes("\\") ? "\\" : "/"; const base = value.replace(/[\\/]+$/, "") || separator; return base === separator ? `${base}.deepseek-harness-desktop` : `${base}${separator}.deepseek-harness-desktop`; }
+function desktopDirForHome(home) {
+  const value = String(home || "").trim();
+  if (!value) return "";
+  const separator = value.includes("\\") ? "\\" : "/";
+  const base = value.replace(/[\\/]+$/, "") || separator;
+  const name = ".deepseek-harness-desktop";
+  // No config / bare DSH Home → default …/.deepseek-harness-desktop. Already that leaf → do not append again.
+  const leaf = base.split(/[\\/]/).filter(Boolean).pop();
+  if (leaf === name) return base;
+  return base === separator ? `${base}${name}` : `${base}${separator}${name}`;
+}
 function syncDesktopDir() { $("desktop-dir").value = desktopDirForHome($("home").value); }
-function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = desktopDirForHome(o.home) || o.desktopDir || ""; $("workspace").value = o.workspace || ""; }
+function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = o.desktopDir || desktopDirForHome(o.home) || ""; $("workspace").value = o.workspace || ""; }
 function configSnapshot(o = options()) { return { executable: o.executable || "", home: o.home || "", workspace: o.workspace || "", desktopDir: o.desktopDir || "", port: 0 }; }
 function configKey(o = options()) { return [o.executable || "", o.home || "", o.workspace || ""].join("\n"); }
 function markBaseline(o = options()) { baselineOptions = configSnapshot(o); void api("SetConfigDirty", false); }
@@ -53,7 +63,7 @@ function showDiscardDialog() { $("discard-config").hidden = false; }
 function hideDiscardDialog() { $("discard-config").hidden = true; }
 function requestCloseConfig() { if (isConfigDirty()) { showDiscardDialog(); return Promise.resolve(); } return api("DismissConfig"); }
 function tryDismissConfigFromOverlay() { return api("TryDismissConfig"); }
-function saveOptions(lastStartSucceeded = false) { try { const value = options(); value.lastStartSucceeded = Boolean(lastStartSucceeded); if (lastVersion) value.version = lastVersion; localStorage.setItem(storageKey, JSON.stringify(value)); } catch (_) {} }
+function saveOptions(lastStartSucceeded = false) { try { const value = options(); value.lastStartSucceeded = Boolean(lastStartSucceeded); if (lastVersion) value.version = lastVersion; localStorage.setItem(storageKey, JSON.stringify(value)); void api("SaveLaunchOptions", value, Boolean(lastStartSucceeded)).catch(() => {}); } catch (_) {} }
 function markStartupConfigStale() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object" && value.lastStartSucceeded) { value.lastStartSucceeded = false; localStorage.setItem(storageKey, JSON.stringify(value)); } } catch (_) {} }
 function loadSavedOptions() { try { const value = JSON.parse(localStorage.getItem(storageKey) || "null"); if (value && typeof value === "object") { fillOptions(value); return value; } } catch (_) {} return null; }
 function clearErrorCard() { lastErrorReport = ""; setHidden("error-card", true); $("error-copy-state").textContent = ""; $("error-details-panel").open = false; }
@@ -411,10 +421,15 @@ async function load() {
   }).catch(() => {});
   let saved = null;
   try {
-    const [, defaults] = await Promise.all([localeP, api("Defaults")]);
+    const [, defaults, disk] = await Promise.all([localeP, api("Defaults"), api("PersistedLaunch").catch(() => null)]);
     defaultOptions = defaults;
     fillOptions(defaultOptions);
     saved = loadSavedOptions();
+    if (disk && disk.present && disk.options) {
+      fillOptions(disk.options);
+      saved = Object.assign({}, disk.options, { lastStartSucceeded: Boolean(disk.lastStartSucceeded), version: (saved && saved.version) || lastVersion });
+      try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch (_) {}
+    }
     showLoading(manualManagement ? t("loading.opening_config") : t("loading.reading_saved"));
   } catch (error) {
     await localeP.catch(() => {});

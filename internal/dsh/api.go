@@ -29,7 +29,11 @@ type InstallGuide struct {
 
 // Defaults 返回用户现有的 DSH_HOME、桌面端专属目录，以及默认 Chat 工作目录（DSH_HOME/.deepseek-harness-desktop）。
 func (d *Manager) Defaults() (Options, error) {
-	return defaultOptions()
+	defaults, err := defaultOptions()
+	if err != nil {
+		return defaults, err
+	}
+	return applyPersistedToDefaults(defaults), nil
 }
 
 // DiscoverCLI 在不改变 DSH_HOME 的前提下自动探测常见的 dsh 安装位置。

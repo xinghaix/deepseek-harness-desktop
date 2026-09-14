@@ -104,6 +104,12 @@ func defaultOptions() (Options, error) {
 }
 
 func desktopDataDirPath(home string) string {
+	home = filepath.Clean(home)
+	// No config / bare DSH Home → append .deepseek-harness-desktop.
+	// If the path is already the desktop data dir, keep it (do not append again).
+	if filepath.Base(home) == desktopDataDirName {
+		return home
+	}
 	return filepath.Join(home, desktopDataDirName)
 }
 
@@ -480,7 +486,13 @@ func joinPathDirectories(dirs []string) string {
 
 func New() *Manager {
 	warmCLISearchCache()
-	return &Manager{state: "stopped"}
+	d := &Manager{state: "stopped"}
+	if _, options, ok, err := loadPersistedLaunchOptions(); err == nil && ok {
+		d.options, d.launchOptions = options, options
+	} else if defaults, err := defaultOptions(); err == nil {
+		d.options, d.launchOptions = defaults, defaults
+	}
+	return d
 }
 
 // SetBridgeHost 注入桌面宿主实现（配置窗、选路径、偏好、更新等）。
@@ -682,6 +694,7 @@ func (d *Manager) start(o Options) error {
 		return err
 	}
 	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
+	_ = savePersistedLaunchOptions(o, false)
 	d.browserTokenUsed = false
 	d.chatWindowURL = ""
 	d.userStop = false
@@ -825,6 +838,7 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 			if d.cmd == cmd && d.state == "starting" {
 				d.options.Port = candidatePort
 				d.url, d.browserTokenUsed, d.state = candidate, false, "running"
+				_ = savePersistedLaunchOptions(d.launchOptions, true)
 			}
 			d.mu.Unlock()
 			return
