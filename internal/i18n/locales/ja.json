@@ -69,7 +69,7 @@
   "field.tray_session_limit_hint": "0 はトレイのセッション一覧を非表示。1–20 件、最終アクティビティ順。",
   "field.tray_session_limit_hint_dashboard": "トレイメニューに表示する最近のセッション数。0 で非表示、最大 20。",
   "field.language": "インターフェース言語",
-  "field.language_hint": "システム言語に従うか、固定言語を選びます。desktop-prefs.json に保存されます。",
+  "field.language_hint": "システム言語に従うか、固定言語を選びます。desktop-state.json に保存されます。",
   "lang.system": "システム",
   "install.title": "まだ dsh が見つかりませんか？",
   "install.body": "先にターミナルで公式 CLI をインストールし、戻って「CLI を再検出」をクリックしてください。コマンドは表示のみで、デスクトップアプリは実行しません。",

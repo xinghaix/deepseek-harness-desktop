@@ -1,7 +1,7 @@
 // Package desktopstate stores durable desktop-shell preferences in one file:
 // ~/.deepseek-harness-desktop/desktop-state.json
 //
-// It does NOT hold DSH_HOME runtime artifacts (bridge-endpoint, dsh-process,
+// It does NOT hold DSH_HOME runtime artifacts (desktop-bridge-endpoint, desktop-process,
 // webview-boot, profiles, storages, settings.yaml).
 package desktopstate
 

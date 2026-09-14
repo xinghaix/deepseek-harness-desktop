@@ -69,7 +69,7 @@
   "field.tray_session_limit_hint": "0 oculta a lista de sessões na bandeja; 1–20 itens, ordenados pela última atividade.",
   "field.tray_session_limit_hint_dashboard": "Quantas sessões recentes aparecem no menu da bandeja. 0 oculta a lista; máximo 20.",
   "field.language": "Idioma da interface",
-  "field.language_hint": "Seguir o idioma do sistema ou escolher um idioma fixo. Guardado em desktop-prefs.json.",
+  "field.language_hint": "Seguir o idioma do sistema ou escolher um idioma fixo. Guardado em desktop-state.json.",
   "lang.system": "Sistema",
   "install.title": "Ainda não encontrou o dsh?",
   "install.body": "Instale primeiro o CLI oficial num terminal, volte aqui e clique em «Verificar CLI novamente». Os comandos são só mostrados; a app não os executa.",

@@ -26,7 +26,7 @@ let lastErrorReport = "";
 let baselineOptions = null;
 
 function options() {
-  return { executable: $("executable").value.trim(), home: $("home").value.trim(), desktopDir: $("desktop-dir").value.trim(), workspace: $("workspace").value.trim(), port: 0 };
+  return { executable: $("executable").value.trim(), home: $("home").value.trim(), workspace: $("workspace").value.trim(), port: 0 };
 }
 function errorText(error) { return error && error.message ? error.message : String(error || t("msg.operation_failed")); }
 function formatAppVersion(v) {
@@ -41,20 +41,8 @@ function setMessage(text, isError = false) {
   $("dashboard-message").textContent = text || t("dashboard.ready_message");
 }
 function setHidden(id, hidden) { $(id).hidden = hidden; }
-function desktopDirForHome(home) {
-  const value = String(home || "").trim();
-  if (!value) return "";
-  const separator = value.includes("\\") ? "\\" : "/";
-  const base = value.replace(/[\\/]+$/, "") || separator;
-  const name = ".deepseek-harness-desktop";
-  // No config / bare DSH Home → default …/.deepseek-harness-desktop. Already that leaf → do not append again.
-  const leaf = base.split(/[\\/]/).filter(Boolean).pop();
-  if (leaf === name) return base;
-  return base === separator ? `${base}${name}` : `${base}${separator}${name}`;
-}
-function syncDesktopDir() { $("desktop-dir").value = desktopDirForHome($("home").value); }
-function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("desktop-dir").value = o.desktopDir || desktopDirForHome(o.home) || ""; $("workspace").value = o.workspace || ""; }
-function configSnapshot(o = options()) { return { executable: o.executable || "", home: o.home || "", workspace: o.workspace || "", desktopDir: o.desktopDir || "", port: 0 }; }
+function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("workspace").value = o.workspace || ""; }
+function configSnapshot(o = options()) { return { executable: o.executable || "", home: o.home || "", workspace: o.workspace || "", port: 0 }; }
 function configKey(o = options()) { return [o.executable || "", o.home || "", o.workspace || ""].join("\n"); }
 function markBaseline(o = options()) { baselineOptions = configSnapshot(o); void api("SetConfigDirty", false); }
 function isConfigDirty() { return Boolean(baselineOptions) && configKey() !== configKey(baselineOptions); }
@@ -77,7 +65,6 @@ function formatErrorReport(status) {
     t("error.diag_state", labels[status && status.state] || (status && status.state) || t("state.failed")),
     t("error.diag_cli", o.executable || dash),
     t("error.diag_home", o.home || dash),
-    t("error.diag_desktop_dir", o.desktopDir || dash),
     t("error.diag_workspace", o.workspace || dash),
     t("error.diag_port", Number.isInteger(o.port) ? String(o.port) : dash),
     t("error.diag_desktop_error", status && status.error ? status.error : dash),
@@ -139,7 +126,6 @@ function renderStatus(status) {
   const o = status.options || {};
   $("metric-executable").textContent = o.executable || dash;
   $("metric-home").textContent = o.home || dash;
-  $("metric-desktop-dir").textContent = o.desktopDir || desktopDirForHome(o.home) || dash;
   $("metric-workspace").textContent = o.workspace || dash;
   $("metric-url").textContent = status.url || t("dashboard.url_not_ready");
   updateButtons();
@@ -330,7 +316,7 @@ $("retry-discovery").onclick = () => run(() => {
 });
 $("restore-defaults").onclick = () => { fillOptions(defaultOptions); cliReady = false; syncConfigDirty(); void discover(); };
 $("choose-executable").onclick = $("choose-executable-missing").onclick = () => run(async () => { const path = await api("ChooseExecutable"); if (path) { $("executable").value = path; $("advanced-settings").open = true; await probeSelected(); } });
-$("choose-home").onclick = () => run(async () => { const path = await api("ChooseHome"); if (path) { $("home").value = path; syncDesktopDir(); cliReady = false; syncConfigDirty(); } });
+$("choose-home").onclick = () => run(async () => { const path = await api("ChooseHome"); if (path) { $("home").value = path; cliReady = false; syncConfigDirty(); } });
 $("choose-workspace").onclick = () => run(async () => { const path = await api("ChooseWorkspace"); if (path) { $("workspace").value = path; cliReady = false; syncConfigDirty(); } });
 $("copy-cli-command").onclick = () => copyText($("cli-install-command").textContent, t("msg.copy_cli_ok"));
 $("copy-error").onclick = async () => {
@@ -406,7 +392,7 @@ bindLanguageSelect("ui-language-dashboard");
 $("install-update").onclick = () => run(() => api("InstallUpdate"), () => setMessage(t("update.installing")));
 $("open-release").onclick = () => run(() => api("OpenReleasePage"));
 ["executable", "workspace"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); }));
-$("home").addEventListener("input", () => { syncDesktopDir(); cliReady = false; updateButtons(); syncConfigDirty(); });
+$("home").addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); });
 async function load() {
   // Paint splash immediately; load locale in parallel with Defaults.
   document.documentElement.classList.add("is-loading");

@@ -23,7 +23,8 @@ import (
 
 const maxLogBytes = 64 * 1024
 const desktopDataDirName = ".deepseek-harness-desktop"
-const ownedProcessMarkerName = "dsh-process.json"
+const desktopWorkspaceDirName = "workspaces"
+const ownedProcessMarkerName = "desktop-process.json"
 const ownedProcessLockName = "dsh.lock"
 const desktopStateDirEnv = "DSH_DESKTOP_STATE_DIR"
 
@@ -98,7 +99,7 @@ func defaultOptions() (Options, error) {
 		Executable: "dsh",
 		Home:       dshHome,
 		DesktopDir: desktopDataDirPath(dshHome),
-		Workspace:  desktopDataDirPath(dshHome),
+		Workspace:  defaultWorkspacePath(dshHome),
 		Port:       0,
 	}, err
 }
@@ -111,6 +112,11 @@ func desktopDataDirPath(home string) string {
 		return home
 	}
 	return filepath.Join(home, desktopDataDirName)
+}
+
+// defaultWorkspacePath is Chat cwd when unset: DSH_HOME/workspaces (outside DesktopDir).
+func defaultWorkspacePath(home string) string {
+	return filepath.Join(home, desktopWorkspaceDirName)
 }
 
 func ensurePrivateDirectory(directory string) (string, error) {
@@ -244,7 +250,7 @@ func writeProcessMarker(path string, marker ownedProcessMarker) error {
 	if err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".dsh-process-*.tmp")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".desktop-process-*.tmp")
 	if err != nil {
 		return fmt.Errorf("%s: %w", i18n.TActive("err.marker_create"), err)
 	}
@@ -347,13 +353,18 @@ func normalizeOptions(o Options) (Options, error) {
 	}
 	o.DesktopDir = desktopDataDirPath(o.Home)
 	if strings.TrimSpace(o.Workspace) == "" {
-		o.Workspace = o.DesktopDir
+		o.Workspace = defaultWorkspacePath(o.Home)
 	}
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
 		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
 	}
-	// Default Chat cwd is the desktop-owned dir; create it before Stat so first launch works.
-	if o.Workspace == o.DesktopDir {
+	// First-launch default workspace: create before Stat. Legacy Workspace==DesktopDir still OK.
+	defaultWS := defaultWorkspacePath(o.Home)
+	if o.Workspace == defaultWS {
+		if err = os.MkdirAll(o.Workspace, 0o700); err != nil {
+			return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
+		}
+	} else if o.Workspace == o.DesktopDir {
 		if _, err = ensurePrivateDirectory(o.DesktopDir); err != nil {
 			return o, err
 		}

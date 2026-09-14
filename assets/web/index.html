@@ -59,19 +59,14 @@
           <div class="field">
             <label for="workspace" data-i18n="field.workspace">Chat 工作目录（DSH cwd）</label>
             <div class="input-row"><input id="workspace" autocomplete="off" spellcheck="false"><button class="secondary" id="choose-workspace" type="button" data-i18n="btn.choose_folder">选择文件夹</button></div>
-            <p class="hint" data-i18n="field.workspace_hint">这是启动 DSH Chat 时的当前目录，默认沿用系统用户目录；可改为项目目录。监听端口由 dsh web 自行分配，桌面端从它的输出解析。</p>
+            <p class="hint" data-i18n="field.workspace_hint">这是启动 DSH Chat 时的当前目录，未配置时默认 DSH_HOME/workspaces；可改为项目目录。监听端口由 dsh web 自行分配，桌面端从它的输出解析。</p>
           </div>
           </div><div class="config-block"><h3 class="config-section-title" data-i18n="config.desktop_title">桌面配置</h3>
           <p class="hint" data-i18n="config.desktop_hint">只作用于桌面端，不会改 DSH 自己的 settings.yaml。更新检查在运行控制台里设置。</p>
           <div class="field">
-            <label for="desktop-dir" data-i18n="field.desktop_dir">桌面端目录（固定）</label>
-            <div class="input-row"><input id="desktop-dir" autocomplete="off" spellcheck="false" readonly aria-readonly="true"></div>
-            <p class="hint" data-i18n="field.desktop_dir_hint">固定为 DSH_HOME/.deepseek-harness-desktop，仅供桌面端使用；不会把它当作 Chat workspace。</p>
-          </div>
-          <div class="field">
             <label for="ui-language" data-i18n="field.language">界面语言</label>
             <select id="ui-language"></select>
-            <p class="hint" data-i18n="field.language_hint">跟随系统语言，或选择固定语言。保存在 desktop-prefs.json。</p>
+            <p class="hint" data-i18n="field.language_hint">跟随系统语言，或选择固定语言。保存在 desktop-state.json。</p>
           </div>
           <div class="field">
             <label class="update-toggle"><input id="confirm-quit-busy-setup" type="checkbox" checked> <span data-i18n="field.confirm_quit">有任务在运行时退出先确认</span></label>
@@ -138,7 +133,7 @@
     <div class="dashboard-head"><div><div class="eyebrow" data-i18n="dashboard.eyebrow">运行控制台</div><h1 data-i18n="dashboard.title">DSH 已准备好</h1><p data-i18n="dashboard.lead">从这里管理启动参数；聊天内容和 DSH 设置仍保留在官方 DSH Web UI 中。</p></div><button class="secondary" id="reconfigure" type="button" data-i18n="btn.reconfigure">重新配置</button></div>
     <div class="dashboard-grid">
       <div>
-        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped" data-i18n="state.stopped">未启动</span><span class="version" id="version" data-i18n="dashboard.version_unknown">尚未检测</span></div><p class="status-summary" id="dashboard-message" data-i18n="dashboard.ready_message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button" data-i18n="btn.start_dsh">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled data-i18n="btn.stop_dsh">停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled data-i18n="btn.open_chat_webview">在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span data-i18n="dashboard.metric_cli">CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_home">DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_desktop_dir">桌面端目录</span><strong id="metric-desktop-dir">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_workspace">Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_url">地址</span><strong id="metric-url" data-i18n="dashboard.url_not_ready">未就绪</strong></div></div></section>
+        <section class="panel status-panel"><div class="status-overline"><span class="status-label" id="dashboard-state" data-state="stopped" data-i18n="state.stopped">未启动</span><span class="version" id="version" data-i18n="dashboard.version_unknown">尚未检测</span></div><p class="status-summary" id="dashboard-message" data-i18n="dashboard.ready_message">准备启动 DSH…</p><div class="dashboard-actions"><button class="primary" id="dashboard-start" type="button" data-i18n="btn.start_dsh">启动 DSH</button><button class="danger" id="dashboard-stop" type="button" disabled data-i18n="btn.stop_dsh">停止 DSH</button><button class="secondary" id="dashboard-open" type="button" disabled data-i18n="btn.open_chat_webview">在桌面 WebView 打开 Chat</button></div><div class="metric-list"><div class="metric"><span data-i18n="dashboard.metric_cli">CLI</span><strong id="metric-executable">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_home">DSH Home</span><strong id="metric-home">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_workspace">Chat 工作目录</span><strong id="metric-workspace">—</strong></div><div class="metric"><span data-i18n="dashboard.metric_url">地址</span><strong id="metric-url" data-i18n="dashboard.url_not_ready">未就绪</strong></div></div></section>
         <section class="panel log-panel"><div class="panel-heading"><h2 data-i18n="dashboard.logs_title">启动日志</h2><span class="panel-caption" data-i18n="dashboard.logs_caption">最近 64 KiB</span></div><pre id="logs" data-i18n="dashboard.no_logs">暂无日志</pre></section>
       </div>
       <aside>

@@ -12,7 +12,7 @@ import (
 
 func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	owner := New()
-	endpoint := filepath.Join(t.TempDir(), "bridge-endpoint.json")
+	endpoint := filepath.Join(t.TempDir(), "desktop-bridge-endpoint.json")
 	bridge, err := newDesktopBridge(owner, endpoint)
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 
 func TestDesktopBridgeListenerRecreate(t *testing.T) {
 	owner := New()
-	endpoint := filepath.Join(t.TempDir(), "bridge-endpoint.json")
+	endpoint := filepath.Join(t.TempDir(), "desktop-bridge-endpoint.json")
 	bridge, err := newDesktopBridge(owner, endpoint)
 	if err != nil {
 		t.Fatal(err)

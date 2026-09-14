@@ -24,7 +24,7 @@ const (
 	desktopBridgeTokenVar        = "DSH_DESKTOP_BRIDGE_TOKEN"
 	desktopBridgeEndpointFileVar = "DSH_DESKTOP_BRIDGE_ENDPOINT_FILE"
 	desktopBridgeTokenHeader     = "X-DSH-Desktop-Bridge-Token"
-	desktopBridgeEndpointName    = "bridge-endpoint.json"
+	desktopBridgeEndpointName    = "desktop-bridge-endpoint.json"
 	maxBridgeBodyBytes           = 1 << 20
 )
 

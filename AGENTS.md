@@ -46,6 +46,7 @@
 | 桌面 UI      | `internal/desktop`                        | 配置窗 / Chat 窗、标题栏与安全区、文件对话框、配置模态、菜单动作；依赖 Wails                                                           |
 | 国际化       | `internal/i18n`                           | 嵌入式 locales JSON、Resolve/Catalog/T/TActive；进程 Active 语言；桌面 prefs + LocaleBundle/SetLanguage                                  |
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
+| 壳状态       | `internal/desktopstate`                   | 持久偏好单文件 `~/.deepseek-harness-desktop/desktop-state.json`（prefs / launch / update）；与 DSH 运行时目录分离                      |
 | WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431       |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
 | 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
@@ -54,8 +55,12 @@
 
 ### 进程与数据边界
 
-- 显式传入 `DSH_HOME`；桌面专属目录：`DSH_HOME/.deepseek-harness-desktop`（0700），不是 DSH cwd。
-- Chat workspace 独立可配，默认用户目录。
+- 显式传入 `DSH_HOME`；DSH 运行时叠加目录：`DSH_HOME/.deepseek-harness-desktop`（0700），不是 DSH cwd。可用 `DSH_DESKTOP_STATE_DIR` 覆盖壳状态目录。
+- **两套目录，不要混：**
+  - **壳状态**（`~/.deepseek-harness-desktop/`，与 `DSH_HOME` 无关）：持久配置 `desktop-state.json`（prefs / launch / update；由本桌面端写入）。另有全局进程标记 `desktop-process.json`、锁 `dsh.lock`。
+  - **DSH 运行时**（`DSH_HOME/.deepseek-harness-desktop/`）：本桌面端写入热状态 `desktop-process.json`（owned-process 标记）、`desktop-bridge-endpoint.json`（桥接 `url`+`token`，关桥删除）；以及每次启动的 `desktop-bridge/`、`webview-boot/` patch。默认 Chat cwd 为 `DSH_HOME/workspaces`（不在本目录内）。同目录下 `settings.yaml`、`profiles/`、`storages/`、`.credentials.yaml` 等为 **dsh CLI/运行时** 数据，不是壳偏好。
+- 冷配置与热状态保持分文件（不要并进 `desktop-state.json`）：寿命、路径绑定、token 安全不同。
+- Chat workspace 独立可配；未配置时默认 `DSH_HOME/workspaces`（在 DesktopDir 之外）。已配置路径原样使用。
 - 同一用户同时只允许一个由本桌面端拥有的 DSH（应用单实例锁 + DSH 锁 + 生命周期串行化）。
 - macOS：独立进程组 + 可选 supervise；Windows：Job Object（关闭即回收）+ `taskkill /T` 兜底。
 - 端口占用则失败，不抢端口。

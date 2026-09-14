@@ -69,7 +69,7 @@
   "field.tray_session_limit_hint": "0이면 트레이에서 세션 목록을 숨깁니다. 1–20개, 최근 활동순.",
   "field.tray_session_limit_hint_dashboard": "트레이 메뉴에 표시할 최근 세션 수. 0은 숨김, 최대 20.",
   "field.language": "인터페이스 언어",
-  "field.language_hint": "시스템 언어를 따르거나 고정 언어를 선택합니다. desktop-prefs.json에 저장됩니다.",
+  "field.language_hint": "시스템 언어를 따르거나 고정 언어를 선택합니다. desktop-state.json에 저장됩니다.",
   "lang.system": "시스템",
   "install.title": "아직 dsh를 찾지 못했나요?",
   "install.body": "터미널에서 공식 CLI를 먼저 설치한 뒤 돌아와 「CLI 다시 검사」를 누르세요. 명령은 표시만 하며 데스크톱 앱이 실행하지 않습니다.",

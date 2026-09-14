@@ -186,8 +186,9 @@ func TestDSH(t *testing.T) {
 		if defaults.DesktopDir != filepath.Join(defaults.Home, desktopDataDirName) {
 			t.Fatalf("default desktop dir = %q", defaults.DesktopDir)
 		}
-		if defaults.Workspace != defaults.DesktopDir {
-			t.Fatalf("default workspace = %q, want desktop dir %q", defaults.Workspace, defaults.DesktopDir)
+		wantWS := filepath.Join(defaults.Home, desktopWorkspaceDirName)
+		if defaults.Workspace != wantWS {
+			t.Fatalf("default workspace = %q, want %q", defaults.Workspace, wantWS)
 		}
 		if defaults.Port != 0 {
 			t.Fatalf("default port = %d, want 0", defaults.Port)

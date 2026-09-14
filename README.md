@@ -112,7 +112,7 @@ GitHub Actions（`.github/workflows/release.yml`）构建并自签名 **darwin-a
 ## 数据与进程边界（摘要）
 
 - 只向子进程显式传入 `DSH_HOME`；桌面专属目录为 `DSH_HOME/.deepseek-harness-desktop`（0700），不作为 DSH 的 cwd。
-- Chat workspace 可配置，默认 `DSH_HOME/.deepseek-harness-desktop`；也可选用项目目录。
+- Chat workspace 可配置，默认 `DSH_HOME/workspaces`；也可选用项目目录。
 - 单实例应用锁 + DSH 锁：同一用户同时只有一个本端拥有的 DSH；重复打开只复用窗口。
 - 异常退出清理自有进程树；未确认退出前禁止再启。Windows 用 Job Object（`taskkill /T` 兜底），Unix 用独立进程组。
 - 不扫 workspace、不读写凭据、不另写 YAML；`settings.yaml` 只打开已存在文件。端口占用则失败，不接管他人进程。

@@ -69,7 +69,7 @@
   "field.tray_session_limit_hint": "0 blendet die Sitzungsliste im Tray aus; 1–20 Einträge, sortiert nach letzter Aktivität.",
   "field.tray_session_limit_hint_dashboard": "Wie viele letzte Sitzungen im Tray-Menü erscheinen. 0 blendet die Liste aus; höchstens 20.",
   "field.language": "Oberflächensprache",
-  "field.language_hint": "Systemsprache folgen oder eine feste Sprache wählen. Gespeichert in desktop-prefs.json.",
+  "field.language_hint": "Systemsprache folgen oder eine feste Sprache wählen. Gespeichert in desktop-state.json.",
   "lang.system": "System",
   "install.title": "Noch kein dsh gefunden?",
   "install.body": "Installieren Sie zuerst die offizielle CLI im Terminal, kehren Sie zurück und klicken Sie „CLI erneut prüfen“. Befehle werden nur angezeigt; die Desktop-App führt sie nicht aus.",

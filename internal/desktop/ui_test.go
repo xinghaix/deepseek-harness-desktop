@@ -112,7 +112,7 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, `if (!manualManagement && state === "running"`) {
 		t.Fatal("manual configuration must not reopen or refresh the existing Chat window")
 	}
-	for _, fragment := range []string{"scrollbar-color", "DSH cwd", "DSH_HOME/.deepseek-harness-desktop", "desktopDir", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", `aria-readonly="true"`, "桌面桥接已内置"} {
+	for _, fragment := range []string{"scrollbar-color", "DSH cwd", "DSH_HOME/workspaces", "重试启动", "retryFailedStart", "lastStartSucceeded", "startAutomatically(true)", "桌面桥接已内置"} {
 		if !strings.Contains(html, fragment) {
 			t.Fatalf("UI is missing platform/workspace fragment %q", fragment)
 		}
