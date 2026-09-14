@@ -229,3 +229,4 @@ make windows-build GOARCH=amd64 VERSION=0.1.4
 - 跨平台：功能一致优先，允许端侧优化；改动默认评估 macOS / Windows / Linux 影响。
 - 改 UI 文案时同步更新 `internal/i18n/locales` 全部语言，并保持 key 集合与 `en.json` 一致。
 - 发版相关只动 tag + 已有 workflow/脚本；避免再引入易触发 GitHub API 限流的第三方 setup action 装 `task`。
+- 完成会改变运行中桌面端的改动后，在本机执行 `make build`（当前 GOOS/GOARCH，产物 `dist/`），不必等用户再叫打包。纯文档 / 纯测试且不影响二进制的改动可跳过。
