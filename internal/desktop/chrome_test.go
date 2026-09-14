@@ -26,8 +26,11 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if strings.Contains(script, "打开桌面设置") || strings.Contains(script, "最小化") {
 		t.Fatal("chrome control titles must not stay hard-coded Chinese")
 	}
-	if strings.Contains(script, "lastZoomClickTs") || strings.Contains(script, "onZoomBandMouseDown") || strings.Contains(script, `drag.addEventListener("dblclick"`) {
-		t.Fatal("非 macOS Chat 不应再绑定顶栏双击/click-timing 缩放（会抢按钮点击）")
+	if strings.Contains(script, "lastZoomClickTs") || strings.Contains(script, "onZoomBandMouseDown") || strings.Contains(script, "ensureDragOverlay") || strings.Contains(script, "dsh-desktop-native-drag") {
+		t.Fatal("非 macOS Chat 不应再用全宽命中带/click-timing 缩放")
+	}
+	if !strings.Contains(script, `drag.addEventListener("dblclick"`) {
+		t.Fatal("非 macOS Chat 应在拖拽条上绑定 dblclick 缩放")
 	}
 	if !strings.Contains(script, "dsh-desktop-chrome__drag") {
 		t.Fatal("非 macOS Chat 必须保留自绘拖拽条")
@@ -35,8 +38,11 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if !strings.Contains(desktopChromeCSS, "--wails-draggable: drag") {
 		t.Fatal("非 macOS 拖拽条必须保留 --wails-draggable: drag")
 	}
+	if !strings.Contains(desktopChromeCSS, "--wails-draggable: no-drag") {
+		t.Fatal("非 macOS 窗控按钮必须标记 no-drag")
+	}
 	if !strings.Contains(script, "main.DSH.ToggleChatZoom") {
-		t.Fatal("非 macOS 最大化按钮仍应走 Go ToggleChatZoom")
+		t.Fatal("非 macOS 最大化/双击仍应走 Go ToggleChatZoom")
 	}
 }
 
@@ -73,13 +79,19 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 		t.Fatal("macOS 不应注入自绘控制按钮")
 	}
 	if strings.Contains(script, "dsh-desktop-native-drag") || strings.Contains(script, "lastZoomClickTs") || strings.Contains(script, "onZoomBandMouseDown") || strings.Contains(script, "ensureDragOverlay") {
-		t.Fatal("macOS Chat 不应再注入顶栏双击缩放命中带（会挡住标题栏按钮）")
+		t.Fatal("macOS Chat 不应再注入全宽双击缩放命中带（会挡住标题栏按钮）")
 	}
 	if strings.Contains(desktopNativeWindowInsetCSS, "dsh-desktop-native-drag") {
 		t.Fatal("macOS inset CSS 不应再包含缩放命中带")
 	}
 	if !strings.Contains(script, "InvisibleTitleBarHeight") && !strings.Contains(script, "Chat drag: InvisibleTitleBarHeight") {
 		t.Fatal("macOS Chat 应保留原生拖拽说明（InvisibleTitleBarHeight）")
+	}
+	if !strings.Contains(script, `document.addEventListener("dblclick"`) || !strings.Contains(script, "interactiveSel") || !strings.Contains(script, "main.DSH.ToggleChatZoom") {
+		t.Fatal("macOS Chat 应在顶栏空白处 dblclick 走 ToggleChatZoom，并跳过可交互控件")
+	}
+	if !strings.Contains(script, "event.clientY > topInset") {
+		t.Fatal("macOS 双击缩放必须限制在 topInset（36px）内")
 	}
 	if !strings.Contains(script, "MutationObserver") {
 		t.Fatal("macOS sidebar 折叠观察仍应保留 MutationObserver")

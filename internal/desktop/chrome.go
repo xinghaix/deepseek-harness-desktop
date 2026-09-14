@@ -68,6 +68,7 @@ const desktopChromeCSS = `
   backdrop-filter: blur(18px) saturate(1.35);
   -webkit-backdrop-filter: blur(18px) saturate(1.35);
   pointer-events: auto;
+  --wails-draggable: no-drag;
 }
 .dsh-desktop-chrome__button {
   width: 30px;
@@ -81,6 +82,7 @@ const desktopChromeCSS = `
   background: transparent;
   cursor: pointer;
   transition: background .14s ease, color .14s ease, transform .14s ease;
+  --wails-draggable: no-drag;
 }
 .dsh-desktop-chrome__button:hover {
   color: var(--dsh-chrome-text);
@@ -254,8 +256,30 @@ const desktopNativeWindowInsetJS = `
   }
 
   // Chat drag: InvisibleTitleBarHeight (>0) supplies native drag (Wails #5900).
-  // Do not inject a full-width pointer-events overlay — it steals clicks from
-  // title-band buttons. Double-click maximise/restore was removed on purpose.
+  // Never inject a full-width pointer-events overlay — it steals title-band clicks.
+  // Blank-area dblclick in the 36px inset always toggles work-area zoom.
+  const interactiveSel = "a,button,input,textarea,select,label,summary,[role='button'],[contenteditable='true'],[data-no-window-zoom]";
+  const toggleZoom = () => {
+    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
+    if (typeof call === "function") {
+      void call("main.DSH.ToggleChatZoom");
+      return;
+    }
+    const current = window.wails && window.wails.Window;
+    if (current && typeof current.ToggleMaximise === "function") {
+      current.ToggleMaximise();
+      return;
+    }
+    window.setTimeout(toggleZoom, 100);
+  };
+  document.addEventListener("dblclick", (event) => {
+    if (event.clientY > topInset) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(interactiveSel)) return;
+    event.preventDefault();
+    toggleZoom();
+  });
 
   applyInset();
 })();
@@ -329,8 +353,8 @@ const desktopChromeJS = `
     }
     current[method]();
   };
-  // Explicit maximize button still toggles work-area maximise/restore.
-  // Title-band double-click / click-timing zoom removed so drag + buttons work.
+  // Maximize button + blank drag-strip dblclick both toggle work-area zoom.
+  // Bind dblclick only on the drag strip (not full-width overlay / document capture).
   const toggleZoom = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call === "function") {
@@ -344,6 +368,10 @@ const desktopChromeJS = `
     }
     window.setTimeout(toggleZoom, 100);
   };
+  drag.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    toggleZoom();
+  });
   const openManagement = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call !== "function") {
