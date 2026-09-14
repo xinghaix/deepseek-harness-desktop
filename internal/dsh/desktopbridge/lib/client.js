@@ -495,7 +495,7 @@ window.__ModuleLoader__.load({
 		// dshweb maps unknown settings.section ids to IconSettingsOutline16 (same as 通用设置).
 		// Swap the nav glyph for 「桌面设置」 to a distinct desktop/monitor outline in the same 16px stroke language.
 		const DESKTOP_NAV_LABEL = "桌面设置";
-		function desktopNavIconSVG() {
+		function desktopNavIconSVG(className) {
 			const ns = "http://www.w3.org/2000/svg";
 			const svg = document.createElementNS(ns, "svg");
 			svg.setAttribute("width", "16");
@@ -503,14 +503,15 @@ window.__ModuleLoader__.load({
 			svg.setAttribute("viewBox", "0 0 16 16");
 			svg.setAttribute("fill", "none");
 			svg.setAttribute("aria-hidden", "true");
-			svg.classList.add("dshDesktopBridgeNavIcon");
+			// Keep host navIcon class so flex/size match sibling glyphs; draw fuller so optical weight ≈ gear.
+			svg.setAttribute("class", [className, "dshDesktopBridgeNavIcon"].filter(Boolean).join(" "));
 			const mk = (tag, attrs) => {
 				const el = document.createElementNS(ns, tag);
 				for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
 				return el;
 			};
-			svg.appendChild(mk("rect", { x: "2.5", y: "2.5", width: "11", height: "8", rx: "1.5", stroke: "currentColor", "stroke-width": "1.25" }));
-			svg.appendChild(mk("path", { d: "M6 13.5h4M8 10.5v3", stroke: "currentColor", "stroke-width": "1.25", "stroke-linecap": "round" }));
+			svg.appendChild(mk("rect", { x: "1.25", y: "1.5", width: "13.5", height: "9.25", rx: "1.75", stroke: "currentColor", "stroke-width": "1.5" }));
+			svg.appendChild(mk("path", { d: "M5 14.25h6M8 10.75v3.5", stroke: "currentColor", "stroke-width": "1.5", "stroke-linecap": "round" }));
 			return svg;
 		}
 		function installDesktopNavIcon() {
@@ -525,7 +526,7 @@ window.__ModuleLoader__.load({
 					if (existing) continue;
 					const oldSvg = row.querySelector("svg");
 					if (!oldSvg) continue;
-					oldSvg.replaceWith(desktopNavIconSVG());
+					oldSvg.replaceWith(desktopNavIconSVG(oldSvg.getAttribute("class") || ""));
 				}
 			};
 			paint();
@@ -848,6 +849,13 @@ window.__ModuleLoader__.load({
 											disabled: !connected || pending,
 											onClick: () => void invoke("chooseHome", {}, "已选择 DSH Home"),
 											children: "选择"
+										}),
+										jsx("button", {
+											className: "dshDesktopBridgeSelector",
+											type: "button",
+											disabled: !connected || pending,
+											onClick: () => void invoke("openHome", { home: draft.home, workspace: draft.workspace }),
+											children: "打开"
 										})
 									]
 								})
@@ -876,34 +884,13 @@ window.__ModuleLoader__.load({
 											disabled: !connected || pending,
 											onClick: () => void invoke("chooseWorkspace", {}, "已选择工作目录"),
 											children: "选择"
-										})
-									]
-								})
-							]
-						}),
-						jsxs("div", {
-							className: "dshDesktopBridgeRow",
-							children: [
-								jsx("div", {
-									className: "dshDesktopBridgeRowText",
-									children: jsx("div", { className: "dshDesktopBridgeTitle", children: "打开" })
-								}),
-								jsxs("div", {
-									className: "dshDesktopBridgeActions",
-									children: [
-										jsx("button", {
-											className: "dshDesktopBridgeSelector",
-											type: "button",
-											disabled: !connected || pending,
-											onClick: () => void invoke("openHome", { home: draft.home, workspace: draft.workspace }),
-											children: "打开 DSH Home"
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
 											onClick: () => void invoke("openWorkspace", { home: draft.home, workspace: draft.workspace }),
-											children: "打开工作目录"
+											children: "打开"
 										})
 									]
 								})
@@ -939,6 +926,7 @@ window.__ModuleLoader__.load({
 						}),
 						]
 					}),
+
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
