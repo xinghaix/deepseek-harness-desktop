@@ -1,7 +1,7 @@
 #!/bin/sh
 # Sign the just-built artifact with whatever the current host can do.
-# Missing platform tools skip with a message (exit 0) so the same Taskfile
-# works for native and cross builds.
+# Missing platform tools skip with a message (exit 0) so the same Makefile /
+# scripts/build.sh path works for native and cross builds.
 set -eu
 
 if [ $# -ne 1 ]; then

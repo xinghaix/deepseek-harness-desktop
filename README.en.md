@@ -44,12 +44,13 @@ The control plane listens only on `127.0.0.1`, with a whitelisted RPC surface an
 
 ## Build and test
 
-Requires Go 1.27, Wails 3, and native WebView deps for the target OS (macOS: Xcode; Linux: GTK 4 / WebKitGTK 6; Windows: WebView2). `task` is optional:
+Requires Go 1.27, Wails 3, and native WebView deps for the target OS (macOS: Xcode; Linux: GTK 4 / WebKitGTK 6; Windows: WebView2). Use `make` or the scripts directly:
 
 ```bash
-go test -race ./...
-./scripts/build.sh              # e.g. 0.1.1-dev
-./scripts/build.sh 0.2.0        # explicit version
+make test
+make build                      # e.g. 0.1.1-dev
+make build VERSION=0.2.0        # explicit version
+./scripts/build.sh 0.2.0        # equivalent, without make
 ```
 
 Version is stamped into `internal/version.Version` via `scripts/app-version.sh`:
@@ -59,7 +60,7 @@ Version is stamped into `internal/version.Version` via `scripts/app-version.sh`:
 - Otherwise → latest release + `-dev` (e.g. `0.1.1-dev`)
 - No tags → `0.0.0-dev`
 
-With [go-task](https://taskfile.dev): `task build VERSION=0.2.0`.
+Platform targets: `make darwin-build` / `make linux-build` / `make windows-build` (was Taskfile `*:build`).
 
 Artifacts land in `dist/`. macOS also builds a drag-to-Applications DMG. Builds self-sign per platform (not Developer ID / EV, not notarized; downloaded macOS builds may need Open via context menu; Windows may hit SmartScreen):
 
@@ -70,11 +71,12 @@ Artifacts land in `dist/`. macOS also builds a drag-to-Applications DMG. Builds 
 Cross-compile examples:
 
 ```bash
-GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.2.0
-GOOS=linux GOARCH=amd64 ./scripts/build.sh 0.2.0
-GOOS=linux GOARCH=arm64 ./scripts/build.sh 0.2.0
-GOOS=windows GOARCH=amd64 ./scripts/build.sh 0.2.0
-GOOS=windows GOARCH=arm64 ./scripts/build.sh 0.2.0
+make darwin-build GOARCH=arm64 VERSION=0.2.0
+make linux-build GOARCH=amd64 VERSION=0.2.0
+make linux-build GOARCH=arm64 VERSION=0.2.0
+make windows-build GOARCH=amd64 VERSION=0.2.0
+make windows-build GOARCH=arm64 VERSION=0.2.0
+# or: GOOS=… GOARCH=… ./scripts/build.sh 0.2.0
 ```
 
 Combinations not actually built or run on the target OS are not claimed as verified.
@@ -83,10 +85,11 @@ The setup page can check GitHub Releases manually, or enable daily auto-check (f
 
 ### Icons
 
-Shared source: `assets/shared/app-icon.svg`. Regenerate on a native Go toolchain for the target OS:
+Shared source: `assets/shared/app-icon.svg`. Generated assets are committed under `assets/`; **everyday `make build` does not regenerate them**. After changing the source or generator:
 
 ```bash
-go run ./tools/icons
+make icons
+# or: go run ./tools/icons
 ```
 
 Linux packaging can use `assets/linux/deepseek-harness-desktop.desktop` and install `assets/linux/icons/hicolor` into the system icon theme.

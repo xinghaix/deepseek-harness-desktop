@@ -50,7 +50,7 @@
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
 | 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
 | 桌面桥接     | `internal/dsh/desktopbridge*`             | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/desktop-bridge/` 的 `--patch`；Chat 设置左侧一级「桌面设置」（`settings.section`）；与 webview-boot 并列 |
-| 构建         | `scripts/build.sh`、`Taskfile.yml`        | 本地/CI 打包与自签名；CI 优先 `scripts/build.sh`                                                                                       |
+| 构建         | `scripts/build.sh`、`Makefile`            | 本地/CI 打包与自签名；`make build` 包装脚本，CI 也可直接调 `scripts/build.sh`                                                            |
 
 ### 进程与数据边界
 

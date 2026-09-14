@@ -43,12 +43,13 @@ Deepseek Harness Desktop 是 DSH 的轻量桌面客户端：复用本机已安�
 
 ## 构建与测试
 
-需要 Go 1.27、Wails 3，以及目标平台原生 WebView 依赖（macOS：Xcode；Linux：GTK 4 / WebKitGTK 6；Windows：WebView2）。不必安装 `task`：
+需要 Go 1.27、Wails 3，以及目标平台原生 WebView 依赖（macOS：Xcode；Linux：GTK 4 / WebKitGTK 6；Windows：WebView2）。可用 `make` 或直接跑脚本：
 
 ```bash
-go test -race ./...
-./scripts/build.sh              # 例如 0.1.1-dev
-./scripts/build.sh 0.2.0        # 显式版本
+make test
+make build                      # 例如 0.1.1-dev
+make build VERSION=0.2.0        # 显式版本
+./scripts/build.sh 0.2.0        # 等价，不经过 make
 ```
 
 版本写入 `internal/version.Version`（见 `scripts/app-version.sh`）：
@@ -58,7 +59,7 @@ go test -race ./...
 - 其它提交 → 最新发布号 + `-dev`（如 `0.1.1-dev`）
 - 尚无 tag → `0.0.0-dev`
 
-也可用 [go-task](https://taskfile.dev)：`task build VERSION=0.2.0`。
+平台目标：`make darwin-build` / `make linux-build` / `make windows-build`（对应旧 Taskfile 的 `*:build`）。
 
 产物在 `dist/`。macOS 会额外生成可拖入 Applications 的 DMG。构建会按平台自签名（非 Developer ID / EV，未公证；下载后 macOS 可能需右键打开，Windows 可能被 SmartScreen 拦截）：
 
@@ -69,11 +70,12 @@ go test -race ./...
 交叉编译示例：
 
 ```bash
-GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.2.0
-GOOS=linux GOARCH=amd64 ./scripts/build.sh 0.2.0
-GOOS=linux GOARCH=arm64 ./scripts/build.sh 0.2.0
-GOOS=windows GOARCH=amd64 ./scripts/build.sh 0.2.0
-GOOS=windows GOARCH=arm64 ./scripts/build.sh 0.2.0
+make darwin-build GOARCH=arm64 VERSION=0.2.0
+make linux-build GOARCH=amd64 VERSION=0.2.0
+make linux-build GOARCH=arm64 VERSION=0.2.0
+make windows-build GOARCH=amd64 VERSION=0.2.0
+make windows-build GOARCH=arm64 VERSION=0.2.0
+# 或：GOOS=… GOARCH=… ./scripts/build.sh 0.2.0
 ```
 
 未在目标机实际构建或运行的组合，不宣称已验收。
@@ -82,10 +84,11 @@ GOOS=windows GOARCH=arm64 ./scripts/build.sh 0.2.0
 
 ### 图标
 
-统一源：`assets/shared/app-icon.svg`。在目标平台原生 Go 环境重生成：
+统一源：`assets/shared/app-icon.svg`；生成物已提交到 `assets/`，**日常 `make build` 不会重跑**。改源图或生成器后再生成：
 
 ```bash
-go run ./tools/icons
+make icons
+# 或：go run ./tools/icons
 ```
 
 Linux 可用 `assets/linux/deepseek-harness-desktop.desktop`，并把 `assets/linux/icons/hicolor` 装到系统 icon theme。

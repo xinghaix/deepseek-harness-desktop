@@ -1,7 +1,8 @@
 #!/bin/sh
-# Cross-platform build entry that does not require the `task` CLI.
+# Cross-platform build entry (also used by `make build`).
 # Usage: ./scripts/build.sh [version]
 #        VERSION=0.2.0 ./scripts/build.sh
+#        make build VERSION=0.2.0
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
@@ -41,7 +42,6 @@ darwin)
 	bundle="$dist/$bundle_name.app"
 	rm -rf "$dist/$app.app" "$bundle"
 	mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/plugins"
-	go run ./tools/icons
 	cp "$dist/$app" "$bundle/Contents/MacOS/$app"
 	cp assets/darwin/icons.icns "$bundle/Contents/Resources/icons.icns"
 	cp assets/darwin/Info.plist "$bundle/Contents/Info.plist"
