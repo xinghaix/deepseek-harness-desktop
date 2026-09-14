@@ -13,6 +13,7 @@ type desktopPrefs struct {
 	closeToTray         atomic.Bool
 	traySessionLimit    atomic.Int32
 	language            atomic.Value // string; "" / "system" = follow system
+	shortcuts           atomic.Value // map[string]string overrides; nil/empty = all defaults
 }
 
 func (p *desktopPrefs) load() {
@@ -21,6 +22,7 @@ func (p *desktopPrefs) load() {
 	p.closeToTray.Store(false)
 	p.traySessionLimit.Store(defaultTraySessionLimit)
 	p.language.Store("")
+	p.shortcuts.Store(map[string]string(nil))
 	file, err := desktopstate.Load()
 	if err != nil {
 		return
@@ -48,6 +50,7 @@ func (p *desktopPrefs) load() {
 	if prefs.Language != nil {
 		p.language.Store(*prefs.Language)
 	}
+	p.setShortcutOverrides(NormalizeShortcutOverrides(prefs.Shortcuts))
 }
 
 func (p *desktopPrefs) save() error {
@@ -55,6 +58,7 @@ func (p *desktopPrefs) save() error {
 	trayEnabled := p.trayEnabled.Load()
 	closeToTray := p.closeToTray.Load() && trayEnabled
 	limit := int(p.traySessionLimit.Load())
+	shortcuts := NormalizeShortcutOverrides(p.getShortcutOverrides())
 	return desktopstate.Update(func(f *desktopstate.File) {
 		f.Prefs.ConfirmQuitWhenBusy = &confirm
 		f.Prefs.TrayEnabled = &trayEnabled
@@ -66,6 +70,7 @@ func (p *desktopPrefs) save() error {
 		} else {
 			f.Prefs.Language = nil
 		}
+		f.Prefs.Shortcuts = shortcuts
 	})
 }
 
@@ -76,4 +81,17 @@ func (p *desktopPrefs) getLanguage() string {
 
 func (p *desktopPrefs) setLanguage(code string) {
 	p.language.Store(strings.TrimSpace(code))
+}
+
+func (p *desktopPrefs) getShortcutOverrides() map[string]string {
+	v, _ := p.shortcuts.Load().(map[string]string)
+	return cloneShortcutMap(v)
+}
+
+func (p *desktopPrefs) setShortcutOverrides(overrides map[string]string) {
+	p.shortcuts.Store(NormalizeShortcutOverrides(overrides))
+}
+
+func (p *desktopPrefs) effectiveShortcuts() map[string]string {
+	return EffectiveShortcuts(p.getShortcutOverrides())
 }

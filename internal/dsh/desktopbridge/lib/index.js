@@ -31,6 +31,7 @@ const routes = Object.freeze({
 	setTrayEnabled: Object.freeze({ method: "POST", path: "/v1/set-tray-enabled" }),
 	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
 	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
+	setShortcuts: Object.freeze({ method: "POST", path: "/v1/set-shortcuts" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),
 	installUpdate: Object.freeze({ method: "POST", path: "/v1/install-update" }),

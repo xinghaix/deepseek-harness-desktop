@@ -61,7 +61,7 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.goos, func(t *testing.T) {
-			menu := newApplicationMenu(tc.goos, application.NewMenu, stubMenuController{}, func() {}, locale)
+			menu := newApplicationMenu(tc.goos, application.NewMenu, stubMenuController{}, func() {}, locale, DefaultAccelerators())
 			if got := menu.ItemAt(0); got == nil || got.Label() != tc.host || !got.IsSubmenu() {
 				t.Fatalf("host menu = %v, want submenu %q", labelOf(got), tc.host)
 			}
@@ -104,7 +104,7 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 
 func TestApplicationMenuDoesNotUseDefaultQuitRole(t *testing.T) {
 	for _, goos := range []string{"darwin", "windows", "linux"} {
-		menu := newApplicationMenu(goos, application.NewMenu, stubMenuController{}, func() {}, "en")
+		menu := newApplicationMenu(goos, application.NewMenu, stubMenuController{}, func() {}, "en", DefaultAccelerators())
 		if item := menu.FindByRole(application.Quit); item != nil {
 			t.Fatalf("%s must not use the Wails Quit role, which skips busy-task confirmation", goos)
 		}
@@ -148,4 +148,35 @@ func labelOf(item *application.MenuItem) string {
 		return "<nil>"
 	}
 	return item.Label()
+}
+
+func TestApplicationMenuSkipsAcceleratorWhenCleared(t *testing.T) {
+	locale := "en"
+	openManagementLabel := i18n.T(locale, "menu.open_management")
+	closeWindowLabel := i18n.T(locale, "menu.close_window")
+	quitLabel := i18n.T(locale, "menu.quit")
+	hideLabel := i18n.T(locale, "menu.hide")
+	hideOthersLabel := i18n.T(locale, "menu.hide_others")
+
+	cleared := EffectiveShortcuts(map[string]string{
+		ShortcutOpenSettings: "",
+		ShortcutCloseChat:    "",
+		ShortcutQuit:         "",
+		ShortcutHide:         "",
+		ShortcutHideOthers:   "",
+	})
+	menu := newApplicationMenu("darwin", application.NewMenu, stubMenuController{}, func() {}, locale, cleared)
+	for _, label := range []string{openManagementLabel, closeWindowLabel, quitLabel, hideLabel, hideOthersLabel} {
+		item := menu.FindByLabel(label)
+		if item == nil {
+			t.Fatalf("missing menu item %q", label)
+		}
+		if acc := item.GetAccelerator(); acc != "" {
+			t.Fatalf("%s accelerator = %q, want empty (cleared; SetAccelerator must be skipped)", label, acc)
+		}
+	}
+	// Role items must still be present with roles.
+	if menu.FindByRole(application.Hide) == nil || menu.FindByRole(application.HideOthers) == nil {
+		t.Fatal("cleared hide shortcuts must keep SetRole")
+	}
 }

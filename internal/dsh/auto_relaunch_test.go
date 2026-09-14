@@ -63,6 +63,9 @@ func (h *recordingBridgeHost) SetCloseToTray(bool) (BridgePrefs, error) {
 func (h *recordingBridgeHost) SetTraySessionLimit(int) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) SetShortcuts(map[string]string) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
 func (h *recordingBridgeHost) ReportSessions([]BridgeSession)   {}
 func (h *recordingBridgeHost) BridgeUpdateStatus() BridgeUpdate { return BridgeUpdate{} }
 func (h *recordingBridgeHost) CheckUpdate() (BridgeUpdate, error) {

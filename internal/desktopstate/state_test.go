@@ -98,3 +98,31 @@ func TestDirUsesDSHHome(t *testing.T) {
 		t.Fatalf("Dir()=%q want %q", dir, want)
 	}
 }
+
+func TestShortcutsRoundTripClearedEmptyString(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(StateDirEnv, dir)
+	ResetCacheForTest()
+	if err := Update(func(f *File) {
+		f.Prefs.Shortcuts = map[string]string{
+			"closeChat": "",
+			"quit":      "CmdOrCtrl+q",
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ResetCacheForTest()
+	f, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Prefs.Shortcuts == nil {
+		t.Fatal("shortcuts missing")
+	}
+	if v, ok := f.Prefs.Shortcuts["closeChat"]; !ok || v != "" {
+		t.Fatalf("closeChat = %q ok=%v, want present empty", v, ok)
+	}
+	if f.Prefs.Shortcuts["quit"] != "CmdOrCtrl+q" {
+		t.Fatalf("quit = %q", f.Prefs.Shortcuts["quit"])
+	}
+}

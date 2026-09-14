@@ -56,7 +56,7 @@ func TestManagementUIContract(t *testing.T) {
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
 		"SetTrayEnabled", "SetCloseToTray", "SetTraySessionLimit",
-		"LocaleBundle", "SetLanguage",
+		"LocaleBundle", "SetLanguage", "SetShortcuts",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
 			t.Fatalf("UI does not call bound method %q", method)
@@ -98,8 +98,14 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, `id="shortcuts-panel"`) || !strings.Contains(html, "dashboard.shortcuts_title") {
 		t.Fatal("desktop settings must expose keyboard shortcuts panel")
 	}
-	if !strings.Contains(html, "shortcut.close_chat_keys") || !strings.Contains(html, "⌘W / Ctrl+W") {
-		t.Fatal("shortcuts panel must document Cmd/Ctrl+W hide-to-tray")
+	if !strings.Contains(html, `data-shortcut="closeChat"`) || !strings.Contains(html, "shortcut.clear") {
+		t.Fatal("shortcuts panel must expose clearable rows")
+	}
+	if !strings.Contains(html, "shortcut.hide_others_label") {
+		t.Fatal("shortcuts panel must include hideOthers row")
+	}
+	if !strings.Contains(html, "SetShortcuts") {
+		t.Fatal("dashboard must wire SetShortcuts")
 	}
 	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "任务显示数量") {
 		t.Fatal("desktop settings must expose tray session limit")

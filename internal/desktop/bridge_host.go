@@ -72,6 +72,7 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		SystemLocale:        prefs.SystemLocale,
 		Source:              prefs.Source,
 		Supported:           supported,
+		Shortcuts:           prefs.Shortcuts,
 	}
 }
 
@@ -105,6 +106,13 @@ func (a bridgeHostAdapter) SetCloseToTray(enabled bool) (dsh.BridgePrefs, error)
 
 func (a bridgeHostAdapter) SetTraySessionLimit(n int) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetTraySessionLimit(n); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetShortcuts(shortcuts map[string]string) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetShortcuts(shortcuts); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil

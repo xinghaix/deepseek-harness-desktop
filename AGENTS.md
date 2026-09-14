@@ -89,7 +89,7 @@ Node 默认 16KiB header（HTTP 431）。
 - Windows / Linux：页面内悬浮窗控 + 内容安全区。
 - 宿主菜单承载「打开配置 / 打开 Chat / 关闭窗口 / 退出」等（macOS 应用菜单；Win/Linux「文件」），不单独挂「设置」菜单。
 - 配置盖在 Chat 上的模态：有未保存改动时关闭需确认。
-- 固定快捷键（v1 不可自定义；桌面设置「快捷键」面板仅展示）：⌘, / Ctrl+, 打开设置；⌘W / Ctrl+W 始终将 Chat 藏到托盘（`CloseChatToTray`，即使 `closeToTray` 关闭也会 `ensureTrayForHide`，**不** `RequestQuit`）；⌘Q / Ctrl+Q 退出；macOS ⌘H 系统隐藏。勿使用 Wails `CloseWindow` role（其会 `Close()` 而非藏托盘）。
+- 快捷键可清除（`prefs.shortcuts`；缺省=内置默认；`""`=无加速键但仍可点菜单；变更后 `rebuildApplicationMenu`）。默认：⌘, / Ctrl+, 打开设置；⌘W / Ctrl+W 关闭/隐藏 Chat（`CloseChatToTray`：绑定存在时始终隐藏窗口；仅 `trayEnabled` 时进托盘，否则回程序坞/任务栏；**不** `RequestQuit`）；⌘Q / Ctrl+Q 退出；macOS ⌘H / ⌥⌘H 系统隐藏（保留 `SetRole`）。窗口 **X** 才遵循 `closeToTray`。勿使用 Wails `CloseWindow` role（其会 `Close()` 而非藏托盘）。暂不支持任意改键。
 - 托盘相关三项：`trayEnabled`（总开关，默认 false）、`traySessionLimit`（任务显示数量）、`closeToTray`（关闭窗口到托盘；依赖 `trayEnabled`）。关闭总开关时后两项不可用，并会关掉 `closeToTray`、销毁托盘。开启总开关后创建托盘图标；仅当 `closeToTray` 开启时 **X** 关窗隐藏到托盘。⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。⌘W / Ctrl+W 始终隐藏窗口；仅在 `trayEnabled` 时才会创建/使用托盘图标，否则回到程序坞/任务栏。旧配置仅有 `closeToTray=true` 时会迁移为同时开启 `trayEnabled`。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。会话状态用左侧静态图标：运行中青绿点、粘性错误红点（`api-session/error` 与 `turn/end` 的 `error`/`interrupted`；`aborted` 不算；再次 running、成为当前会话、或点击该菜单项可清除）；标题不再拼「· 运行中」。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
 - Chat 窗口拖拽：macOS 用 `InvisibleTitleBarHeight` 原生拖条；Windows/Linux 用自绘 `--wails-draggable: drag` 顶栏（窗控 `no-drag`）。**已取消**顶栏双击放大/还原（命中带与原生拖拽冲突，且易挡工具栏按钮）。Win/Linux 仍可通过窗控「最大化」走 `ToggleChatZoom`。
 

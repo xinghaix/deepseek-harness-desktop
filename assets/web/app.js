@@ -291,6 +291,7 @@ async function applyLocaleBundle(bundle) {
   window.DSHI18n.setBundle(bundle);
   syncLanguageSelects();
   updateButtons();
+  void loadDesktopPrefs();
   void refresh();
   void refreshDesktopUpdate();
 }
@@ -378,11 +379,73 @@ function applyDesktopTrayPrefs(prefs) {
   if (typeof prefs.closeToTray === "boolean") applyCloseToTrayPref(trayOn && prefs.closeToTray);
   if (typeof prefs.traySessionLimit === "number") applyTraySessionLimitPref(prefs.traySessionLimit);
 }
+const DEFAULT_SHORTCUTS = {
+  openSettings: "CmdOrCtrl+,",
+  closeChat: "CmdOrCtrl+w",
+  quit: "CmdOrCtrl+q",
+  hide: "CmdOrCtrl+h",
+  hideOthers: "CmdOrCtrl+OptionOrAlt+h",
+};
+function isMacPlatform() {
+  return document.documentElement.dataset.platform === "mac";
+}
+function formatAccelerator(accel) {
+  if (accel == null || accel === "") return "";
+  const mac = isMacPlatform();
+  let s = String(accel);
+  s = s.replace(/CmdOrCtrl\+/gi, mac ? "⌘" : "Ctrl+");
+  s = s.replace(/CommandOrControl\+/gi, mac ? "⌘" : "Ctrl+");
+  s = s.replace(/OptionOrAlt\+/gi, mac ? "⌥" : "Alt+");
+  s = s.replace(/Alt\+/gi, mac ? "⌥" : "Alt+");
+  s = s.replace(/Shift\+/gi, mac ? "⇧" : "Shift+");
+  if (mac) {
+    s = s.replace(/\+/g, "");
+    // Uppercase lone letter keys for display (w -> W) but keep punctuation.
+    s = s.replace(/([a-z])$/i, (m) => m.toUpperCase());
+  }
+  return s;
+}
+function shortcutDisplayLabel(accel, row) {
+  if (accel === "") return t("shortcut.cleared");
+  const formatted = formatAccelerator(accel);
+  if (formatted) return formatted;
+  if (row) {
+    const fallback = isMacPlatform() ? row.getAttribute("data-default-mac") : row.getAttribute("data-default-other");
+    if (fallback) return fallback;
+  }
+  return accel;
+}
+function applyShortcutsPrefs(prefs) {
+  const map = (prefs && prefs.shortcuts && typeof prefs.shortcuts === "object") ? prefs.shortcuts : {};
+  document.querySelectorAll("#shortcuts-list [data-shortcut]").forEach((li) => {
+    const id = li.getAttribute("data-shortcut");
+    const accel = Object.prototype.hasOwnProperty.call(map, id) ? map[id] : (DEFAULT_SHORTCUTS[id] || "");
+    const kbd = li.querySelector("[data-shortcut-display]");
+    const btn = li.querySelector(".shortcut-toggle");
+    const cleared = accel === "";
+    if (kbd) {
+      if (cleared) {
+        kbd.setAttribute("data-i18n", "shortcut.cleared");
+        kbd.textContent = t("shortcut.cleared");
+      } else {
+        kbd.removeAttribute("data-i18n");
+        kbd.textContent = shortcutDisplayLabel(accel, kbd);
+      }
+      kbd.classList.toggle("is-cleared", cleared);
+    }
+    if (btn) {
+      btn.dataset.action = cleared ? "reset" : "clear";
+      btn.setAttribute("data-i18n", cleared ? "shortcut.reset" : "shortcut.clear");
+      btn.textContent = t(cleared ? "shortcut.reset" : "shortcut.clear");
+    }
+  });
+}
 async function loadDesktopPrefs() {
   try {
     const prefs = await api("DesktopPrefs");
     if (prefs && typeof prefs.confirmQuitWhenBusy === "boolean") applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
     applyDesktopTrayPrefs(prefs);
+    applyShortcutsPrefs(prefs);
   } catch (_) {}
 }
 ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => {
@@ -417,6 +480,31 @@ async function loadDesktopPrefs() {
     applyDesktopTrayPrefs(prefs);
   });
 });
+const shortcutsList = $("shortcuts-list");
+if (shortcutsList) {
+  shortcutsList.addEventListener("click", (event) => {
+    const btn = event.target.closest(".shortcut-toggle");
+    if (!btn || !shortcutsList.contains(btn)) return;
+    const li = btn.closest("[data-shortcut]");
+    if (!li) return;
+    const id = li.getAttribute("data-shortcut");
+    void run(async () => {
+      const prefs = await api("DesktopPrefs");
+      const current = Object.assign({}, DEFAULT_SHORTCUTS, (prefs && prefs.shortcuts) || {});
+      if (btn.dataset.action === "reset") current[id] = DEFAULT_SHORTCUTS[id] || "";
+      else current[id] = "";
+      const updated = await api("SetShortcuts", current);
+      applyShortcutsPrefs(updated);
+    });
+  });
+}
+const resetAllBtn = $("shortcuts-reset-all");
+if (resetAllBtn) {
+  resetAllBtn.onclick = () => run(async () => {
+    const updated = await api("SetShortcuts", Object.assign({}, DEFAULT_SHORTCUTS));
+    applyShortcutsPrefs(updated);
+  });
+}
 bindLanguageSelect("ui-language");
 bindLanguageSelect("ui-language-dashboard");
 $("install-update").onclick = () => run(() => api("InstallUpdate"), () => setMessage(t("update.installing")));

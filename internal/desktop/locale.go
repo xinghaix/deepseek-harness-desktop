@@ -12,14 +12,15 @@ import (
 
 // DesktopPrefs is the JSON shape exposed to the config UI.
 type DesktopPrefs struct {
-	ConfirmQuitWhenBusy bool   `json:"confirmQuitWhenBusy"`
-	TrayEnabled         bool   `json:"trayEnabled"`
-	CloseToTray         bool   `json:"closeToTray"`
-	TraySessionLimit    int    `json:"traySessionLimit"`
-	Language            string `json:"language"`
-	ResolvedLocale      string `json:"resolvedLocale"`
-	SystemLocale        string `json:"systemLocale"`
-	Source              string `json:"source"`
+	ConfirmQuitWhenBusy bool              `json:"confirmQuitWhenBusy"`
+	TrayEnabled         bool              `json:"trayEnabled"`
+	CloseToTray         bool              `json:"closeToTray"`
+	TraySessionLimit    int               `json:"traySessionLimit"`
+	Language            string            `json:"language"`
+	ResolvedLocale      string            `json:"resolvedLocale"`
+	SystemLocale        string            `json:"systemLocale"`
+	Source              string            `json:"source"`
+	Shortcuts           map[string]string `json:"shortcuts"`
 }
 
 // SupportedLocale is one entry in LocaleBundle.Supported.
@@ -51,6 +52,7 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		ResolvedLocale:      resolved,
 		SystemLocale:        i18n.Normalize(system),
 		Source:              source,
+		Shortcuts:           d.prefs.effectiveShortcuts(),
 	}
 }
 
@@ -104,6 +106,23 @@ func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
 	}
 	d.refreshTrayMenu()
 	return d.DesktopPrefs(), nil
+}
+
+// SetShortcuts saves accelerator overrides and rebuilds the application menu.
+// Semantics match desktop-state prefs.shortcuts: absent key → default; "" → cleared;
+// non-empty → that accelerator. The request map is treated as the full override set
+// for known keys (values equal to defaults are omitted on disk).
+func (d *Service) SetShortcuts(shortcuts map[string]string) (DesktopPrefs, error) {
+	d.prefs.setShortcutOverrides(shortcuts)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	d.rebuildApplicationMenu()
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) effectiveShortcuts() map[string]string {
+	return d.prefs.effectiveShortcuts()
 }
 
 func (d *Service) resolvedLocale() string {

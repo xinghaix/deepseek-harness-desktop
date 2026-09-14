@@ -17,8 +17,19 @@
     return s;
   }
 
+  function platformKind() {
+    const p = document.documentElement && document.documentElement.dataset
+      ? document.documentElement.dataset.platform
+      : "";
+    return p === "mac" ? "mac" : "other";
+  }
+
   function applyElement(el) {
-    const key = el.getAttribute("data-i18n");
+    const macKey = el.getAttribute("data-i18n-mac");
+    const otherKey = el.getAttribute("data-i18n-other");
+    let key = el.getAttribute("data-i18n");
+    if (platformKind() === "mac" && macKey) key = macKey;
+    else if (platformKind() !== "mac" && otherKey) key = otherKey;
     if (key) {
       const value = t(key);
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
@@ -53,7 +64,7 @@
 
   function applyAll(root) {
     const scope = root || document;
-    scope.querySelectorAll("[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-aria-label], [data-i18n-expand], [data-i18n-collapse]").forEach(applyElement);
+    scope.querySelectorAll("[data-i18n], [data-i18n-mac], [data-i18n-other], [data-i18n-placeholder], [data-i18n-title], [data-i18n-aria-label], [data-i18n-expand], [data-i18n-collapse]").forEach(applyElement);
     if (document.documentElement && state.locale) {
       document.documentElement.lang = state.locale;
     }
@@ -93,6 +104,7 @@
     applyAll,
     setBundle,
     fillLanguageSelect,
+    platformKind,
     get locale() { return state.locale; },
     get language() { return state.language; },
     get source() { return state.source; },

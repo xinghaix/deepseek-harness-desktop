@@ -279,6 +279,45 @@ window.__ModuleLoader__.load({
 					outline: 2px solid var(--dsw-alias-brand-primary);
 					outline-offset: 2px;
 				}
+				.dshDesktopBridgeShortcutRow {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 12px;
+					padding: 10px 0;
+					border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,.18));
+				}
+				.dshDesktopBridgeShortcutRow:last-child { border-bottom: none; }
+				.dshDesktopBridgeKbd {
+					font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+					font-size: 12px;
+					padding: 3px 8px;
+					border-radius: 6px;
+					border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,.28));
+					background: var(--dsw-alias-bg-module-platform, rgba(127,127,127,.08));
+					color: var(--dsw-alias-label-primary);
+					white-space: nowrap;
+					min-width: 4.5em;
+					text-align: center;
+				}
+				.dshDesktopBridgeKbd.is-cleared {
+					color: var(--dsw-alias-label-tertiary);
+					font-style: italic;
+					border-style: dashed;
+				}
+				.dshDesktopBridgeShortcutActions {
+					display: flex;
+					align-items: center;
+					gap: 8px;
+					flex: none;
+				}
+				.dshDesktopBridgeShortcutActions button {
+					height: 28px;
+					padding: 0 10px;
+					font-size: 12px;
+					border-radius: 14px;
+				}
+
 				.dshDesktopBridgePillSelect {
 					position: relative;
 					flex: none;
@@ -623,7 +662,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "prefs";
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -641,7 +680,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -669,6 +708,71 @@ window.__ModuleLoader__.load({
 			// pending alone must not paint the page as process-busy (that was the flash).
 			const busy = state === "starting" || state === "stopping" || link === "reconnecting";
 			const connected = link === "connected";
+			const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
+			const DEFAULT_SHORTCUTS = {
+				openSettings: "CmdOrCtrl+,",
+				closeChat: "CmdOrCtrl+w",
+				quit: "CmdOrCtrl+q",
+				hide: "CmdOrCtrl+h",
+				hideOthers: "CmdOrCtrl+OptionOrAlt+h"
+			};
+			const SHORTCUT_LABELS = {
+				openSettings: "打开桌面设置",
+				closeChat: "关闭/隐藏 Chat",
+				quit: "退出",
+				hide: "隐藏应用",
+				hideOthers: "隐藏其他"
+			};
+			const formatAccel = (accel) => {
+				if (accel == null || accel === "") return "";
+				let s = String(accel);
+				s = s.replace(/CmdOrCtrl\+/gi, isMac ? "⌘" : "Ctrl+");
+				s = s.replace(/OptionOrAlt\+/gi, isMac ? "⌥" : "Alt+");
+				s = s.replace(/Alt\+/gi, isMac ? "⌥" : "Alt+");
+				s = s.replace(/Shift\+/gi, isMac ? "⇧" : "Shift+");
+				if (isMac) {
+					s = s.replace(/\+/g, "");
+					s = s.replace(/([a-z])$/i, (m) => m.toUpperCase());
+				}
+				return s;
+			};
+			const shortcutMap = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
+			const shortcutIds = ["openSettings", "closeChat", "quit", "hide", "hideOthers"].filter((id) => {
+				if (id === "hide" || id === "hideOthers") return isMac;
+				return true;
+			});
+			const setOneShortcut = (id, value) => {
+				const next = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
+				next[id] = value;
+				return invoke("setShortcuts", { shortcuts: next });
+			};
+			const shortcutRows = shortcutIds.map((id) => {
+				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : DEFAULT_SHORTCUTS[id];
+				const cleared = accel === "";
+				return jsxs("div", {
+					className: "dshDesktopBridgeShortcutRow",
+					key: id,
+					children: [
+						jsx("div", { className: "dshDesktopBridgeTitle", children: SHORTCUT_LABELS[id] || id }),
+						jsxs("div", {
+							className: "dshDesktopBridgeShortcutActions",
+							children: [
+								jsx("kbd", {
+									className: "dshDesktopBridgeKbd" + (cleared ? " is-cleared" : ""),
+									children: cleared ? "已清除" : (formatAccel(accel) || accel)
+								}),
+								jsx("button", {
+									className: "dshDesktopBridgeSelector",
+									type: "button",
+									disabled: !connected || pending || !prefs,
+									onClick: () => void setOneShortcut(id, cleared ? DEFAULT_SHORTCUTS[id] : ""),
+									children: cleared ? "恢复默认" : "清除"
+								})
+							]
+						})
+					]
+				});
+			});
 
 			return jsxs("div", {
 				className: "dshDesktopBridge",
@@ -1051,6 +1155,29 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
+						]
+					}),
+					jsxs("div", {
+						className: "dshDesktopBridgeCard",
+						children: [
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "快捷键" }),
+						jsx("div", {
+							className: "dshDesktopBridgeDesc",
+							style: { padding: "0 0 8px" },
+							children: "可清除单个快捷键（清除后无加速键，菜单仍可点）。绑定的 ⌘W / Ctrl+W 始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。暂不支持改键。"
+						}),
+						...shortcutRows,
+						jsx("div", {
+							className: "dshDesktopBridgeActions",
+							style: { paddingTop: "8px" },
+							children: jsx("button", {
+								className: "dshDesktopBridgeSelector",
+								type: "button",
+								disabled: !connected || pending || !prefs,
+								onClick: () => void invoke("setShortcuts", { shortcuts: { ...DEFAULT_SHORTCUTS } }),
+								children: "全部恢复默认"
+							})
+						})
 						]
 					}),
 					jsxs("div", {

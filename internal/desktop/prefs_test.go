@@ -126,3 +126,42 @@ func TestCloseToTrayDefaultsOffAndPersists(t *testing.T) {
 		t.Fatal("zero traySessionLimit (hide list) was not persisted")
 	}
 }
+
+func TestShortcutOverridesRoundTripIncludingCleared(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	eff := p.effectiveShortcuts()
+	if eff[ShortcutCloseChat] != "CmdOrCtrl+w" {
+		t.Fatalf("default closeChat = %q", eff[ShortcutCloseChat])
+	}
+	p.setShortcutOverrides(map[string]string{
+		ShortcutCloseChat: "",
+		ShortcutQuit:      "CmdOrCtrl+q", // equals default → omitted
+	})
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.Shortcuts == nil || file.Prefs.Shortcuts[ShortcutCloseChat] != "" {
+		t.Fatalf("cleared closeChat not persisted: %+v", file.Prefs.Shortcuts)
+	}
+	if _, ok := file.Prefs.Shortcuts[ShortcutQuit]; ok {
+		t.Fatalf("default quit should be omitted from overrides: %+v", file.Prefs.Shortcuts)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	eff2 := p2.effectiveShortcuts()
+	if eff2[ShortcutCloseChat] != "" {
+		t.Fatalf("reloaded closeChat = %q, want cleared", eff2[ShortcutCloseChat])
+	}
+	if eff2[ShortcutQuit] != "CmdOrCtrl+q" {
+		t.Fatalf("reloaded quit = %q", eff2[ShortcutQuit])
+	}
+}

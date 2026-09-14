@@ -47,6 +47,7 @@ type BridgeHost interface {
 	SetTrayEnabled(enabled bool) (BridgePrefs, error)
 	SetCloseToTray(enabled bool) (BridgePrefs, error)
 	SetTraySessionLimit(n int) (BridgePrefs, error)
+	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
 	ReportChatBusy(busy bool)
 	ReportSessions(sessions []BridgeSession)
 	BridgeUpdateStatus() BridgeUpdate
@@ -68,6 +69,7 @@ type BridgePrefs struct {
 	SystemLocale        string               `json:"systemLocale"`
 	Source              string               `json:"source"`
 	Supported           []BridgeLocaleOption `json:"supported"`
+	Shortcuts           map[string]string    `json:"shortcuts"`
 }
 
 // BridgeLocaleOption is one language choice in BridgePrefs.
@@ -472,6 +474,29 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetTraySessionLimit(body.Limit)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-shortcuts":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Shortcuts map[string]string `json:"shortcuts"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetShortcuts(body.Shortcuts)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return
