@@ -50,7 +50,7 @@ func (d *Service) createTrayIfNeeded() {
 		return
 	}
 	tray := app.SystemTray.New()
-	// Colorful app icon + top-right deep-teal running badge (R2). Never SetTemplateIcon — template/monochrome
+	// Colorful app icon + top-right emerald (翠绿) running badge. Never SetTemplateIcon — template/monochrome
 	// washes out the activity indicator on macOS menu bar.
 	d.tray = tray
 	d.applyTrayAppearanceLocked(true, running)
@@ -267,12 +267,12 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 			sess := session
 			full := fullTraySessionTitle(sess, untitled)
 			short := traySessionTitle(sess, untitled)
-			label := formatTraySessionLabel(short, runningL, "", sess.Running)
+			status := traySessionStatus(sess.Running, sess.Error && !d.trayErrorAcked(sess.ID))
+			label := traySessionMenuLabel(short, status)
 			item := menu.Add(label).OnClick(func(*application.Context) {
 				d.acknowledgeTraySessionError(sess.ID)
 				d.revealChatFromTray()
 			})
-			status := traySessionStatus(sess.Running, sess.Error && !d.trayErrorAcked(sess.ID))
 			switch status {
 			case "running":
 				if len(runPip) > 0 {

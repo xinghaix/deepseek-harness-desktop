@@ -17,11 +17,11 @@ const (
 	// Canvas size for tray icons. NSStatusBar scales to ~18–22pt.
 	trayIconCanvasSize = 64
 	// Online-dot radius (~14% ≈ 9px at 64); 9% read as a speck in real menu bars.
-	trayBusyDotFrac = 0.14
+	trayBusyDotFrac = 0.15
 )
 
 // trayIconWithRunningBadge returns base unchanged when running is false.
-// When running, overlays a deep-teal status dot at the top-right (R2).
+// When running, overlays an emerald (翠绿) status dot at the top-right.
 func trayIconWithRunningBadge(base []byte, running bool) ([]byte, error) {
 	if !running {
 		return base, nil
@@ -94,8 +94,8 @@ func trayIconBusyFrame(base []byte) ([]byte, error) {
 
 	// Light halo so the teal disc stays readable on dark menu bars / dark icon edges.
 	fillCircle(out, cx, cy, r+1.5, color.NRGBA{R: 255, G: 255, B: 255, A: 220})
-	// Deep teal (R2) — ocean-adjacent, not traffic-light green.
-	fillCircle(out, cx, cy, r, color.NRGBA{R: 13, G: 148, B: 136, A: 255})
+	// Emerald green (翠绿) — running activity, distinct from error red.
+	fillCircle(out, cx, cy, r, color.NRGBA{R: 16, G: 185, B: 129, A: 255})
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, out); err != nil {

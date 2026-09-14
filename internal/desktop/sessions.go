@@ -24,12 +24,28 @@ func clampTraySessionLimit(n int) int {
 	return n
 }
 
+// traySessionListRank: running (0) > error (1) > idle (2) so active sessions
+// stay inside traySessionLimit even when UpdatedAt is stale.
+func traySessionListRank(s dsh.BridgeSession) int {
+	if s.Running {
+		return 0
+	}
+	if s.Error {
+		return 1
+	}
+	return 2
+}
+
 func selectTraySessions(all []dsh.BridgeSession, limit int) []dsh.BridgeSession {
 	if limit <= 0 || len(all) == 0 {
 		return nil
 	}
 	cp := append([]dsh.BridgeSession(nil), all...)
 	sort.SliceStable(cp, func(i, j int) bool {
+		ri, rj := traySessionListRank(cp[i]), traySessionListRank(cp[j])
+		if ri != rj {
+			return ri < rj
+		}
 		if cp[i].UpdatedAt != cp[j].UpdatedAt {
 			return cp[i].UpdatedAt > cp[j].UpdatedAt
 		}
@@ -69,16 +85,44 @@ func traySessionTitle(s dsh.BridgeSession, untitled string) string {
 	return truncateRunes(title, traySessionTitleRunes)
 }
 
-// formatTraySessionLabel returns the menu title only. Running/error status is
-// shown with SetBitmap icons (native menus cannot color trailing glyphs reliably).
+// traySessionMenuLabel applies a compact left status column for non-idle rows.
+// NSMenuItem SetBitmap is unreliable in macOS status-item menus (Wails
+// setMenuItemBitmap has no setSize), so the title itself must carry the mark.
+// Color must live in the title: NSMenu plain strings cannot tint ●.
+// Use compact colored circle emoji (翠绿 running / 红 error) plus thin space;
+// idle rows get a double em-space pad so titles stay roughly aligned.
+// SetBitmap remains best-effort with matching emerald/red PNG pips.
+const (
+	traySessionMarkRunning = "🟢"
+	traySessionMarkError   = "🔴"
+	traySessionMarkPad     = "  "
+	traySessionMarkGap     = " "
+)
+
+func traySessionMenuLabel(title, status string) string {
+	if title == "" {
+		title = "Untitled"
+	}
+	switch status {
+	case "running":
+		return traySessionMarkRunning + traySessionMarkGap + title
+	case "error":
+		return traySessionMarkError + traySessionMarkGap + title
+	default:
+		return traySessionMarkPad + traySessionMarkGap + title
+	}
+}
+
+// formatTraySessionLabel is kept for callers that only know the running bit;
+// prefer traySessionMenuLabel when error status is available.
 func formatTraySessionLabel(title, runningLabel, idleLabel string, running bool) string {
 	_ = runningLabel
 	_ = idleLabel
-	_ = running
-	if title == "" {
-		return "Untitled"
+	status := "idle"
+	if running {
+		status = "running"
 	}
-	return title
+	return traySessionMenuLabel(title, status)
 }
 
 // traySessionStatus ranks icon priority: running > error > idle.

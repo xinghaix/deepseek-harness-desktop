@@ -1401,7 +1401,7 @@ window.__ModuleLoader__.load({
 			for (const id of Object.keys(byId)) {
 				const s = byId[id];
 				if (!s) continue;
-				const sid = s.id || id;
+				const sid = s.sessionId || s.id || id;
 				const running = Boolean(s.running);
 				if (running) stickySessionErrors.delete(sid);
 				const title = typeof s.title === "string" && s.title.trim()

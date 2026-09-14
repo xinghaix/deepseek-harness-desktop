@@ -38,7 +38,7 @@ func TestTrayIconWithRunningBadgeAddsPip(t *testing.T) {
 	}
 	found := false
 	teal := 0
-	// Top-right third: deep-teal R2 pip (G and B both strong vs R).
+	// Top-right third: emerald pip (G dominant, jade/翠绿).
 	for y := b.Min.Y; y < b.Min.Y+b.Dy()/3; y++ {
 		for x := b.Max.X - b.Dx()/3; x < b.Max.X; x++ {
 			r, g, bl, a := img.At(x, y).RGBA()
@@ -49,7 +49,7 @@ func TestTrayIconWithRunningBadgeAddsPip(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("expected a teal running pip in the top-right third of the icon")
+		t.Fatal("expected an emerald running pip in the top-right third of the icon")
 	}
 	if teal < 28 {
 		t.Fatalf("teal badge too small for menu-bar visibility: %d pixels", teal)

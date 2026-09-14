@@ -38,11 +38,38 @@ func TestSelectTraySessionsSortsAndTruncates(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len = %d, want 3", len(got))
 	}
-	if got[0].ID != "newer" || got[1].ID != "busy" || got[2].ID != "mid" {
+	// running first, then UpdatedAt among the rest
+	if got[0].ID != "busy" || got[1].ID != "newer" || got[2].ID != "mid" {
 		t.Fatalf("order = %v", []string{got[0].ID, got[1].ID, got[2].ID})
 	}
 	if selectTraySessions(all, 0) != nil {
 		t.Fatal("limit 0 must hide the list")
+	}
+}
+
+func TestSelectTraySessionsPrefersRunningAndError(t *testing.T) {
+	all := []dsh.BridgeSession{
+		{ID: "idle-new", Title: "IdleNew", UpdatedAt: 100},
+		{ID: "idle-mid", Title: "IdleMid", UpdatedAt: 90},
+		{ID: "idle-old", Title: "IdleOld", UpdatedAt: 80},
+		{ID: "err-stale", Title: "Err", UpdatedAt: 5, Error: true},
+		{ID: "run-stale", Title: "Run", UpdatedAt: 1, Running: true},
+	}
+	got := selectTraySessions(all, 3)
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+	if got[0].ID != "run-stale" || got[1].ID != "err-stale" || got[2].ID != "idle-new" {
+		t.Fatalf("priority order = %v", []string{got[0].ID, got[1].ID, got[2].ID})
+	}
+	// running wins over error even when error is newer
+	mixed := []dsh.BridgeSession{
+		{ID: "e", UpdatedAt: 50, Error: true},
+		{ID: "r", UpdatedAt: 10, Running: true},
+	}
+	got2 := selectTraySessions(mixed, 2)
+	if got2[0].ID != "r" || got2[1].ID != "e" {
+		t.Fatalf("running before error: %v %v", got2[0].ID, got2[1].ID)
 	}
 }
 
@@ -56,11 +83,23 @@ func TestTraySessionTitleFallback(t *testing.T) {
 	if got := traySessionTitle(dsh.BridgeSession{}, "未命名"); got != "未命名" {
 		t.Fatalf("untitled: %q", got)
 	}
-	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "My task" {
-		t.Fatalf("label is title-only: %q", got)
+	if got := traySessionMenuLabel("My task", "running"); got != "🟢 My task" {
+		t.Fatalf("running prefix: %q", got)
 	}
-	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "My task" {
-		t.Fatalf("idle label: %q", got)
+	if got := traySessionMenuLabel("My task", "error"); got != "🔴 My task" {
+		t.Fatalf("error prefix: %q", got)
+	}
+	if got := traySessionMenuLabel("My task", "idle"); got != "   My task" {
+		t.Fatalf("idle padded: %q", got)
+	}
+	if got := traySessionMenuLabel("", "running"); got != "🟢 Untitled" {
+		t.Fatalf("empty title fallback: %q", got)
+	}
+	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "🟢 My task" {
+		t.Fatalf("formatTray running: %q", got)
+	}
+	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "   My task" {
+		t.Fatalf("formatTray idle: %q", got)
 	}
 	if got := traySessionStatus(true, true); got != "running" {
 		t.Fatalf("running wins over error: %q", got)
