@@ -34,11 +34,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-13 is retired/scarce. Ship darwin-arm64; Intel Macs use Rosetta 2.
+          # macos-13 (Intel) is retired/scarce. Build both Darwin arches on
+          # macos-15 (arm64 host): Go+CGO can target amd64 with the macOS SDK.
           - name: darwin-arm64
             os: macos-15
             goos: darwin
             goarch: arm64
+          - name: darwin-amd64
+            os: macos-15
+            goos: darwin
+            goarch: amd64
           - name: linux-amd64
             os: ubuntu-24.04
             goos: linux
@@ -78,7 +83,17 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
         run: |
+          set -euo pipefail
           ver="${GITHUB_REF_NAME#v}"
+          # Cross-arch Darwin on Apple Silicon runners: pin clang to the target.
+          if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+            export CGO_CFLAGS="${CGO_CFLAGS:-} -arch x86_64"
+            export CGO_LDFLAGS="${CGO_LDFLAGS:-} -arch x86_64"
+          fi
+          if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
+            export CGO_CFLAGS="${CGO_CFLAGS:-} -arch arm64"
+            export CGO_LDFLAGS="${CGO_LDFLAGS:-} -arch arm64"
+          fi
           ./scripts/build.sh "$ver"
 
       - name: Package
@@ -145,5 +160,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
-          generate_release_notes: true
+          generate_release_notes: false
           fail_on_unmatched_files: true

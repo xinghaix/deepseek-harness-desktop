@@ -14,7 +14,7 @@
 ## 安装
 
 1. 打开 [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases)，下载对应平台附件：
-   - **macOS（Apple Silicon）**：`deepseek-harness-desktop-darwin-arm64.dmg`（Intel Mac 可用 Rosetta 运行 arm64 包）
+   - **macOS**：`deepseek-harness-desktop-darwin-arm64.dmg`（Apple Silicon）或 `deepseek-harness-desktop-darwin-amd64.dmg`（Intel）
    - **Linux**：`deepseek-harness-desktop-linux-amd64` 或 `…-arm64`
    - **Windows**：`deepseek-harness-desktop-windows-amd64.exe` 或 `…-arm64.exe`
 2. macOS：打开 DMG，把应用拖到「应用程序」。若提示来自未识别开发者，可在 Finder 中右键 → 打开。

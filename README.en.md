@@ -14,7 +14,7 @@ See [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases) fo
 ## Install
 
 1. Open [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases) and download your platform build:
-   - **macOS (Apple Silicon):** `deepseek-harness-desktop-darwin-arm64.dmg` (Intel Macs can run the arm64 build via Rosetta)
+   - **macOS:** `deepseek-harness-desktop-darwin-arm64.dmg` (Apple Silicon) or `deepseek-harness-desktop-darwin-amd64.dmg` (Intel)
    - **Linux:** `deepseek-harness-desktop-linux-amd64` or `…-arm64`
    - **Windows:** `deepseek-harness-desktop-windows-amd64.exe` or `…-arm64.exe`
 2. macOS: open the DMG and drag the app to Applications. If Gatekeeper blocks it, use Finder → Right-click → Open.
