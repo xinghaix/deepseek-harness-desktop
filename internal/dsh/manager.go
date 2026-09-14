@@ -98,7 +98,7 @@ func defaultOptions() (Options, error) {
 		Executable: "dsh",
 		Home:       dshHome,
 		DesktopDir: desktopDataDirPath(dshHome),
-		Workspace:  home,
+		Workspace:  desktopDataDirPath(dshHome),
 		Port:       0,
 	}, err
 }
@@ -340,8 +340,17 @@ func normalizeOptions(o Options) (Options, error) {
 		return o, fmt.Errorf("DSH Home: %w", err)
 	}
 	o.DesktopDir = desktopDataDirPath(o.Home)
+	if strings.TrimSpace(o.Workspace) == "" {
+		o.Workspace = o.DesktopDir
+	}
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
 		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
+	}
+	// Default Chat cwd is the desktop-owned dir; create it before Stat so first launch works.
+	if o.Workspace == o.DesktopDir {
+		if _, err = ensurePrivateDirectory(o.DesktopDir); err != nil {
+			return o, err
+		}
 	}
 	info, err := os.Stat(o.Workspace)
 	if err != nil {

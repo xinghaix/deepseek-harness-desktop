@@ -374,7 +374,52 @@ window.__ModuleLoader__.load({
 				.dshDesktopBridgeOk {
 					color: var(--dsw-alias-label-secondary) !important;
 				}
-			`;
+			
+				.dshDesktopBridgeCardTitleButton {
+					box-sizing: border-box;
+					width: 100%;
+					margin: 0;
+					padding: 14px 0 6px;
+					border: none;
+					background: transparent;
+					color: var(--dsw-alias-label-primary);
+					font: inherit;
+					font-size: 15px;
+					font-weight: 700;
+					line-height: 22px;
+					letter-spacing: 0.01em;
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 8px;
+					cursor: pointer;
+					text-align: left;
+				}
+				.dshDesktopBridgeCardTitleButton:hover {
+					opacity: .88;
+				}
+				.dshDesktopBridgeCardTitleButton:focus-visible {
+					outline: 2px solid var(--dsw-alias-brand-primary);
+					outline-offset: 2px;
+					border-radius: 8px;
+				}
+				.dshDesktopBridgeCardChevron {
+					flex: none;
+					width: 16px;
+					height: 16px;
+					color: var(--dsw-alias-label-tertiary);
+					transition: transform .15s ease;
+				}
+				.dshDesktopBridgeCardChevron[data-open="true"] {
+					transform: rotate(180deg);
+				}
+				.dshDesktopBridgeCardBody {
+					min-width: 0;
+				}
+				.dshDesktopBridgeCardBody[hidden] {
+					display: none !important;
+				}
+`;
 		}
 
 		function classifyLinkError(error) {
@@ -446,6 +491,49 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+
+		// dshweb maps unknown settings.section ids to IconSettingsOutline16 (same as 通用设置).
+		// Swap the nav glyph for 「桌面设置」 to a distinct desktop/monitor outline in the same 16px stroke language.
+		const DESKTOP_NAV_LABEL = "桌面设置";
+		function desktopNavIconSVG() {
+			const ns = "http://www.w3.org/2000/svg";
+			const svg = document.createElementNS(ns, "svg");
+			svg.setAttribute("width", "16");
+			svg.setAttribute("height", "16");
+			svg.setAttribute("viewBox", "0 0 16 16");
+			svg.setAttribute("fill", "none");
+			svg.setAttribute("aria-hidden", "true");
+			svg.classList.add("dshDesktopBridgeNavIcon");
+			const mk = (tag, attrs) => {
+				const el = document.createElementNS(ns, tag);
+				for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+				return el;
+			};
+			svg.appendChild(mk("rect", { x: "2.5", y: "2.5", width: "11", height: "8", rx: "1.5", stroke: "currentColor", "stroke-width": "1.25" }));
+			svg.appendChild(mk("path", { d: "M6 13.5h4M8 10.5v3", stroke: "currentColor", "stroke-width": "1.25", "stroke-linecap": "round" }));
+			return svg;
+		}
+		function installDesktopNavIcon() {
+			if (typeof document === "undefined") return () => {};
+			const paint = () => {
+				const labels = document.querySelectorAll("button, [role='button'], div, span");
+				for (const el of labels) {
+					if ((el.textContent || "").trim() !== DESKTOP_NAV_LABEL) continue;
+					const row = el.closest("button") || el.parentElement;
+					if (!row) continue;
+					const existing = row.querySelector("svg.dshDesktopBridgeNavIcon");
+					if (existing) continue;
+					const oldSvg = row.querySelector("svg");
+					if (!oldSvg) continue;
+					oldSvg.replaceWith(desktopNavIconSVG());
+				}
+			};
+			paint();
+			const obs = new MutationObserver(() => paint());
+			obs.observe(document.documentElement, { childList: true, subtree: true });
+			return () => obs.disconnect();
+		}
+
 		function DesktopSettingsTab({ connection }) {
 			installStyle();
 			const [status, setStatus] = react.useState(null);
@@ -457,6 +545,7 @@ window.__ModuleLoader__.load({
 			const [messageKind, setMessageKind] = react.useState("error");
 			const [pending, setPending] = react.useState(false);
 			const [draft, setDraft] = react.useState({ executable: "", home: "", workspace: "" });
+			const [pathsOpen, setPathsOpen] = react.useState(false);
 			const backoffRef = react.useRef(1000);
 			const timerRef = react.useRef(null);
 			const linkRef = react.useRef(link);
@@ -681,7 +770,33 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "路径" }),
+						jsxs("button", {
+							type: "button",
+							className: "dshDesktopBridgeCardTitleButton",
+							"aria-expanded": pathsOpen,
+							onClick: () => setPathsOpen((prev) => !prev),
+							children: [
+								jsx("span", { children: "路径" }),
+								jsx("svg", {
+									className: "dshDesktopBridgeCardChevron",
+									"data-open": pathsOpen ? "true" : "false",
+									viewBox: "0 0 16 16",
+									fill: "none",
+									"aria-hidden": true,
+									children: jsx("path", {
+										d: "M4 6.5L8 10.5L12 6.5",
+										stroke: "currentColor",
+										strokeWidth: "1.5",
+										strokeLinecap: "round",
+										strokeLinejoin: "round"
+									})
+								})
+							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeCardBody",
+							hidden: !pathsOpen,
+							children: [
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
@@ -789,13 +904,6 @@ window.__ModuleLoader__.load({
 											disabled: !connected || pending,
 											onClick: () => void invoke("openWorkspace", { home: draft.home, workspace: draft.workspace }),
 											children: "打开工作目录"
-										}),
-										jsx("button", {
-											className: "dshDesktopBridgeSelector",
-											type: "button",
-											disabled: !connected || pending,
-											onClick: () => void invoke("openSettingsYaml", { home: draft.home, workspace: draft.workspace }),
-											children: "打开 settings.yaml"
 										})
 									]
 								})
@@ -825,6 +933,8 @@ window.__ModuleLoader__.load({
 										children: "应用路径并打开 Chat"
 									})
 								})
+							]
+						}),
 							]
 						}),
 						]
@@ -1043,6 +1153,10 @@ window.__ModuleLoader__.load({
 		const inject = ["slots", "connection", "sessions"];
 		function apply(ctx) {
 			installStyle();
+			const stopNavIcon = installDesktopNavIcon();
+			if (typeof ctx.effect === "function") {
+				ctx.effect(() => () => stopNavIcon());
+			}
 			// First-class settings nav entry (same slot as Models / Plugins / Market).
 			// Do NOT use a sticky globalThis guard: Cordis HMR disposes the fiber and
 			// re-applies; a sticky flag would skip re-registration and hide 「桌面设置」

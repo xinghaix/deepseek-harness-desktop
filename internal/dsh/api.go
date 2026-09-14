@@ -27,7 +27,7 @@ type InstallGuide struct {
 	VerifyCLI  string `json:"verifyCLI"`
 }
 
-// Defaults 返回用户现有的 DSH_HOME、桌面端专属目录和 GUI 可见的 Chat 工作目录。
+// Defaults 返回用户现有的 DSH_HOME、桌面端专属目录，以及默认 Chat 工作目录（DSH_HOME/.deepseek-harness-desktop）。
 func (d *Manager) Defaults() (Options, error) {
 	return defaultOptions()
 }
