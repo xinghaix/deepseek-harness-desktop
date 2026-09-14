@@ -40,7 +40,58 @@ const routes = Object.freeze({
 	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" })
 });
 
+/** Host-side sticky tray errors (turn/end error|interrupted + api-session/error). */
+const stickySessionErrors = new Set();
+let lastTraySessions = [];
+let lastClearErrors = [];
+let trayRepublishTimer = null;
+let trayConfigGetter = null;
+
+function markStickySessionError(sessionId) {
+	const id = String(sessionId || "").trim();
+	if (!id || stickySessionErrors.has(id)) return false;
+	stickySessionErrors.add(id);
+	return true;
+}
+
+function clearStickySessionError(sessionId) {
+	const id = String(sessionId || "").trim();
+	if (!id) return false;
+	return stickySessionErrors.delete(id);
+}
+
+function mergeTraySessionErrors(sessions, clearErrors) {
+	for (const id of clearErrors || []) clearStickySessionError(id);
+	const out = [];
+	for (const raw of sessions || []) {
+		if (!raw || typeof raw !== "object") continue;
+		const id = String(raw.id || "").trim();
+		if (!id) continue;
+		const running = Boolean(raw.running);
+		if (running) clearStickySessionError(id);
+		out.push({
+			id,
+			title: typeof raw.title === "string" ? raw.title : "",
+			updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
+			running,
+			error: !running && (Boolean(raw.error) || stickySessionErrors.has(id))
+		});
+	}
+	return out;
+}
+
+function scheduleTraySessionsRepublish() {
+	if (typeof trayConfigGetter !== "function") return;
+	if (trayRepublishTimer) clearTimeout(trayRepublishTimer);
+	trayRepublishTimer = setTimeout(() => {
+		trayRepublishTimer = null;
+		const sessions = mergeTraySessionErrors(lastTraySessions, []);
+		void invoke(trayConfigGetter(), "reportSessions", { sessions }).catch(() => {});
+	}, 50);
+}
+
 function validateURL(base) {
+
 	let url;
 	try {
 		url = new URL(base);
@@ -99,6 +150,12 @@ async function resolveConfig(preferred) {
 }
 
 async function invoke(config, endpoint, payload, signal) {
+	if (endpoint === "reportSessions" && payload && typeof payload === "object") {
+		const sessions = mergeTraySessionErrors(payload.sessions, payload.clearErrors);
+		lastTraySessions = sessions.map((s) => ({ ...s }));
+		lastClearErrors = Array.isArray(payload.clearErrors) ? [...payload.clearErrors] : [];
+		payload = { sessions };
+	}
 	const route = routes[endpoint];
 	if (route === undefined) {
 		return {
@@ -325,6 +382,7 @@ function createRouteHandler(connection, getCached, setCached) {
 
 function apply(ctx) {
 	let cached = configFromEnv();
+	trayConfigGetter = () => cached;
 	ctx.inject(["connection", "webServer"], (rpcCtx) => {
 		const handler = createRouteHandler(
 			rpcCtx.connection,
@@ -341,6 +399,22 @@ function apply(ctx) {
 			});
 			return unregister;
 		}, "desktop-bridge: /desktop-bridge rpc prefix");
+	});
+	// Turn-end failures never appear on SessionSummary; sticky them here for the tray.
+	ctx.inject(["sessions"], (sctx) => {
+		sctx.on("session/event", (session, event) => {
+			if (!event || event.type !== "turn/end") return;
+			const kind = event.data?.reason?.kind;
+			if (kind !== "error" && kind !== "interrupted") return;
+			const id = session?.id || session?.header?.id;
+			if (markStickySessionError(id)) scheduleTraySessionsRepublish();
+		});
+		sctx.on("api-session/error", (sessionId) => {
+			if (markStickySessionError(sessionId)) scheduleTraySessionsRepublish();
+		});
+		sctx.on("api-session/status", (sessionId, running) => {
+			if (running && clearStickySessionError(sessionId)) scheduleTraySessionsRepublish();
+		});
 	});
 }
 

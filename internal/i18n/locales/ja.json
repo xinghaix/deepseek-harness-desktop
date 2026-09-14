@@ -181,6 +181,7 @@
   "tray.quit": "終了",
   "tray.recent_sessions": "最近のセッション",
   "tray.session_running": "実行中",
+  "tray.session_error": "エラー",
   "tray.session_idle": "アイドル",
   "tray.session_untitled": "無題",
   "menu.about": "Deepseek Harness Desktop について",

@@ -56,11 +56,20 @@ func TestTraySessionTitleFallback(t *testing.T) {
 	if got := traySessionTitle(dsh.BridgeSession{}, "未命名"); got != "未命名" {
 		t.Fatalf("untitled: %q", got)
 	}
-	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "My task · 运行中" {
-		t.Fatalf("running label: %q", got)
+	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "My task" {
+		t.Fatalf("label is title-only: %q", got)
 	}
 	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "My task" {
-		t.Fatalf("idle label should omit status: %q", got)
+		t.Fatalf("idle label: %q", got)
+	}
+	if got := traySessionStatus(true, true); got != "running" {
+		t.Fatalf("running wins over error: %q", got)
+	}
+	if got := traySessionStatus(false, true); got != "error" {
+		t.Fatalf("error status: %q", got)
+	}
+	if got := traySessionStatus(false, false); got != "idle" {
+		t.Fatalf("idle status: %q", got)
 	}
 	long := strings.Repeat("标题", 30)
 	if got := traySessionTitle(dsh.BridgeSession{Title: long}, "未命名"); utf8.RuneCountInString(got) != traySessionTitleRunes || !strings.HasSuffix(got, "…") {

@@ -80,6 +80,8 @@ type BridgeSession struct {
 	Title     string `json:"title,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"`
 	Running   bool   `json:"running"`
+	// Error is a bridge sticky failure bit (turn error/interrupted or api-session/error).
+	Error bool `json:"error,omitempty"`
 }
 
 // BridgeUpdate mirrors update.Snapshot for the bridge JSON surface.

@@ -181,6 +181,7 @@
   "tray.quit": "退出",
   "tray.recent_sessions": "最近会话",
   "tray.session_running": "运行中",
+  "tray.session_error": "出错",
   "tray.session_idle": "空闲",
   "tray.session_untitled": "未命名",
   "menu.about": "关于 Deepseek Harness Desktop",

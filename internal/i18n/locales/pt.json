@@ -181,6 +181,7 @@
   "tray.quit": "Sair",
   "tray.recent_sessions": "Sessões recentes",
   "tray.session_running": "Em execução",
+  "tray.session_error": "Erro",
   "tray.session_idle": "Inativo",
   "tray.session_untitled": "Sem título",
   "menu.about": "Acerca do Deepseek Harness Desktop",

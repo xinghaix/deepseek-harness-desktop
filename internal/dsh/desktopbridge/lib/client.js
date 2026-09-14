@@ -1112,21 +1112,45 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		/** Sticky tray error ids until running again or the session becomes current. */
+		const stickySessionErrors = /* @__PURE__ */ new Set();
+
+		function markStickySessionError(sessionId) {
+			const id = String(sessionId || "").trim();
+			if (!id) return false;
+			if (stickySessionErrors.has(id)) return false;
+			stickySessionErrors.add(id);
+			return true;
+		}
+
 		function sessionsFromSnapshot(listState) {
 			const byId = listState && listState.byId;
-			if (!byId) return [];
+			if (!byId) return { sessions: [], clearErrors: [] };
+			const clearErrors = [];
+			const current = listState.current;
+			if (current && stickySessionErrors.has(current)) {
+				stickySessionErrors.delete(current);
+				clearErrors.push(current);
+			}
 			const out = [];
 			for (const id of Object.keys(byId)) {
 				const s = byId[id];
 				if (!s) continue;
+				const sid = s.id || id;
+				const running = Boolean(s.running);
+				if (running) stickySessionErrors.delete(sid);
+				const title = typeof s.title === "string" && s.title.trim()
+					? s.title
+					: (typeof s.displayTitle === "string" ? s.displayTitle : "");
 				out.push({
-					id: s.id || id,
-					title: typeof s.title === "string" ? s.title : "",
+					id: sid,
+					title,
 					updatedAt: typeof s.updatedAt === "number" ? s.updatedAt : 0,
-					running: Boolean(s.running)
+					running,
+					error: !running && stickySessionErrors.has(sid)
 				});
 			}
-			return out;
+			return { sessions: out, clearErrors };
 		}
 
 		function anySessionRunning(listState) {
@@ -1138,7 +1162,7 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
-		const inject = ["slots", "connection", "sessions"];
+		const inject = ["slots", "connection", "sessions", "remote"];
 		function apply(ctx) {
 			installStyle();
 			const stopNavIcon = installDesktopNavIcon();
@@ -1166,22 +1190,27 @@ window.__ModuleLoader__.load({
 				void ctx.connection.rpc.call(CHANNEL, "reportChatBusy", { busy }).catch(() => {});
 			};
 			let lastSessionsKey = null;
-			const pushSessions = (sessions) => {
-				const key = JSON.stringify(sessions);
+			const pushSessions = (payload) => {
+				const key = JSON.stringify(payload);
 				if (lastSessionsKey === key) return;
 				lastSessionsKey = key;
-				void ctx.connection.rpc.call(CHANNEL, "reportSessions", { sessions }).catch(() => {});
+				void ctx.connection.rpc.call(CHANNEL, "reportSessions", payload).catch(() => {});
 			};
+			const syncBusy = () => {
+				try {
+					const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
+						? ctx.sessions.list.getSnapshot()
+						: null;
+					pushBusy(anySessionRunning(snap));
+					pushSessions(sessionsFromSnapshot(snap));
+				} catch (_) { /* keep last */ }
+			};
+			if (ctx.remote && typeof ctx.remote.$on === "function") {
+				ctx.effect(() => ctx.remote.$on("api-session/error", (sessionId) => {
+					if (markStickySessionError(sessionId)) syncBusy();
+				}));
+			}
 			if (ctx.sessions && ctx.sessions.list && typeof ctx.sessions.list.subscribe === "function") {
-				const syncBusy = () => {
-					try {
-						const snap = typeof ctx.sessions.list.getSnapshot === "function"
-							? ctx.sessions.list.getSnapshot()
-							: null;
-						pushBusy(anySessionRunning(snap));
-						pushSessions(sessionsFromSnapshot(snap));
-					} catch (_) { /* keep last */ }
-				};
 				ctx.effect(() => {
 					syncBusy();
 					return ctx.sessions.list.subscribe(syncBusy);

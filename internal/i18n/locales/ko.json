@@ -181,6 +181,7 @@
   "tray.quit": "종료",
   "tray.recent_sessions": "최근 세션",
   "tray.session_running": "실행 중",
+  "tray.session_error": "오류",
   "tray.session_idle": "유휴",
   "tray.session_untitled": "제목 없음",
   "menu.about": "Deepseek Harness Desktop 정보",

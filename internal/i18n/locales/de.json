@@ -181,6 +181,7 @@
   "tray.quit": "Beenden",
   "tray.recent_sessions": "Letzte Sitzungen",
   "tray.session_running": "Läuft",
+  "tray.session_error": "Fehler",
   "tray.session_idle": "Leerlauf",
   "tray.session_untitled": "Unbenannt",
   "menu.about": "Über Deepseek Harness Desktop",

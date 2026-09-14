@@ -69,15 +69,27 @@ func traySessionTitle(s dsh.BridgeSession, untitled string) string {
 	return truncateRunes(title, traySessionTitleRunes)
 }
 
+// formatTraySessionLabel returns the menu title only. Running/error status is
+// shown with SetBitmap icons (native menus cannot color trailing glyphs reliably).
 func formatTraySessionLabel(title, runningLabel, idleLabel string, running bool) string {
-	_ = idleLabel // idle sessions show title only (no "· 空闲" suffix)
+	_ = runningLabel
+	_ = idleLabel
+	_ = running
 	if title == "" {
-		title = "Untitled"
-	}
-	if running && runningLabel != "" {
-		return title + " · " + runningLabel
+		return "Untitled"
 	}
 	return title
+}
+
+// traySessionStatus ranks icon priority: running > error > idle.
+func traySessionStatus(running, err bool) string {
+	if running {
+		return "running"
+	}
+	if err {
+		return "error"
+	}
+	return "idle"
 }
 
 func truncateRunes(s string, n int) string {

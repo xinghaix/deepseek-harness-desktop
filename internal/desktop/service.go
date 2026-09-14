@@ -50,6 +50,7 @@ type Service struct {
 	trayIconRunning    bool
 	sessionsMu         sync.Mutex
 	sessions           []dsh.BridgeSession
+	trayErrorAcks      map[string]struct{} // local ack after tray click
 }
 
 func New(icon []byte) *Service {

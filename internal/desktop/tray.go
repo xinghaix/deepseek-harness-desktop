@@ -5,6 +5,7 @@ package desktop
 import (
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	"deepseek-harness-desktop/internal/dsh"
@@ -255,18 +256,41 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 		menu.Add(i18n.T(locale, "tray.recent_sessions")).SetEnabled(false)
 		untitled := i18n.T(locale, "tray.session_untitled")
 		runningL := i18n.T(locale, "tray.session_running")
+		errorL := i18n.T(locale, "tray.session_error")
+		runPip := traySessionRunningPipPNG()
+		errPip := traySessionErrorPipPNG()
 		for _, session := range sessions {
-			full := fullTraySessionTitle(session, untitled)
-			short := traySessionTitle(session, untitled)
-			label := formatTraySessionLabel(short, runningL, "", session.Running)
+			sess := session
+			full := fullTraySessionTitle(sess, untitled)
+			short := traySessionTitle(sess, untitled)
+			label := formatTraySessionLabel(short, runningL, "", sess.Running)
 			item := menu.Add(label).OnClick(func(*application.Context) {
+				d.acknowledgeTraySessionError(sess.ID)
 				d.revealChatFromTray()
 			})
-			if full != short {
-				tip := full
-				if session.Running && runningL != "" {
+			status := traySessionStatus(sess.Running, sess.Error && !d.trayErrorAcked(sess.ID))
+			switch status {
+			case "running":
+				if len(runPip) > 0 {
+					item.SetBitmap(runPip)
+				}
+			case "error":
+				if len(errPip) > 0 {
+					item.SetBitmap(errPip)
+				}
+			}
+			tip := full
+			switch status {
+			case "running":
+				if runningL != "" {
 					tip = full + " · " + runningL
 				}
+			case "error":
+				if errorL != "" {
+					tip = full + " · " + errorL
+				}
+			}
+			if tip != short || status != "idle" {
 				item.SetTooltip(tip)
 			}
 		}
@@ -328,6 +352,42 @@ func (d *Service) ReportSessions(sessions []dsh.BridgeSession) {
 	cp := append([]dsh.BridgeSession(nil), sessions...)
 	d.sessionsMu.Lock()
 	d.sessions = cp
+	// Drop local ack once the bridge no longer reports error for that id.
+	if d.trayErrorAcks != nil {
+		for id := range d.trayErrorAcks {
+			still := false
+			for _, s := range cp {
+				if s.ID == id && s.Error && !s.Running {
+					still = true
+					break
+				}
+			}
+			if !still {
+				delete(d.trayErrorAcks, id)
+			}
+		}
+	}
+	d.sessionsMu.Unlock()
+	d.scheduleTrayMenuRefresh()
+}
+
+func (d *Service) trayErrorAcked(id string) bool {
+	d.sessionsMu.Lock()
+	defer d.sessionsMu.Unlock()
+	_, ok := d.trayErrorAcks[id]
+	return ok
+}
+
+func (d *Service) acknowledgeTraySessionError(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	d.sessionsMu.Lock()
+	if d.trayErrorAcks == nil {
+		d.trayErrorAcks = map[string]struct{}{}
+	}
+	d.trayErrorAcks[id] = struct{}{}
 	d.sessionsMu.Unlock()
 	d.scheduleTrayMenuRefresh()
 }
