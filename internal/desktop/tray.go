@@ -255,12 +255,20 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 		menu.Add(i18n.T(locale, "tray.recent_sessions")).SetEnabled(false)
 		untitled := i18n.T(locale, "tray.session_untitled")
 		runningL := i18n.T(locale, "tray.session_running")
-		idleL := i18n.T(locale, "tray.session_idle")
 		for _, session := range sessions {
-			label := formatTraySessionLabel(traySessionTitle(session, untitled), runningL, idleL, session.Running)
-			menu.Add(label).OnClick(func(*application.Context) {
+			full := fullTraySessionTitle(session, untitled)
+			short := traySessionTitle(session, untitled)
+			label := formatTraySessionLabel(short, runningL, "", session.Running)
+			item := menu.Add(label).OnClick(func(*application.Context) {
 				d.revealChatFromTray()
 			})
+			if full != short {
+				tip := full
+				if session.Running && runningL != "" {
+					tip = full + " · " + runningL
+				}
+				item.SetTooltip(tip)
+			}
 		}
 	}
 

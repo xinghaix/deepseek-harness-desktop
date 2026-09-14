@@ -41,10 +41,10 @@ func selectTraySessions(all []dsh.BridgeSession, limit int) []dsh.BridgeSession 
 	return cp
 }
 
-func traySessionTitle(s dsh.BridgeSession, untitled string) string {
+func fullTraySessionTitle(s dsh.BridgeSession, untitled string) string {
 	title := strings.TrimSpace(s.Title)
 	if title != "" {
-		return truncateRunes(title, traySessionTitleRunes)
+		return title
 	}
 	id := strings.TrimSpace(s.ID)
 	if id == "" {
@@ -53,21 +53,31 @@ func traySessionTitle(s dsh.BridgeSession, untitled string) string {
 		}
 		return untitled
 	}
-	if utf8.RuneCountInString(id) > 8 {
-		return string([]rune(id)[:8])
-	}
 	return id
 }
 
-func formatTraySessionLabel(title, runningLabel, idleLabel string, running bool) string {
-	status := idleLabel
-	if running {
-		status = runningLabel
+func traySessionTitle(s dsh.BridgeSession, untitled string) string {
+	title := fullTraySessionTitle(s, untitled)
+	// Keep short IDs as-is when used as fallback titles.
+	if strings.TrimSpace(s.Title) == "" {
+		id := strings.TrimSpace(s.ID)
+		if id != "" && utf8.RuneCountInString(id) > 8 {
+			return string([]rune(id)[:8])
+		}
+		return title
 	}
+	return truncateRunes(title, traySessionTitleRunes)
+}
+
+func formatTraySessionLabel(title, runningLabel, idleLabel string, running bool) string {
+	_ = idleLabel // idle sessions show title only (no "· 空闲" suffix)
 	if title == "" {
 		title = "Untitled"
 	}
-	return title + " · " + status
+	if running && runningLabel != "" {
+		return title + " · " + runningLabel
+	}
+	return title
 }
 
 func truncateRunes(s string, n int) string {

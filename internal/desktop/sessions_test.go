@@ -1,7 +1,9 @@
 package desktop
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"deepseek-harness-desktop/internal/dsh"
 )
@@ -57,7 +59,14 @@ func TestTraySessionTitleFallback(t *testing.T) {
 	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "My task · 运行中" {
 		t.Fatalf("running label: %q", got)
 	}
-	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "My task · 空闲" {
-		t.Fatalf("idle label: %q", got)
+	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "My task" {
+		t.Fatalf("idle label should omit status: %q", got)
+	}
+	long := strings.Repeat("标题", 30)
+	if got := traySessionTitle(dsh.BridgeSession{Title: long}, "未命名"); utf8.RuneCountInString(got) != traySessionTitleRunes || !strings.HasSuffix(got, "…") {
+		t.Fatalf("title truncate runes=%d got=%q", utf8.RuneCountInString(got), got)
+	}
+	if got := fullTraySessionTitle(dsh.BridgeSession{Title: long}, "未命名"); got != long {
+		t.Fatalf("full title must not truncate")
 	}
 }
