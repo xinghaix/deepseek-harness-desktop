@@ -63,8 +63,8 @@
   "field.confirm_quit_hint": "开启后：仅当会话里有任务在跑时，关窗或退出快捷键会二次确认；空闲时直接退出。关闭此项则无论是否有任务都直接退出。",
   "field.confirm_quit_hint_dashboard": "开启后：仅当有任务在跑时，关窗或 ⌘Q / Ctrl+Q 会二次确认；空闲时直接退出。关掉后始终直接退出。",
   "field.close_to_tray": "关闭窗口后在后台运行",
-  "field.close_to_tray_hint": "开启后：关闭 Chat 窗口会隐藏到系统托盘（macOS 菜单栏 / Windows 通知区域 / Linux 状态栏），不会退出。从托盘图标可重新打开 Chat 或退出。⌘Q / Ctrl+Q 仍会退出。",
-  "field.close_to_tray_hint_dashboard": "开启后：关闭 Chat 窗口会隐藏到托盘（macOS 菜单栏 / Windows 通知区域 / Linux 状态栏），不退出。⌘Q / Ctrl+Q 和「退出」仍会退出。关闭此项则关窗即退出。",
+  "field.close_to_tray_hint": "开启后：关闭 Chat 窗口（X）会隐藏到系统托盘（macOS 菜单栏 / Windows 通知区域 / Linux 状态栏），不会退出。即使关闭此项，⌘W / Ctrl+W 仍会藏到托盘。从托盘图标可重新打开 Chat 或退出。⌘Q / Ctrl+Q 仍会退出。",
+  "field.close_to_tray_hint_dashboard": "开启后：关闭 Chat（X）会隐藏到托盘（macOS 菜单栏 / Windows 通知区域 / Linux 状态栏），不退出。即使关闭此项，⌘W / Ctrl+W 仍会藏到托盘。⌘Q / Ctrl+Q 和「退出」仍会退出。关闭此项则 X 关窗即退出。",
   "field.tray_session_limit": "托盘最近会话数量",
   "field.tray_session_limit_hint": "0 表示不在托盘显示会话列表；1–20 条，按最近活动排序。",
   "field.tray_session_limit_hint_dashboard": "托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条。",
@@ -316,5 +316,16 @@
   "err.bridge_method": "桌面桥接不支持该 HTTP 方法",
   "err.bridge_body_too_large": "桌面桥接请求体过大",
   "tray.tooltip": "托盘中的 Deepseek Harness Desktop",
-  "tray.tooltip_running": "有任务正在运行"
+  "tray.tooltip_running": "有任务正在运行",
+  "menu.close_window": "关闭窗口",
+  "dashboard.shortcuts_title": "快捷键",
+  "dashboard.shortcuts_hint": "固定快捷键，暂不支持自定义。⌘W / Ctrl+W 始终将 Chat 藏到托盘；⌘Q / Ctrl+Q 退出；窗口关闭按钮仍遵循「关闭到托盘」开关。",
+  "shortcut.open_settings_label": "打开设置",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "关闭 Chat 到托盘",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "退出",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "隐藏应用（macOS）",
+  "shortcut.hide_keys": "⌘H"
 }

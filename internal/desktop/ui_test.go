@@ -92,6 +92,12 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, `id="close-to-tray"`) || !strings.Contains(html, "关闭窗口后在后台运行") {
 		t.Fatal("desktop settings must expose close-to-tray")
 	}
+	if !strings.Contains(html, `id="shortcuts-panel"`) || !strings.Contains(html, "dashboard.shortcuts_title") {
+		t.Fatal("desktop settings must expose keyboard shortcuts panel")
+	}
+	if !strings.Contains(html, "shortcut.close_chat_keys") || !strings.Contains(html, "⌘W / Ctrl+W") {
+		t.Fatal("shortcuts panel must document Cmd/Ctrl+W hide-to-tray")
+	}
 	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "托盘最近会话数量") {
 		t.Fatal("desktop settings must expose tray session limit")
 	}

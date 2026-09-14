@@ -25,6 +25,15 @@ func (d *Service) ensureTray() {
 	if !d.prefs.closeToTray.Load() {
 		return
 	}
+	d.createTrayIfNeeded()
+}
+
+// ensureTrayForHide creates the tray even when closeToTray is off (Cmd/Ctrl+W hide).
+func (d *Service) ensureTrayForHide() {
+	d.createTrayIfNeeded()
+}
+
+func (d *Service) createTrayIfNeeded() {
 	app := application.Get()
 	if app == nil {
 		return
@@ -46,6 +55,24 @@ func (d *Service) ensureTray() {
 		tray.OnClick(func() { d.revealChatFromTray() })
 	}
 	tray.SetMenu(d.newTrayMenu(app))
+}
+
+// CloseChatToTray hides Chat (and overlays) to the tray without quitting.
+// Always hides even when closeToTray is false — Cmd/Ctrl+W ≠ quit.
+// The window X button keeps existing closeToTray semantics via hookChatWindow.
+func (d *Service) CloseChatToTray() error {
+	app := application.Get()
+	if app == nil {
+		return nil
+	}
+	chat, ok := app.Window.GetByName(chatWindowName)
+	if !ok || chat == nil {
+		return nil
+	}
+	// Hide before ensuring tray so "last window" logic sees a hidden window.
+	d.hideToTray(app, chat)
+	d.ensureTrayForHide()
+	return nil
 }
 
 func (d *Service) destroyTray() {

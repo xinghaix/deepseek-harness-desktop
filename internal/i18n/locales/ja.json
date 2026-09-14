@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "トレイの Deepseek Harness Desktop",
-  "tray.tooltip_running": "タスク実行中"
+  "tray.tooltip_running": "タスク実行中",
+  "menu.close_window": "ウィンドウを閉じる",
+  "dashboard.shortcuts_title": "キーボードショートカット",
+  "dashboard.shortcuts_hint": "固定ショートカット（未カスタム）。⌘W / Ctrl+W は常に Chat をトレイに隠します；⌘Q / Ctrl+Q で終了；ウィンドウの閉じるボタンは「トレイに閉じる」設定に従います。",
+  "shortcut.open_settings_label": "設定を開く",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Chat をトレイに閉じる",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "終了",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "アプリを隠す（macOS）",
+  "shortcut.hide_keys": "⌘H"
 }

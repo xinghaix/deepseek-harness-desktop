@@ -1,3 +1,9 @@
+(function () {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const isMac = /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(ua);
+  document.documentElement.dataset.platform = isMac ? "mac" : "other";
+})();
 const $ = (id) => document.getElementById(id);
 const t = (key, ...vars) => (window.DSHI18n ? window.DSHI18n.t(key, ...vars) : key);
 const stateLabels = () => ({

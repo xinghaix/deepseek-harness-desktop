@@ -356,3 +356,8 @@ html.dsh-desktop-config-modal .lead { margin-top: 10px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   .loading-mark, .loading-ring, .loading-progress span { animation: none; }
 }
+
+.shortcut-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.shortcut-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.shortcut-list kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--text); white-space: nowrap; }
+html:not([data-platform="mac"]) .shortcut-mac-only { display: none; }

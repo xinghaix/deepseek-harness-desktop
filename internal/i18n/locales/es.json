@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop en la bandeja",
-  "tray.tooltip_running": "Hay tareas en ejecución"
+  "tray.tooltip_running": "Hay tareas en ejecución",
+  "menu.close_window": "Cerrar ventana",
+  "dashboard.shortcuts_title": "Atajos de teclado",
+  "dashboard.shortcuts_hint": "Atajos fijos (aún no personalizables). ⌘W / Ctrl+W siempre oculta Chat en la bandeja; ⌘Q / Ctrl+Q sale; el botón de cierre sigue la opción de cerrar a la bandeja.",
+  "shortcut.open_settings_label": "Abrir ajustes",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Cerrar Chat a la bandeja",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "Salir",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "Ocultar app (macOS)",
+  "shortcut.hide_keys": "⌘H"
 }

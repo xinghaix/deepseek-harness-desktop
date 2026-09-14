@@ -14,14 +14,16 @@ import (
 
 type stubMenuController struct{}
 
-func (stubMenuController) OpenManagement() error { return nil }
-func (stubMenuController) OpenDSH() error        { return nil }
-func (stubMenuController) RequestQuit() error    { return nil }
+func (stubMenuController) OpenManagement() error  { return nil }
+func (stubMenuController) OpenDSH() error         { return nil }
+func (stubMenuController) CloseChatToTray() error { return nil }
+func (stubMenuController) RequestQuit() error     { return nil }
 
 func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 	locale := "zh-CN"
 	openManagementLabel := i18n.T(locale, "menu.open_management")
 	openChatLabel := i18n.T(locale, "menu.open_chat")
+	closeWindowLabel := i18n.T(locale, "menu.close_window")
 	quitLabel := i18n.T(locale, "menu.quit")
 	aboutLabel := i18n.T(locale, "menu.about")
 	servicesLabel := i18n.T(locale, "menu.services")
@@ -40,7 +42,7 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 			host: appMenuLabel,
 			wantHost: []string{
 				aboutLabel, "-",
-				openManagementLabel, openChatLabel, "-",
+				openManagementLabel, openChatLabel, closeWindowLabel, "-",
 				servicesLabel, "-",
 				hideLabel, hideOthersLabel, showAllLabel, "-",
 				quitLabel,
@@ -49,12 +51,12 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 		{
 			goos:     "windows",
 			host:     fileMenuLabel,
-			wantHost: []string{openManagementLabel, openChatLabel, "-", quitLabel},
+			wantHost: []string{openManagementLabel, openChatLabel, closeWindowLabel, "-", quitLabel},
 		},
 		{
 			goos:     "linux",
 			host:     fileMenuLabel,
-			wantHost: []string{openManagementLabel, openChatLabel, "-", quitLabel},
+			wantHost: []string{openManagementLabel, openChatLabel, closeWindowLabel, "-", quitLabel},
 		},
 	}
 	for _, tc := range cases {
@@ -77,9 +79,21 @@ func TestApplicationMenuMergesDesktopActionsIntoHostMenu(t *testing.T) {
 			if openConfig == nil || openConfig.GetAccelerator() == "" {
 				t.Fatal("打开桌面端配置 must keep CmdOrCtrl+,")
 			}
+			closeWin := menu.FindByLabel(closeWindowLabel)
+			if closeWin == nil {
+				t.Fatal("关闭窗口 / Close Window must be present")
+			}
+			closeAcc := strings.ToLower(closeWin.GetAccelerator())
+			if !strings.Contains(closeAcc, "w") || strings.Contains(closeAcc, "q") {
+				t.Fatalf("关闭窗口 accelerator = %q, want CmdOrCtrl+w (not quit)", closeWin.GetAccelerator())
+			}
 			quit := menu.FindByLabel(quitLabel)
 			if quit == nil || quit.GetAccelerator() == "" {
 				t.Fatal("退出 must keep CmdOrCtrl+Q")
+			}
+			quitAcc := strings.ToLower(quit.GetAccelerator())
+			if !strings.Contains(quitAcc, "q") {
+				t.Fatalf("退出 accelerator = %q, want CmdOrCtrl+q", quit.GetAccelerator())
 			}
 			if edit := menu.ItemAt(1); edit == nil || edit.Label() != "Edit" || !edit.IsSubmenu() {
 				t.Fatalf("second menu = %v, want Edit", labelOf(edit))

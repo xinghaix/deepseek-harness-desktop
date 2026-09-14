@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop im Tray",
-  "tray.tooltip_running": "Aufgaben laufen"
+  "tray.tooltip_running": "Aufgaben laufen",
+  "menu.close_window": "Fenster schließen",
+  "dashboard.shortcuts_title": "Tastenkürzel",
+  "dashboard.shortcuts_hint": "Feste Tastenkürzel (noch nicht anpassbar). ⌘W / Ctrl+W blendet Chat immer in die Ablage aus; ⌘Q / Ctrl+Q beendet; die Fensterschließen-Taste folgt weiterhin der Ablage-Option.",
+  "shortcut.open_settings_label": "Einstellungen öffnen",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Chat in Ablage schließen",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "Beenden",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "App ausblenden (macOS)",
+  "shortcut.hide_keys": "⌘H"
 }

@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop dans la barre",
-  "tray.tooltip_running": "Des tâches sont en cours"
+  "tray.tooltip_running": "Des tâches sont en cours",
+  "menu.close_window": "Fermer la fenêtre",
+  "dashboard.shortcuts_title": "Raccourcis clavier",
+  "dashboard.shortcuts_hint": "Raccourcis fixes (pas encore personnalisables). ⌘W / Ctrl+W masque toujours Chat dans la barre d’état ; ⌘Q / Ctrl+Q quitte ; le bouton de fermeture suit toujours l’option « fermer vers la barre d’état ».",
+  "shortcut.open_settings_label": "Ouvrir les réglages",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Fermer Chat vers la barre d’état",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "Quitter",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "Masquer l’app (macOS)",
+  "shortcut.hide_keys": "⌘H"
 }

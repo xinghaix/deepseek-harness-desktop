@@ -63,8 +63,8 @@
   "field.confirm_quit_hint": "When on: window close and quit shortcuts confirm only if a session task is running; idle quits immediately. When off: always quit immediately.",
   "field.confirm_quit_hint_dashboard": "When on: close / ⌘Q / Ctrl+Q confirm only while a task is running; idle quits immediately. Turn off to always quit immediately.",
   "field.close_to_tray": "Keep running in the background when closing Chat",
-  "field.close_to_tray_hint": "When on: closing the Chat window hides it to the system tray (menu bar on macOS, notification area on Windows, status area on Linux) instead of quitting. Use the tray icon to reopen Chat or quit. ⌘Q / Ctrl+Q still quits.",
-  "field.close_to_tray_hint_dashboard": "When on: closing Chat hides to the tray (macOS menu bar / Windows notification area / Linux status area). ⌘Q / Ctrl+Q and Quit still exit. When off: closing Chat quits as usual.",
+  "field.close_to_tray_hint": "When on: closing the Chat window (X) hides it to the system tray (menu bar on macOS, notification area on Windows, status area on Linux) instead of quitting. ⌘W / Ctrl+W always hides to tray even when this is off. Use the tray icon to reopen Chat or quit. ⌘Q / Ctrl+Q still quits.",
+  "field.close_to_tray_hint_dashboard": "When on: closing Chat (X) hides to the tray (macOS menu bar / Windows notification area / Linux status area). ⌘W / Ctrl+W always hides to tray even when this is off. ⌘Q / Ctrl+Q and Quit still exit. When off: the X button quits as usual.",
   "field.tray_session_limit": "Tray recent session count",
   "field.tray_session_limit_hint": "0 hides the session list in the tray; 1–20 items, sorted by last activity.",
   "field.tray_session_limit_hint_dashboard": "How many recent sessions appear in the tray menu. 0 hides the list; maximum 20.",
@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop in the tray",
-  "tray.tooltip_running": "Tasks are running"
+  "tray.tooltip_running": "Tasks are running",
+  "menu.close_window": "Close Window",
+  "dashboard.shortcuts_title": "Keyboard shortcuts",
+  "dashboard.shortcuts_hint": "Fixed shortcuts (not remappable yet). ⌘W / Ctrl+W always hides Chat to the tray; ⌘Q / Ctrl+Q quits; the window close button still follows the close-to-tray toggle.",
+  "shortcut.open_settings_label": "Open settings",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Close Chat to tray",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "Quit",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "Hide app (macOS)",
+  "shortcut.hide_keys": "⌘H"
 }

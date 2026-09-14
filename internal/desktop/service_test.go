@@ -97,3 +97,48 @@ func TestCloseToTrayHookHidesInsteadOfQuit(t *testing.T) {
 		t.Fatal("tray must use SetIcon for the colorful app icon")
 	}
 }
+
+func TestCloseChatToTrayHidesWithoutQuit(t *testing.T) {
+	tray, err := os.ReadFile(repoFile(t, "internal", "desktop", "tray.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	traySrc := string(tray)
+	if !strings.Contains(traySrc, "func (d *Service) CloseChatToTray()") {
+		t.Fatal("must expose CloseChatToTray for Cmd/Ctrl+W")
+	}
+	if !strings.Contains(traySrc, "ensureTrayForHide") {
+		t.Fatal("CloseChatToTray must ensure tray even when closeToTray is off")
+	}
+	// CloseChatToTray body must not call RequestQuit.
+	idx := strings.Index(traySrc, "func (d *Service) CloseChatToTray()")
+	if idx < 0 {
+		t.Fatal("CloseChatToTray missing")
+	}
+	rest := traySrc[idx:]
+	end := strings.Index(rest, "\nfunc ")
+	if end > 0 {
+		rest = rest[:end]
+	}
+	if strings.Contains(rest, "RequestQuit") {
+		t.Fatal("CloseChatToTray must not RequestQuit (W hides; Q quits)")
+	}
+	if !strings.Contains(rest, "hideToTray") {
+		t.Fatal("CloseChatToTray must call hideToTray")
+	}
+
+	menu, err := os.ReadFile(repoFile(t, "internal", "desktop", "menu.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	menuSrc := string(menu)
+	if !strings.Contains(menuSrc, `SetAccelerator("CmdOrCtrl+w")`) {
+		t.Fatal("menu must bind CmdOrCtrl+w to Close Window")
+	}
+	if !strings.Contains(menuSrc, "CloseChatToTray") {
+		t.Fatal("Close Window menu path must call CloseChatToTray, not RequestQuit")
+	}
+	if !strings.Contains(menuSrc, `SetAccelerator("CmdOrCtrl+q")`) {
+		t.Fatal("quit must keep CmdOrCtrl+q")
+	}
+}

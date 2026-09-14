@@ -316,5 +316,16 @@
   "err.bridge_method": "desktop bridge method not allowed",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "트레이의 Deepseek Harness Desktop",
-  "tray.tooltip_running": "작업 실행 중"
+  "tray.tooltip_running": "작업 실행 중",
+  "menu.close_window": "창 닫기",
+  "dashboard.shortcuts_title": "키보드 단축키",
+  "dashboard.shortcuts_hint": "고정 단축키(아직 사용자 지정 불가). ⌘W / Ctrl+W는 항상 Chat을 트레이로 숨깁니다. ⌘Q / Ctrl+Q는 종료합니다. 창 닫기 버튼은 트레이로 닫기 설정을 따릅니다.",
+  "shortcut.open_settings_label": "설정 열기",
+  "shortcut.open_settings_keys": "⌘, / Ctrl+,",
+  "shortcut.close_chat_label": "Chat을 트레이로 닫기",
+  "shortcut.close_chat_keys": "⌘W / Ctrl+W",
+  "shortcut.quit_label": "종료",
+  "shortcut.quit_keys": "⌘Q / Ctrl+Q",
+  "shortcut.hide_label": "앱 숨기기(macOS)",
+  "shortcut.hide_keys": "⌘H"
 }

@@ -16,6 +16,7 @@ const appMenuLabel = "Deepseek Harness Desktop"
 type menuController interface {
 	OpenManagement() error
 	OpenDSH() error
+	CloseChatToTray() error
 	RequestQuit() error
 }
 
@@ -76,6 +77,7 @@ func hostMenuLabel(goos, locale string) string {
 func addDesktopActions(menu *application.Menu, controller menuController, locale string) {
 	openManagement := i18n.T(locale, "menu.open_management")
 	openChat := i18n.T(locale, "menu.open_chat")
+	closeWindow := i18n.T(locale, "menu.close_window")
 	menu.Add(openManagement).SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
 		if err := controller.OpenManagement(); err != nil {
 			log.Printf("open management failed: %v", err)
@@ -84,6 +86,12 @@ func addDesktopActions(menu *application.Menu, controller menuController, locale
 	menu.Add(openChat).OnClick(func(*application.Context) {
 		if err := controller.OpenDSH(); err != nil {
 			log.Printf("open chat failed: %v", err)
+		}
+	})
+	// Cmd/Ctrl+W always hides Chat to tray (never RequestQuit). Do not use Wails CloseWindow role.
+	menu.Add(closeWindow).SetAccelerator("CmdOrCtrl+w").OnClick(func(*application.Context) {
+		if err := controller.CloseChatToTray(); err != nil {
+			log.Printf("close chat to tray failed: %v", err)
 		}
 	})
 }
