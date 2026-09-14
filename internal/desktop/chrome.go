@@ -174,20 +174,6 @@ body > .app-shell {
   padding-right: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
 }
 
-/* Zoom hit-band over the native titlebar (Chat).
-   InvisibleTitleBarHeight owns native drag. This band is --wails-draggable: no-drag
-   so Wails drag.ts cannot steal dblclick into AppleActionOnDoubleClick (may be None).
-   Zoom is driven by our own click-timing → main.DSH.ToggleChatZoom. Left clears traffic lights. */
-.dsh-desktop-native-drag {
-  position: fixed;
-  z-index: 2147483646;
-  top: 0;
-  left: 78px;
-  right: 0;
-  height: 52px;
-  --wails-draggable: no-drag;
-  pointer-events: auto;
-}
 `
 
 // escapeWailsCSS 为 Wails beta.16 macOS 的 windowInjectCSS 转义 CSS。
@@ -210,7 +196,6 @@ const desktopNativeWindowInsetJS = `
   let pageContent = null;
   let observedFrame = null;
   let frameObserver = null;
-  let ensureDragOverlay = null;
   if (!document.getElementById(chromeStyleId)) {
     const style = document.createElement("style");
     style.id = chromeStyleId;
@@ -244,7 +229,6 @@ const desktopNativeWindowInsetJS = `
         frameObserver.observe(frame, { attributes: true, attributeFilter: ["data-sidebar-collapsed", "data-details-collapsed", "style"] });
       }
       syncCollapsedRail();
-      if (typeof ensureDragOverlay === "function") ensureDragOverlay();
     }
   };
 
@@ -269,100 +253,9 @@ const desktopNativeWindowInsetJS = `
     return overlay?.parentElement || null;
   }
 
-  // Chat: InvisibleTitleBarHeight (>0) supplies native drag (Wails #5900
-  // clickCount==1). Do NOT use --wails-draggable: drag here — Wails drag.ts
-  // captures dblclick and routes it through AppleActionOnDoubleClick (None = no-op).
-  // Zoom: capture-phase click timing → always main.DSH.ToggleChatZoom.
-  if (!isManagement) {
-    const trafficLightClearance = 78;
-    const zoomBand = Math.max(topInset, 52);
-    const interactiveSel = "button, a, input, textarea, select, [role='button'], [contenteditable='true']";
-    const toggleZoom = () => {
-      const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-      if (typeof call === "function") {
-        void call("main.DSH.ToggleChatZoom");
-        return;
-      }
-      const current = window.wails && window.wails.Window;
-      if (current && typeof current.ToggleMaximise === "function") {
-        current.ToggleMaximise();
-        return;
-      }
-      window.setTimeout(toggleZoom, 100);
-    };
-    const applyDragOverlayStyles = (drag) => {
-      drag.style.position = "fixed";
-      drag.style.zIndex = "2147483646";
-      drag.style.top = "0";
-      drag.style.left = trafficLightClearance + "px";
-      drag.style.right = "0";
-      drag.style.height = zoomBand + "px";
-      drag.style.pointerEvents = "auto";
-      // no-drag: keep Wails drag.ts off this node so our zoom path owns the clicks.
-      drag.style.setProperty("--wails-draggable", "no-drag");
-    };
-    let lastZoomClickTs = 0;
-    let lastZoomClickX = 0;
-    let lastZoomClickY = 0;
-    const isZoomBandEvent = (event) => {
-      if (event.button !== 0) return false;
-      if (event.clientY < 0 || event.clientY > zoomBand) return false;
-      if (event.clientX < trafficLightClearance) return false;
-      const t = event.target;
-      if (t && t.closest && t.closest(interactiveSel)) return false;
-      return true;
-    };
-    // Click-timing zoom: works even when native first-click drag suppresses WebKit dblclick,
-    // and does not depend on AppleActionOnDoubleClick / wails:drag:doubleclick.
-    const onZoomBandMouseDown = (event) => {
-      if (!isZoomBandEvent(event)) return;
-      const now = typeof event.timeStamp === "number" && event.timeStamp > 0 ? event.timeStamp : Date.now();
-      const dt = now - lastZoomClickTs;
-      const dx = Math.abs(event.clientX - lastZoomClickX);
-      const dy = Math.abs(event.clientY - lastZoomClickY);
-      if (lastZoomClickTs > 0 && dt > 0 && dt <= 400 && dx <= 8 && dy <= 8) {
-        lastZoomClickTs = 0;
-        event.preventDefault();
-        event.stopPropagation();
-        toggleZoom();
-        return;
-      }
-      lastZoomClickTs = now;
-      lastZoomClickX = event.clientX;
-      lastZoomClickY = event.clientY;
-    };
-    ensureDragOverlay = () => {
-      let drag = document.getElementById("dsh-desktop-native-drag");
-      if (!drag) {
-        drag = document.createElement("div");
-        drag.id = "dsh-desktop-native-drag";
-        drag.className = "dsh-desktop-native-drag";
-        applyDragOverlayStyles(drag);
-        drag.addEventListener("mousedown", onZoomBandMouseDown, true);
-        (document.documentElement || document.body).appendChild(drag);
-        return drag;
-      }
-      applyDragOverlayStyles(drag);
-      return drag;
-    };
-    ensureDragOverlay();
-    const dragRoot = document.documentElement || document.body;
-    if (dragRoot && typeof MutationObserver === "function") {
-      const dragObserver = new MutationObserver(() => {
-        if (!document.getElementById("dsh-desktop-native-drag")) ensureDragOverlay();
-      });
-      dragObserver.observe(dragRoot, { childList: true, subtree: true });
-    }
-    window.setInterval(() => {
-      if (!document.getElementById("dsh-desktop-native-drag")) ensureDragOverlay();
-    }, 1500);
-    // Also catch title-band clicks that miss the overlay node (SPA chrome gaps).
-    document.addEventListener("mousedown", (event) => {
-      const t = event.target;
-      if (t && t.closest && t.closest("#dsh-desktop-native-drag")) return;
-      onZoomBandMouseDown(event);
-    }, true);
-  }
+  // Chat drag: InvisibleTitleBarHeight (>0) supplies native drag (Wails #5900).
+  // Do not inject a full-width pointer-events overlay — it steals clicks from
+  // title-band buttons. Double-click maximise/restore was removed on purpose.
 
   applyInset();
 })();
@@ -436,8 +329,8 @@ const desktopChromeJS = `
     }
     current[method]();
   };
-  // Chat: zoom via click-timing + dblclick on drag strip / top chrome band
-  // (work-area maximise/restore, not fullscreen). Prefer Go ToggleChatZoom.
+  // Explicit maximize button still toggles work-area maximise/restore.
+  // Title-band double-click / click-timing zoom removed so drag + buttons work.
   const toggleZoom = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call === "function") {
@@ -451,48 +344,6 @@ const desktopChromeJS = `
     }
     window.setTimeout(toggleZoom, 100);
   };
-  if (!isManagement) {
-    const zoomBand = Math.max(topInset, 52);
-    const interactiveSel = "button, a, input, textarea, select, [role='button'], [contenteditable='true'], .dsh-desktop-chrome__controls";
-    let lastZoomClickTs = 0;
-    let lastZoomClickX = 0;
-    let lastZoomClickY = 0;
-    const onZoomBandMouseDown = (event) => {
-      if (event.button !== 0) return;
-      if (event.clientY < 0 || event.clientY > zoomBand) return;
-      const t = event.target;
-      if (t && t.closest && t.closest(interactiveSel)) return;
-      const now = typeof event.timeStamp === "number" && event.timeStamp > 0 ? event.timeStamp : Date.now();
-      const dt = now - lastZoomClickTs;
-      const dx = Math.abs(event.clientX - lastZoomClickX);
-      const dy = Math.abs(event.clientY - lastZoomClickY);
-      if (lastZoomClickTs > 0 && dt > 0 && dt <= 400 && dx <= 8 && dy <= 8) {
-        lastZoomClickTs = 0;
-        event.preventDefault();
-        event.stopPropagation();
-        toggleZoom();
-        return;
-      }
-      lastZoomClickTs = now;
-      lastZoomClickX = event.clientX;
-      lastZoomClickY = event.clientY;
-    };
-    drag.addEventListener("mousedown", onZoomBandMouseDown, true);
-    drag.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      toggleZoom();
-    });
-    document.addEventListener("mousedown", onZoomBandMouseDown, true);
-    document.addEventListener("dblclick", (event) => {
-      if (event.clientY < 0 || event.clientY > zoomBand) return;
-      const t = event.target;
-      if (t && t.closest && t.closest(interactiveSel)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      toggleZoom();
-    }, true);
-  }
   const openManagement = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call !== "function") {

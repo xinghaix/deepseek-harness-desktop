@@ -69,7 +69,7 @@ func TestMacChatWindowUsesCompactTitlebarInset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(rawService), "func (d *Service) ToggleChatZoom()") {
-		t.Fatal("must expose ToggleChatZoom for JS titlebar double-click fallback")
+		t.Fatal("must expose ToggleChatZoom for chrome maximize button")
 	}
 }
 

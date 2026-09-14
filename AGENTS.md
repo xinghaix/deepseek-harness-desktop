@@ -46,7 +46,7 @@
 | 桌面 UI      | `internal/desktop`                        | 配置窗 / Chat 窗、标题栏与安全区、文件对话框、配置模态、菜单动作；依赖 Wails                                                           |
 | 国际化       | `internal/i18n`                           | 嵌入式 locales JSON、Resolve/Catalog/T/TActive；进程 Active 语言；桌面 prefs + LocaleBundle/SetLanguage                                  |
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
-| 壳状态       | `internal/desktopstate`                   | 持久偏好单文件 `~/.deepseek-harness-desktop/desktop-state.json`（prefs / launch / update）；与 DSH 运行时目录分离                      |
+| 壳状态       | `internal/desktopstate`                   | 持久偏好 `DSH_HOME/.deepseek-harness-desktop/desktop-state.json`（prefs / launch / update；与运行时同目录）                            |
 | WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431       |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
 | 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
@@ -55,11 +55,12 @@
 
 ### 进程与数据边界
 
-- 显式传入 `DSH_HOME`；DSH 运行时叠加目录：`DSH_HOME/.deepseek-harness-desktop`（0700），不是 DSH cwd。可用 `DSH_DESKTOP_STATE_DIR` 覆盖壳状态目录。
-- **两套目录，不要混：**
-  - **壳状态**（`~/.deepseek-harness-desktop/`，与 `DSH_HOME` 无关）：持久配置 `desktop-state.json`（prefs / launch / update；由本桌面端写入）。另有全局进程标记 `desktop-process.json`、锁 `dsh.lock`。
-  - **DSH 运行时**（`DSH_HOME/.deepseek-harness-desktop/`）：本桌面端写入热状态 `desktop-process.json`（owned-process 标记）、`desktop-bridge-endpoint.json`（桥接 `url`+`token`，关桥删除）；以及每次启动的 `desktop-bridge/`、`webview-boot/` patch。默认 Chat cwd 为 `DSH_HOME/workspaces`（不在本目录内）。同目录下 `settings.yaml`、`profiles/`、`storages/`、`.credentials.yaml` 等为 **dsh CLI/运行时** 数据，不是壳偏好。
-- 冷配置与热状态保持分文件（不要并进 `desktop-state.json`）：寿命、路径绑定、token 安全不同。
+- 显式传入 `DSH_HOME`；桌面运行目录：`DSH_HOME/.deepseek-harness-desktop`（0700），不是 DSH cwd。可用 `DSH_DESKTOP_STATE_DIR` 覆盖该目录。
+- **同一运行目录**（`DSH_HOME/.deepseek-harness-desktop/`）内分文件：
+  - 冷配置：`desktop-state.json`（prefs / launch / update）
+  - 热状态：`desktop-process.json`、`desktop-bridge-endpoint.json`、`dsh.lock`；以及 `desktop-bridge/`、`webview-boot/` patch
+  - 同目录下 `settings.yaml`、`profiles/`、`storages/`、`.credentials.yaml` 等为 **dsh CLI/运行时** 数据
+- 冷配置与热状态保持分文件（不要并进一个 JSON）：寿命与 token 安全不同；目录已统一。
 - Chat workspace 独立可配；未配置时默认 `DSH_HOME/workspaces`（在 DesktopDir 之外）。已配置路径原样使用。
 - 同一用户同时只允许一个由本桌面端拥有的 DSH（应用单实例锁 + DSH 锁 + 生命周期串行化）。
 - macOS：独立进程组 + 可选 supervise；Windows：Job Object（关闭即回收）+ `taskkill /T` 兜底。
@@ -89,7 +90,7 @@ Node 默认 16KiB header（HTTP 431）。
 - 宿主菜单承载「打开配置 / 打开 Chat / 退出」等（macOS 应用菜单；Win/Linux「文件」），不单独挂「设置」菜单。
 - 配置盖在 Chat 上的模态：有未保存改动时关闭需确认。
 - 可选「关闭到托盘」：`closeToTray`（`desktop-state.json`（prefs 段），默认 false）。开启后关闭 Chat 窗口会隐藏到系统托盘而非退出；⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。托盘图标仅在该偏好开启时存在。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
-- Chat 顶栏空白双击：铺满当前屏工作区或还原（`ToggleChatZoom` → `ToggleMaximise`，非系统全屏）。macOS：`InvisibleTitleBarHeight` 负责拖拽；顶栏 `no-drag` 命中带用 **click-timing** 调 Go 缩放（不依赖 `AppleActionOnDoubleClick` / Wails `wails:drag:doubleclick`）。Windows/Linux 用自绘拖区 + 同宽顶栏命中带。三端用户可见行为一致。
+- Chat 窗口拖拽：macOS 用 `InvisibleTitleBarHeight` 原生拖条；Windows/Linux 用自绘 `--wails-draggable: drag` 顶栏。**已取消**顶栏双击放大/还原（曾用全宽命中带/click-timing，会挡住标题栏按钮）。Win/Linux 仍可通过窗控「最大化」走 `ToggleChatZoom`。
 
 ## 跨平台
 
