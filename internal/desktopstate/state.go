@@ -33,6 +33,7 @@ type File struct {
 
 type Prefs struct {
 	ConfirmQuitWhenBusy *bool   `json:"confirmQuitWhenBusy,omitempty"`
+	TrayEnabled         *bool   `json:"trayEnabled,omitempty"`
 	CloseToTray         *bool   `json:"closeToTray,omitempty"`
 	TraySessionLimit    *int    `json:"traySessionLimit,omitempty"`
 	Language            *string `json:"language,omitempty"`
@@ -185,6 +186,7 @@ func migrateLegacyUnlocked() File {
 	if data, err := os.ReadFile(filepath.Join(dir, legacyDesktopPrefs)); err == nil {
 		var legacy struct {
 			ConfirmQuitWhenBusy *bool   `json:"confirmQuitWhenBusy"`
+			TrayEnabled         *bool   `json:"trayEnabled"`
 			CloseToTray         *bool   `json:"closeToTray"`
 			TraySessionLimit    *int    `json:"traySessionLimit"`
 			Language            *string `json:"language"`

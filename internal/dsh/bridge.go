@@ -44,6 +44,7 @@ type BridgeHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
 	SetConfirmQuitWhenBusy(enabled bool) (BridgePrefs, error)
+	SetTrayEnabled(enabled bool) (BridgePrefs, error)
 	SetCloseToTray(enabled bool) (BridgePrefs, error)
 	SetTraySessionLimit(n int) (BridgePrefs, error)
 	ReportChatBusy(busy bool)
@@ -59,6 +60,7 @@ type BridgeHost interface {
 // BridgePrefs is the JSON shape returned on /v1/prefs.
 type BridgePrefs struct {
 	ConfirmQuitWhenBusy bool                 `json:"confirmQuitWhenBusy"`
+	TrayEnabled         bool                 `json:"trayEnabled"`
 	CloseToTray         bool                 `json:"closeToTray"`
 	TraySessionLimit    int                  `json:"traySessionLimit"`
 	Language            string               `json:"language"`
@@ -401,6 +403,29 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetConfirmQuitWhenBusy(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-tray-enabled":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetTrayEnabled(body.Enabled)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return

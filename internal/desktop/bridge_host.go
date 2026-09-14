@@ -64,6 +64,7 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 	}
 	return dsh.BridgePrefs{
 		ConfirmQuitWhenBusy: prefs.ConfirmQuitWhenBusy,
+		TrayEnabled:         prefs.TrayEnabled,
 		CloseToTray:         prefs.CloseToTray,
 		TraySessionLimit:    prefs.TraySessionLimit,
 		Language:            prefs.Language,
@@ -84,6 +85,13 @@ func (a bridgeHostAdapter) SetLanguage(code string) (dsh.BridgePrefs, error) {
 func (a bridgeHostAdapter) SetConfirmQuitWhenBusy(enabled bool) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetConfirmQuitWhenBusy(enabled); err != nil {
 		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetTrayEnabled(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetTrayEnabled(enabled); err != nil {
+		return dsh.BridgePrefs{}, err
 	}
 	return a.BridgePrefs(), nil
 }

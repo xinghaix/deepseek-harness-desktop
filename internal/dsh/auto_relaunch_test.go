@@ -54,6 +54,9 @@ func (h *recordingBridgeHost) ReportChatBusy(bool) {}
 func (h *recordingBridgeHost) SetConfirmQuitWhenBusy(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) SetTrayEnabled(bool) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
 func (h *recordingBridgeHost) SetCloseToTray(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }

@@ -13,6 +13,7 @@ import (
 // DesktopPrefs is the JSON shape exposed to the config UI.
 type DesktopPrefs struct {
 	ConfirmQuitWhenBusy bool   `json:"confirmQuitWhenBusy"`
+	TrayEnabled         bool   `json:"trayEnabled"`
 	CloseToTray         bool   `json:"closeToTray"`
 	TraySessionLimit    int    `json:"traySessionLimit"`
 	Language            string `json:"language"`
@@ -40,9 +41,11 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 	pref := d.prefs.getLanguage()
 	system := i18n.SystemTag()
 	resolved, source := i18n.ResolveWithSource(pref, system)
+	trayOn := d.prefs.trayEnabled.Load()
 	return DesktopPrefs{
 		ConfirmQuitWhenBusy: d.prefs.confirmQuitWhenBusy.Load(),
-		CloseToTray:         d.prefs.closeToTray.Load(),
+		TrayEnabled:         trayOn,
+		CloseToTray:         trayOn && d.prefs.closeToTray.Load(),
 		TraySessionLimit:    int(d.prefs.traySessionLimit.Load()),
 		Language:            pref,
 		ResolvedLocale:      resolved,
@@ -59,12 +62,33 @@ func (d *Service) SetConfirmQuitWhenBusy(enabled bool) (DesktopPrefs, error) {
 	return d.DesktopPrefs(), nil
 }
 
-func (d *Service) SetCloseToTray(enabled bool) (DesktopPrefs, error) {
-	d.prefs.closeToTray.Store(enabled)
+func (d *Service) SetTrayEnabled(enabled bool) (DesktopPrefs, error) {
+	d.prefs.trayEnabled.Store(enabled)
+	if !enabled {
+		d.prefs.closeToTray.Store(false)
+	}
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
 	if enabled {
+		d.ensureTray()
+	} else {
+		d.destroyTray()
+		d.revealHiddenChat()
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetCloseToTray(enabled bool) (DesktopPrefs, error) {
+	if enabled && !d.prefs.trayEnabled.Load() {
+		// Closing to tray requires the tray master switch.
+		d.prefs.trayEnabled.Store(true)
+	}
+	d.prefs.closeToTray.Store(enabled && d.prefs.trayEnabled.Load())
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	if d.prefs.trayEnabled.Load() {
 		d.ensureTray()
 	} else {
 		d.destroyTray()

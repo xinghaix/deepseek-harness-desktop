@@ -55,7 +55,7 @@ func TestManagementUIContract(t *testing.T) {
 		"ChooseHome", "ChooseWorkspace", "OpenHome",
 		"OpenWorkspace", "OpenSettings", "CheckUpdate", "InstallUpdate", "UpdateStatus", "OpenReleasePage", "SetAutoCheckUpdate", "ReloadChat",
 		"SetConfigDirty", "DismissConfig", "DesktopPrefs", "SetConfirmQuitWhenBusy",
-		"SetCloseToTray", "SetTraySessionLimit",
+		"SetTrayEnabled", "SetCloseToTray", "SetTraySessionLimit",
 		"LocaleBundle", "SetLanguage",
 	} {
 		if !strings.Contains(html, "api(\""+method) {
@@ -89,7 +89,10 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, `id="confirm-quit-busy"`) || !strings.Contains(html, "有任务在运行时退出先确认") {
 		t.Fatal("desktop settings must allow disabling quit confirmation while a task is running")
 	}
-	if !strings.Contains(html, `id="close-to-tray"`) || !strings.Contains(html, "关闭窗口后在后台运行") {
+	if !strings.Contains(html, `id="tray-enabled"`) || !strings.Contains(html, "开启系统托盘") {
+		t.Fatal("desktop settings must expose tray-enabled master switch")
+	}
+	if !strings.Contains(html, `id="close-to-tray"`) || !strings.Contains(html, "关闭窗口到托盘") {
 		t.Fatal("desktop settings must expose close-to-tray")
 	}
 	if !strings.Contains(html, `id="shortcuts-panel"`) || !strings.Contains(html, "dashboard.shortcuts_title") {
@@ -98,7 +101,7 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, "shortcut.close_chat_keys") || !strings.Contains(html, "⌘W / Ctrl+W") {
 		t.Fatal("shortcuts panel must document Cmd/Ctrl+W hide-to-tray")
 	}
-	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "托盘最近会话数量") {
+	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "任务显示数量") {
 		t.Fatal("desktop settings must expose tray session limit")
 	}
 	if !strings.Contains(html, `id="ui-language"`) || !strings.Contains(html, "data-i18n") || !strings.Contains(html, "DSHI18n") {

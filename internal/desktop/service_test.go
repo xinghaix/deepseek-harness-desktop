@@ -108,7 +108,10 @@ func TestCloseChatToTrayHidesWithoutQuit(t *testing.T) {
 		t.Fatal("must expose CloseChatToTray for Cmd/Ctrl+W")
 	}
 	if !strings.Contains(traySrc, "ensureTrayForHide") {
-		t.Fatal("CloseChatToTray must ensure tray even when closeToTray is off")
+		t.Fatal("CloseChatToTray must ensure tray only when trayEnabled is on")
+	}
+	if !strings.Contains(traySrc, "trayEnabled.Load()") {
+		t.Fatal("tray creation must gate on trayEnabled")
 	}
 	// CloseChatToTray body must not call RequestQuit.
 	idx := strings.Index(traySrc, "func (d *Service) CloseChatToTray()")

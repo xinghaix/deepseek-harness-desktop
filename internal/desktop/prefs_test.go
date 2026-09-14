@@ -78,12 +78,16 @@ func TestCloseToTrayDefaultsOffAndPersists(t *testing.T) {
 	desktopstate.ResetCacheForTest()
 	var p desktopPrefs
 	p.load()
+	if p.trayEnabled.Load() {
+		t.Fatal("trayEnabled must default to off")
+	}
 	if p.closeToTray.Load() {
 		t.Fatal("close-to-tray must default to off")
 	}
 	if got := p.traySessionLimit.Load(); got != defaultTraySessionLimit {
 		t.Fatalf("tray session limit default = %d, want %d", got, defaultTraySessionLimit)
 	}
+	p.trayEnabled.Store(true)
 	p.closeToTray.Store(true)
 	p.traySessionLimit.Store(int32(clampTraySessionLimit(99)))
 	if err := p.save(); err != nil {
@@ -102,6 +106,9 @@ func TestCloseToTrayDefaultsOffAndPersists(t *testing.T) {
 	desktopstate.ResetCacheForTest()
 	var p2 desktopPrefs
 	p2.load()
+	if !p2.trayEnabled.Load() {
+		t.Fatal("enabled trayEnabled was not reloaded")
+	}
 	if !p2.closeToTray.Load() {
 		t.Fatal("enabled close-to-tray was not reloaded")
 	}

@@ -361,3 +361,5 @@ html.dsh-desktop-config-modal .lead { margin-top: 10px; font-size: 13px; }
 .shortcut-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
 .shortcut-list kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--text); white-space: nowrap; }
 html:not([data-platform="mac"]) .shortcut-mac-only { display: none; }
+
+.tray-dependent.is-disabled { opacity: 0.45; pointer-events: none; }

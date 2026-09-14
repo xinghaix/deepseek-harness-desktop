@@ -623,7 +623,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "prefs";
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "prefs";
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -641,7 +641,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -985,8 +985,8 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "关闭窗口后在后台运行" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "开启后：关闭 Chat 窗口会隐藏到系统托盘，不会退出。从托盘图标可重新打开 Chat 或退出。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "开启系统托盘" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: "总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。" })
 									]
 								}),
 								jsx("div", {
@@ -995,10 +995,10 @@ window.__ModuleLoader__.load({
 										className: "dshDesktopBridgeToggle",
 										type: "checkbox",
 										role: "switch",
-										"aria-checked": prefs?.closeToTray === true,
-										checked: prefs?.closeToTray === true,
+										"aria-checked": prefs?.trayEnabled === true,
+										checked: prefs?.trayEnabled === true,
 										disabled: !connected || pending || !prefs,
-										onChange: (event) => void invoke("setCloseToTray", { enabled: event.target.checked })
+										onChange: (event) => void invoke("setTrayEnabled", { enabled: event.target.checked })
 									})
 								})
 							]
@@ -1009,8 +1009,8 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "托盘最近会话数量" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条，按最近活动排序。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "任务显示数量" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条，按最近活动排序。" })
 									]
 								}),
 								jsx("div", {
@@ -1021,8 +1021,32 @@ window.__ModuleLoader__.load({
 										min: 0,
 										max: 20,
 										value: prefs?.traySessionLimit ?? 5,
-										disabled: !connected || pending || !prefs,
+										disabled: !connected || pending || !prefs || prefs?.trayEnabled !== true,
 										onChange: (event) => void invoke("setTraySessionLimit", { limit: Number(event.target.value) })
+									})
+								})
+							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "关闭窗口到托盘" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: "需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。" })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.trayEnabled === true && prefs?.closeToTray === true,
+										checked: prefs?.trayEnabled === true && prefs?.closeToTray === true,
+										disabled: !connected || pending || !prefs || prefs?.trayEnabled !== true,
+										onChange: (event) => void invoke("setCloseToTray", { enabled: event.target.checked })
 									})
 								})
 							]

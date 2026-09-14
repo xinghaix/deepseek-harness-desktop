@@ -9,6 +9,7 @@ import (
 
 type desktopPrefs struct {
 	confirmQuitWhenBusy atomic.Bool
+	trayEnabled         atomic.Bool
 	closeToTray         atomic.Bool
 	traySessionLimit    atomic.Int32
 	language            atomic.Value // string; "" / "system" = follow system
@@ -16,6 +17,7 @@ type desktopPrefs struct {
 
 func (p *desktopPrefs) load() {
 	p.confirmQuitWhenBusy.Store(true)
+	p.trayEnabled.Store(false)
 	p.closeToTray.Store(false)
 	p.traySessionLimit.Store(defaultTraySessionLimit)
 	p.language.Store("")
@@ -27,8 +29,18 @@ func (p *desktopPrefs) load() {
 	if prefs.ConfirmQuitWhenBusy != nil {
 		p.confirmQuitWhenBusy.Store(*prefs.ConfirmQuitWhenBusy)
 	}
+	if prefs.TrayEnabled != nil {
+		p.trayEnabled.Store(*prefs.TrayEnabled)
+	} else if prefs.CloseToTray != nil && *prefs.CloseToTray {
+		// Migration: older installs only had closeToTray; that implied a live tray.
+		p.trayEnabled.Store(true)
+	}
 	if prefs.CloseToTray != nil {
 		p.closeToTray.Store(*prefs.CloseToTray)
+	}
+	// closeToTray requires trayEnabled.
+	if p.closeToTray.Load() && !p.trayEnabled.Load() {
+		p.closeToTray.Store(false)
 	}
 	if prefs.TraySessionLimit != nil {
 		p.traySessionLimit.Store(int32(clampTraySessionLimit(*prefs.TraySessionLimit)))
@@ -40,10 +52,12 @@ func (p *desktopPrefs) load() {
 
 func (p *desktopPrefs) save() error {
 	confirm := p.confirmQuitWhenBusy.Load()
-	closeToTray := p.closeToTray.Load()
+	trayEnabled := p.trayEnabled.Load()
+	closeToTray := p.closeToTray.Load() && trayEnabled
 	limit := int(p.traySessionLimit.Load())
 	return desktopstate.Update(func(f *desktopstate.File) {
 		f.Prefs.ConfirmQuitWhenBusy = &confirm
+		f.Prefs.TrayEnabled = &trayEnabled
 		f.Prefs.CloseToTray = &closeToTray
 		f.Prefs.TraySessionLimit = &limit
 		if lang := p.getLanguage(); lang != "" {

@@ -14,23 +14,27 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// StartTrayIfEnabled creates the system tray when closeToTray is already on at launch.
+// StartTrayIfEnabled creates the system tray when trayEnabled is already on at launch.
 // Linux tray visibility depends on the desktop environment (StatusNotifierItem / AppIndicator).
 func (d *Service) StartTrayIfEnabled() {
-	if d.prefs.closeToTray.Load() {
+	if d.prefs.trayEnabled.Load() {
 		d.ensureTray()
 	}
 }
 
 func (d *Service) ensureTray() {
-	if !d.prefs.closeToTray.Load() {
+	if !d.prefs.trayEnabled.Load() {
 		return
 	}
 	d.createTrayIfNeeded()
 }
 
-// ensureTrayForHide creates the tray even when closeToTray is off (Cmd/Ctrl+W hide).
+// ensureTrayForHide creates the tray for Cmd/Ctrl+W hide only when tray is enabled.
+// With tray off, the window still hides (dock/taskbar) but no status-item is created.
 func (d *Service) ensureTrayForHide() {
+	if !d.prefs.trayEnabled.Load() {
+		return
+	}
 	d.createTrayIfNeeded()
 }
 
@@ -58,9 +62,9 @@ func (d *Service) createTrayIfNeeded() {
 	tray.SetMenu(d.newTrayMenu(app))
 }
 
-// CloseChatToTray hides Chat (and overlays) to the tray without quitting.
-// Always hides even when closeToTray is false — Cmd/Ctrl+W ≠ quit.
-// The window X button keeps existing closeToTray semantics via hookChatWindow.
+// CloseChatToTray hides Chat (and overlays) without quitting.
+// Always hides — Cmd/Ctrl+W ≠ quit. Tray icon is created only when trayEnabled.
+// The window X button keeps closeToTray semantics via hookChatWindow.
 func (d *Service) CloseChatToTray() error {
 	app := application.Get()
 	if app == nil {

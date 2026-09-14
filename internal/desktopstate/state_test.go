@@ -29,6 +29,7 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 	}
 	mustWrite(legacyDesktopPrefs, map[string]any{
 		"confirmQuitWhenBusy": confirm,
+		"trayEnabled":         closeToTray,
 		"closeToTray":         closeToTray,
 		"traySessionLimit":    limit,
 		"language":            lang,
