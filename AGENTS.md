@@ -90,7 +90,7 @@ Node 默认 16KiB header（HTTP 431）。
 - 宿主菜单承载「打开配置 / 打开 Chat / 退出」等（macOS 应用菜单；Win/Linux「文件」），不单独挂「设置」菜单。
 - 配置盖在 Chat 上的模态：有未保存改动时关闭需确认。
 - 可选「关闭到托盘」：`closeToTray`（`desktop-state.json`（prefs 段），默认 false）。开启后关闭 Chat 窗口会隐藏到系统托盘而非退出；⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。托盘图标仅在该偏好开启时存在。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
-- Chat 窗口拖拽与双击缩放：macOS 用 `InvisibleTitleBarHeight` 原生拖条；Windows/Linux 用自绘 `--wails-draggable: drag` 顶栏（窗控 `no-drag`）。空白处双击一律 `ToggleChatZoom`（不跟系统偏好）；**禁止**全宽 pointer-events overlay / click-timing。macOS：仅 `clientY ≤ 36` 且非可交互控件；Win/Linux：仅拖拽条 `dblclick` + 最大化按钮。
+- Chat 窗口拖拽与双击缩放：macOS `InvisibleTitleBarHeight` 负责拖；空白区事件到不了 WebView，需 **36px** `no-drag` 命中带 + click-timing → `ToggleChatZoom`（左让交通灯；`elementFromPoint` 穿透按钮；**禁止**高度 52/全宽挡工具栏）。Win/Linux：仅自绘拖拽条 click-timing/dblclick + 最大化按钮（窗控 `no-drag`）。不依赖 `AppleActionOnDoubleClick`。
 
 ## 跨平台
 

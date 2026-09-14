@@ -176,6 +176,21 @@ body > .app-shell {
   padding-right: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
 }
 
+/* Zoom hit-band over the native titlebar (Chat only).
+   InvisibleTitleBarHeight owns native drag; blank-area events never reach JS without
+   this no-drag band. Height MUST equal desktopNativeTopInset (36) — taller bands
+   cover Chat toolbar buttons. Left clears traffic lights. Buttons use poke-through. */
+.dsh-desktop-native-drag {
+  position: fixed;
+  z-index: 2147483646;
+  top: 0;
+  left: 78px;
+  right: 0;
+  height: 36px;
+  --wails-draggable: no-drag;
+  pointer-events: auto;
+}
+
 `
 
 // escapeWailsCSS 为 Wails beta.16 macOS 的 windowInjectCSS 转义 CSS。
@@ -198,6 +213,7 @@ const desktopNativeWindowInsetJS = `
   let pageContent = null;
   let observedFrame = null;
   let frameObserver = null;
+  let ensureDragOverlay = null;
   if (!document.getElementById(chromeStyleId)) {
     const style = document.createElement("style");
     style.id = chromeStyleId;
@@ -231,6 +247,7 @@ const desktopNativeWindowInsetJS = `
         frameObserver.observe(frame, { attributes: true, attributeFilter: ["data-sidebar-collapsed", "data-details-collapsed", "style"] });
       }
       syncCollapsedRail();
+      if (typeof ensureDragOverlay === "function") ensureDragOverlay();
     }
   };
 
@@ -255,33 +272,129 @@ const desktopNativeWindowInsetJS = `
     return overlay?.parentElement || null;
   }
 
-  // Chat drag: InvisibleTitleBarHeight (>0) supplies native drag (Wails #5900).
-  // Never inject a full-width pointer-events overlay — it steals title-band clicks.
-  // Blank-area dblclick in the 36px inset always toggles work-area zoom.
-  const interactiveSel = "a,button,input,textarea,select,label,summary,[role='button'],[contenteditable='true'],[data-no-window-zoom]";
-  const toggleZoom = () => {
-    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-    if (typeof call === "function") {
-      void call("main.DSH.ToggleChatZoom");
-      return;
+  // Chat: InvisibleTitleBarHeight supplies native drag (Wails #5900). Blank-area
+  // clicks never reach the WebView without a no-drag hit-band. Height = topInset
+  // only (never 52). On mousedown, peek under the band; if the real target is
+  // interactive, pass the click through. Otherwise click-timing → ToggleChatZoom
+  // (not AppleActionOnDoubleClick / wails:drag:doubleclick).
+  if (!isManagement) {
+    const trafficLightClearance = 78;
+    const zoomBand = topInset;
+    const interactiveSel = "a,button,input,textarea,select,label,summary,[role='button'],[contenteditable='true'],[data-no-window-zoom]";
+    const toggleZoom = () => {
+      const call = window.wails && window.wails.Call && window.wails.Call.ByName;
+      if (typeof call === "function") {
+        void call("main.DSH.ToggleChatZoom");
+        return;
+      }
+      const current = window.wails && window.wails.Window;
+      if (current && typeof current.ToggleMaximise === "function") {
+        current.ToggleMaximise();
+        return;
+      }
+      window.setTimeout(toggleZoom, 100);
+    };
+    const applyDragOverlayStyles = (drag) => {
+      drag.style.position = "fixed";
+      drag.style.zIndex = "2147483646";
+      drag.style.top = "0";
+      drag.style.left = trafficLightClearance + "px";
+      drag.style.right = "0";
+      drag.style.height = zoomBand + "px";
+      drag.style.pointerEvents = "auto";
+      drag.style.setProperty("--wails-draggable", "no-drag");
+    };
+    let lastZoomClickTs = 0;
+    let lastZoomClickX = 0;
+    let lastZoomClickY = 0;
+    let passThroughUntilUp = false;
+    const underInteractive = (clientX, clientY, band) => {
+      band.style.pointerEvents = "none";
+      const under = document.elementFromPoint(clientX, clientY);
+      band.style.pointerEvents = "auto";
+      if (!under || !(under instanceof Element)) return null;
+      return under.closest(interactiveSel);
+    };
+    const passClickThrough = (band, event, under) => {
+      passThroughUntilUp = true;
+      band.style.pointerEvents = "none";
+      const restore = () => {
+        passThroughUntilUp = false;
+        band.style.pointerEvents = "auto";
+        window.removeEventListener("mouseup", restore, true);
+        window.removeEventListener("blur", restore);
+      };
+      window.addEventListener("mouseup", restore, true);
+      window.addEventListener("blur", restore);
+      try {
+        under.dispatchEvent(new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          screenX: event.screenX,
+          screenY: event.screenY,
+          button: 0,
+          buttons: 1
+        }));
+      } catch (_) {}
+    };
+    const onZoomBandMouseDown = (event) => {
+      if (event.button !== 0) return;
+      if (passThroughUntilUp) return;
+      if (event.clientY < 0 || event.clientY > zoomBand) return;
+      if (event.clientX < trafficLightClearance) return;
+      const band = document.getElementById("dsh-desktop-native-drag");
+      if (!band) return;
+      // event.target is usually the band itself — peek underneath for real controls.
+      const under = underInteractive(event.clientX, event.clientY, band);
+      if (under) {
+        lastZoomClickTs = 0;
+        passClickThrough(band, event, under);
+        return;
+      }
+      const now = typeof event.timeStamp === "number" && event.timeStamp > 0 ? event.timeStamp : Date.now();
+      const dt = now - lastZoomClickTs;
+      const dx = Math.abs(event.clientX - lastZoomClickX);
+      const dy = Math.abs(event.clientY - lastZoomClickY);
+      if (lastZoomClickTs > 0 && dt > 0 && dt <= 400 && dx <= 8 && dy <= 8) {
+        lastZoomClickTs = 0;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleZoom();
+        return;
+      }
+      lastZoomClickTs = now;
+      lastZoomClickX = event.clientX;
+      lastZoomClickY = event.clientY;
+    };
+    ensureDragOverlay = () => {
+      let drag = document.getElementById("dsh-desktop-native-drag");
+      if (!drag) {
+        drag = document.createElement("div");
+        drag.id = "dsh-desktop-native-drag";
+        drag.className = "dsh-desktop-native-drag";
+        applyDragOverlayStyles(drag);
+        drag.addEventListener("mousedown", onZoomBandMouseDown, true);
+        (document.documentElement || document.body).appendChild(drag);
+        return drag;
+      }
+      applyDragOverlayStyles(drag);
+      return drag;
+    };
+    ensureDragOverlay();
+    const dragRoot = document.documentElement || document.body;
+    if (dragRoot && typeof MutationObserver === "function") {
+      const dragObserver = new MutationObserver(() => {
+        if (!document.getElementById("dsh-desktop-native-drag")) ensureDragOverlay();
+      });
+      dragObserver.observe(dragRoot, { childList: true, subtree: true });
     }
-    const current = window.wails && window.wails.Window;
-    if (current && typeof current.ToggleMaximise === "function") {
-      current.ToggleMaximise();
-      return;
-    }
-    window.setTimeout(toggleZoom, 100);
-  };
-  document.addEventListener("dblclick", (event) => {
-    if (event.clientY > topInset) return;
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest(interactiveSel)) return;
-    event.preventDefault();
-    toggleZoom();
-  });
+  }
 
   applyInset();
+  if (typeof ensureDragOverlay === "function") ensureDragOverlay();
 })();
 `
 
@@ -353,8 +466,8 @@ const desktopChromeJS = `
     }
     current[method]();
   };
-  // Maximize button + blank drag-strip dblclick both toggle work-area zoom.
-  // Bind dblclick only on the drag strip (not full-width overlay / document capture).
+  // Maximize button + drag-strip click-timing/dblclick → ToggleChatZoom.
+  // Bind only on the drag strip (never document capture / full-width overlay).
   const toggleZoom = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call === "function") {
@@ -368,10 +481,34 @@ const desktopChromeJS = `
     }
     window.setTimeout(toggleZoom, 100);
   };
-  drag.addEventListener("dblclick", (event) => {
-    event.preventDefault();
-    toggleZoom();
-  });
+  if (!isManagement) {
+    let lastZoomClickTs = 0;
+    let lastZoomClickX = 0;
+    let lastZoomClickY = 0;
+    const onDragZoomMouseDown = (event) => {
+      if (event.button !== 0) return;
+      const now = typeof event.timeStamp === "number" && event.timeStamp > 0 ? event.timeStamp : Date.now();
+      const dt = now - lastZoomClickTs;
+      const dx = Math.abs(event.clientX - lastZoomClickX);
+      const dy = Math.abs(event.clientY - lastZoomClickY);
+      if (lastZoomClickTs > 0 && dt > 0 && dt <= 400 && dx <= 8 && dy <= 8) {
+        lastZoomClickTs = 0;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleZoom();
+        return;
+      }
+      lastZoomClickTs = now;
+      lastZoomClickX = event.clientX;
+      lastZoomClickY = event.clientY;
+    };
+    drag.addEventListener("mousedown", onDragZoomMouseDown, true);
+    drag.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleZoom();
+    });
+  }
   const openManagement = () => {
     const call = window.wails && window.wails.Call && window.wails.Call.ByName;
     if (typeof call !== "function") {
