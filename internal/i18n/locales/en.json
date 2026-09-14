@@ -323,7 +323,7 @@
   "tray.tooltip_running": "Tasks are running",
   "menu.close_window": "Close Window",
   "dashboard.shortcuts_title": "Keyboard shortcuts",
-  "dashboard.shortcuts_hint": "Shortcuts can be cleared (cleared = no accelerator; menu items still work by click). Works with Enable system tray and Close window to tray: when bound, ⌘W / Ctrl+W always hides Chat (to tray when tray is on, otherwise Dock/taskbar); the window X only goes to tray when Close window to tray is on; ⌘Q / Ctrl+Q quits. Remapping is not supported yet.",
+  "dashboard.shortcuts_hint": "Click a key chip to record a new shortcut; Clear unsets the accelerator (menu items still work by click); Restore all defaults resets built-in bindings. Works with Enable system tray and Close window to tray: when bound, the close/hide Chat shortcut always hides Chat (to tray when tray is on, otherwise Dock/taskbar); the window X only goes to tray when Close window to tray is on; the quit shortcut quits.",
   "shortcut.hide_others_keys_mac": "⌥⌘H",
   "shortcut.hide_others_keys": "⌥⌘H",
   "shortcut.hide_others_label": "Hide others",
@@ -345,5 +345,8 @@
   "shortcut.cleared": "Cleared",
   "shortcut.clear": "Clear",
   "shortcut.reset": "Restore default",
-  "shortcut.reset_all": "Restore all defaults"
+  "shortcut.reset_all": "Restore all defaults",
+  "shortcut.recording": "Press new shortcut…",
+  "shortcut.conflict": "Conflicts with “{0}”",
+  "shortcut.invalid": "Invalid shortcut"
 }

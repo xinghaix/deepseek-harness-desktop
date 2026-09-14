@@ -107,6 +107,15 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, "SetShortcuts") {
 		t.Fatal("dashboard must wire SetShortcuts")
 	}
+	if !strings.Contains(html, "keyboardEventToAccelerator") || !strings.Contains(html, "startShortcutRecording") {
+		t.Fatal("shortcuts panel must support click-to-record remapping")
+	}
+	if !strings.Contains(html, "shortcut.recording") || !strings.Contains(html, "shortcut.conflict") {
+		t.Fatal("locales must expose shortcut recording/conflict copy")
+	}
+	if strings.Contains(html, "暂不支持改键") || strings.Contains(html, "Remapping is not supported") {
+		t.Fatal("shortcuts hint must no longer say remapping is unsupported")
+	}
 	if !strings.Contains(html, `id="tray-session-limit"`) || !strings.Contains(html, "任务显示数量") {
 		t.Fatal("desktop settings must expose tray session limit")
 	}

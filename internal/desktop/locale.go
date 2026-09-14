@@ -112,8 +112,13 @@ func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
 // Semantics match desktop-state prefs.shortcuts: absent key → default; "" → cleared;
 // non-empty → that accelerator. The request map is treated as the full override set
 // for known keys (values equal to defaults are omitted on disk).
+// Invalid accelerator tokens are rejected.
 func (d *Service) SetShortcuts(shortcuts map[string]string) (DesktopPrefs, error) {
-	d.prefs.setShortcutOverrides(shortcuts)
+	normalized, err := ValidateShortcutOverrides(shortcuts)
+	if err != nil {
+		return d.DesktopPrefs(), err
+	}
+	d.prefs.setShortcutOverrides(normalized)
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}

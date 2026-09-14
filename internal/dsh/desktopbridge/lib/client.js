@@ -299,11 +299,23 @@ window.__ModuleLoader__.load({
 					white-space: nowrap;
 					min-width: 4.5em;
 					text-align: center;
+					cursor: pointer;
+					user-select: none;
+				}
+				.dshDesktopBridgeKbd:hover {
+					border-color: var(--dsw-alias-brand-primary, #3b82f6);
 				}
 				.dshDesktopBridgeKbd.is-cleared {
 					color: var(--dsw-alias-label-tertiary);
 					font-style: italic;
 					border-style: dashed;
+				}
+				.dshDesktopBridgeKbd.is-recording {
+					color: var(--dsw-alias-brand-primary, #3b82f6);
+					border-color: var(--dsw-alias-brand-primary, #3b82f6);
+					border-style: solid;
+					font-style: normal;
+					box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 				}
 				.dshDesktopBridgeShortcutActions {
 					display: flex;
@@ -574,6 +586,54 @@ window.__ModuleLoader__.load({
 			return () => obs.disconnect();
 		}
 
+
+		function keyboardEventToAccelerator(event, isMac) {
+			const code = event.code || "";
+			const key = event.key || "";
+			if (key === "Escape" || code === "Escape") return { cancel: true };
+			const modifierCodes = new Set([
+				"ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
+				"AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight"
+			]);
+			if (modifierCodes.has(code) || key === "Shift" || key === "Control" || key === "Alt" || key === "Meta") {
+				return null;
+			}
+			let keyToken = "";
+			if (/^Key[A-Z]$/.test(code)) keyToken = code.slice(3).toLowerCase();
+			else if (/^Digit[0-9]$/.test(code)) keyToken = code.slice(5);
+			else if (/^Numpad[0-9]$/.test(code)) keyToken = code.slice(6);
+			else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) keyToken = code;
+			else {
+				const codeMap = {
+					Comma: ",", Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]",
+					Semicolon: ";", Quote: "'", Minus: "-", Equal: "=", Backquote: "`",
+					Space: "Space", Tab: "Tab", Enter: "Return", NumpadEnter: "Return",
+					Backspace: "Backspace", Delete: "Delete", Insert: "Insert",
+					ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+					Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+					NumpadAdd: "Plus", NumpadSubtract: "-", NumpadMultiply: "*", NumpadDivide: "/",
+					NumpadDecimal: "."
+				};
+				if (Object.prototype.hasOwnProperty.call(codeMap, code)) keyToken = codeMap[code];
+				else if (key.length === 1) {
+					const ch = key.toLowerCase();
+					if (/[a-z0-9]/.test(ch) || "`-=[]\\;',./".includes(ch)) keyToken = ch;
+				}
+			}
+			if (!keyToken) return { invalid: true };
+			const parts = [];
+			if (isMac) {
+				if (event.metaKey) parts.push("CmdOrCtrl");
+				if (event.ctrlKey) parts.push("Control");
+			} else if (event.ctrlKey || event.metaKey) {
+				parts.push("CmdOrCtrl");
+			}
+			if (event.altKey) parts.push("OptionOrAlt");
+			if (event.shiftKey) parts.push("Shift");
+			parts.push(keyToken);
+			return { accel: parts.join("+") };
+		}
+
 		function DesktopSettingsTab({ connection }) {
 			installStyle();
 			const [status, setStatus] = react.useState(null);
@@ -586,6 +646,7 @@ window.__ModuleLoader__.load({
 			const [pending, setPending] = react.useState(false);
 			const [draft, setDraft] = react.useState({ executable: "", home: "", workspace: "" });
 			const [pathsOpen, setPathsOpen] = react.useState(false);
+			const [recordingShortcutId, setRecordingShortcutId] = react.useState(null);
 			const backoffRef = react.useRef(1000);
 			const timerRef = react.useRef(null);
 			const linkRef = react.useRef(link);
@@ -727,6 +788,7 @@ window.__ModuleLoader__.load({
 				if (accel == null || accel === "") return "";
 				let s = String(accel);
 				s = s.replace(/CmdOrCtrl\+/gi, isMac ? "⌘" : "Ctrl+");
+				s = s.replace(/\bControl\+/gi, isMac ? "⌃" : "Ctrl+");
 				s = s.replace(/OptionOrAlt\+/gi, isMac ? "⌥" : "Alt+");
 				s = s.replace(/Alt\+/gi, isMac ? "⌥" : "Alt+");
 				s = s.replace(/Shift\+/gi, isMac ? "⇧" : "Shift+");
@@ -746,9 +808,44 @@ window.__ModuleLoader__.load({
 				next[id] = value;
 				return invoke("setShortcuts", { shortcuts: next });
 			};
+			const normalizeAccelCompare = (accel) => String(accel || "").trim().toLowerCase();
+			react.useEffect(() => {
+				if (!recordingShortcutId) return undefined;
+				const onKey = (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					const parsed = keyboardEventToAccelerator(event, isMac);
+					if (!parsed) return;
+					if (parsed.cancel) {
+						setRecordingShortcutId(null);
+						return;
+					}
+					if (parsed.invalid || !parsed.accel) {
+						setMessage("无效快捷键");
+						setMessageKind("error");
+						return;
+					}
+					const id = recordingShortcutId;
+					const current = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
+					const want = normalizeAccelCompare(parsed.accel);
+					for (const otherId of Object.keys(current)) {
+						if (otherId === id) continue;
+						if (normalizeAccelCompare(current[otherId]) === want && current[otherId] !== "") {
+							setMessage(`快捷键与「${SHORTCUT_LABELS[otherId] || otherId}」冲突`);
+							setMessageKind("error");
+							return;
+						}
+					}
+					setRecordingShortcutId(null);
+					void setOneShortcut(id, parsed.accel);
+				};
+				window.addEventListener("keydown", onKey, true);
+				return () => window.removeEventListener("keydown", onKey, true);
+			}, [recordingShortcutId, isMac, prefs]);
 			const shortcutRows = shortcutIds.map((id) => {
 				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : DEFAULT_SHORTCUTS[id];
 				const cleared = accel === "";
+				const recording = recordingShortcutId === id;
 				return jsxs("div", {
 					className: "dshDesktopBridgeShortcutRow",
 					key: id,
@@ -758,14 +855,31 @@ window.__ModuleLoader__.load({
 							className: "dshDesktopBridgeShortcutActions",
 							children: [
 								jsx("kbd", {
-									className: "dshDesktopBridgeKbd" + (cleared ? " is-cleared" : ""),
-									children: cleared ? "已清除" : (formatAccel(accel) || accel)
+									className: "dshDesktopBridgeKbd" + (cleared && !recording ? " is-cleared" : "") + (recording ? " is-recording" : ""),
+									role: "button",
+									tabIndex: 0,
+									title: "点击录制新快捷键",
+									onClick: () => {
+										if (!connected || pending || !prefs) return;
+										setRecordingShortcutId((prev) => (prev === id ? null : id));
+									},
+									onKeyDown: (event) => {
+										if (recordingShortcutId) return;
+										if (event.key !== "Enter" && event.key !== " ") return;
+										event.preventDefault();
+										if (!connected || pending || !prefs) return;
+										setRecordingShortcutId(id);
+									},
+									children: recording ? "按下新快捷键…" : (cleared ? "已清除" : (formatAccel(accel) || accel))
 								}),
 								jsx("button", {
 									className: "dshDesktopBridgeSelector",
 									type: "button",
 									disabled: !connected || pending || !prefs,
-									onClick: () => void setOneShortcut(id, cleared ? DEFAULT_SHORTCUTS[id] : ""),
+									onClick: () => {
+										setRecordingShortcutId(null);
+										void setOneShortcut(id, cleared ? DEFAULT_SHORTCUTS[id] : "");
+									},
 									children: cleared ? "恢复默认" : "清除"
 								})
 							]
@@ -1164,7 +1278,7 @@ window.__ModuleLoader__.load({
 						jsx("div", {
 							className: "dshDesktopBridgeDesc",
 							style: { padding: "0 0 8px" },
-							children: "可清除单个快捷键（清除后无加速键，菜单仍可点）。绑定的 ⌘W / Ctrl+W 始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。暂不支持改键。"
+							children: "点击按键可录制新快捷键；清除可取消加速键（菜单仍可点）；全部恢复默认还原内置绑定。绑定的关闭/隐藏 Chat 快捷键始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。"
 						}),
 						...shortcutRows,
 						jsx("div", {
@@ -1174,7 +1288,7 @@ window.__ModuleLoader__.load({
 								className: "dshDesktopBridgeSelector",
 								type: "button",
 								disabled: !connected || pending || !prefs,
-								onClick: () => void invoke("setShortcuts", { shortcuts: { ...DEFAULT_SHORTCUTS } }),
+								onClick: () => { setRecordingShortcutId(null); void invoke("setShortcuts", { shortcuts: { ...DEFAULT_SHORTCUTS } }); },
 								children: "全部恢复默认"
 							})
 						})

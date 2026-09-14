@@ -323,7 +323,7 @@
   "tray.tooltip_running": "有任务正在运行",
   "menu.close_window": "关闭窗口",
   "dashboard.shortcuts_title": "快捷键",
-  "dashboard.shortcuts_hint": "快捷键可清除（清除后无加速键，菜单仍可点选）。与上方「开启系统托盘」「关闭窗口到托盘」配合：绑定的 ⌘W / Ctrl+W 始终隐藏 Chat（开托盘则进托盘，否则回程序坞/任务栏）；窗口 X 仅在开启「关闭窗口到托盘」时进托盘；⌘Q / Ctrl+Q 退出。暂不支持改键。",
+  "dashboard.shortcuts_hint": "点击按键可录制新快捷键；清除可取消加速键（菜单仍可点选）；全部恢复默认还原内置绑定。与上方「开启系统托盘」「关闭窗口到托盘」配合：绑定的关闭/隐藏 Chat 快捷键始终隐藏 Chat（开托盘则进托盘，否则回程序坞/任务栏）；窗口 X 仅在开启「关闭窗口到托盘」时进托盘；退出快捷键退出应用。",
   "shortcut.hide_others_keys_mac": "⌥⌘H",
   "shortcut.hide_others_keys": "⌥⌘H",
   "shortcut.hide_others_label": "隐藏其他",
@@ -345,5 +345,8 @@
   "shortcut.cleared": "已清除",
   "shortcut.clear": "清除",
   "shortcut.reset": "恢复默认",
-  "shortcut.reset_all": "全部恢复默认"
+  "shortcut.reset_all": "全部恢复默认",
+  "shortcut.recording": "按下新快捷键…",
+  "shortcut.conflict": "快捷键与「{0}」冲突",
+  "shortcut.invalid": "无效快捷键"
 }

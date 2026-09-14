@@ -386,6 +386,14 @@ const DEFAULT_SHORTCUTS = {
   hide: "CmdOrCtrl+h",
   hideOthers: "CmdOrCtrl+OptionOrAlt+h",
 };
+const SHORTCUT_LABEL_KEYS = {
+  openSettings: "shortcut.open_settings_label",
+  closeChat: "shortcut.close_chat_label",
+  quit: "shortcut.quit_label",
+  hide: "shortcut.hide_label",
+  hideOthers: "shortcut.hide_others_label",
+};
+let shortcutRecordingId = null;
 function isMacPlatform() {
   return document.documentElement.dataset.platform === "mac";
 }
@@ -395,6 +403,7 @@ function formatAccelerator(accel) {
   let s = String(accel);
   s = s.replace(/CmdOrCtrl\+/gi, mac ? "⌘" : "Ctrl+");
   s = s.replace(/CommandOrControl\+/gi, mac ? "⌘" : "Ctrl+");
+  s = s.replace(/\bControl\+/gi, mac ? "⌃" : "Ctrl+");
   s = s.replace(/OptionOrAlt\+/gi, mac ? "⌥" : "Alt+");
   s = s.replace(/Alt\+/gi, mac ? "⌥" : "Alt+");
   s = s.replace(/Shift\+/gi, mac ? "⇧" : "Shift+");
@@ -415,6 +424,130 @@ function shortcutDisplayLabel(accel, row) {
   }
   return accel;
 }
+function normalizeAccelCompare(accel) {
+  return String(accel || "").trim().toLowerCase();
+}
+/** Map KeyboardEvent → Wails accelerator, or null if modifier-only / unsupported. */
+function keyboardEventToAccelerator(event) {
+  const code = event.code || "";
+  const key = event.key || "";
+  if (key === "Escape" || code === "Escape") return { cancel: true };
+  const modifierCodes = new Set([
+    "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
+    "AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight",
+  ]);
+  if (modifierCodes.has(code) || key === "Shift" || key === "Control" || key === "Alt" || key === "Meta") {
+    return null;
+  }
+  let keyToken = "";
+  if (/^Key[A-Z]$/.test(code)) keyToken = code.slice(3).toLowerCase();
+  else if (/^Digit[0-9]$/.test(code)) keyToken = code.slice(5);
+  else if (/^Numpad[0-9]$/.test(code)) keyToken = code.slice(6);
+  else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) keyToken = code;
+  else {
+    const codeMap = {
+      Comma: ",", Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]",
+      Semicolon: ";", Quote: "'", Minus: "-", Equal: "=", Backquote: "`",
+      Space: "Space", Tab: "Tab", Enter: "Return", NumpadEnter: "Return",
+      Backspace: "Backspace", Delete: "Delete", Insert: "Insert",
+      ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+      Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+      NumpadAdd: "Plus", NumpadSubtract: "-", NumpadMultiply: "*", NumpadDivide: "/",
+      NumpadDecimal: ".",
+    };
+    if (Object.prototype.hasOwnProperty.call(codeMap, code)) keyToken = codeMap[code];
+    else if (key.length === 1) {
+      const ch = key.toLowerCase();
+      if (/[a-z0-9]/.test(ch) || "`-=[]\\;',./".includes(ch)) keyToken = ch;
+    }
+  }
+  if (!keyToken) return { invalid: true };
+  const parts = [];
+  const mac = isMacPlatform();
+  if (mac) {
+    if (event.metaKey) parts.push("CmdOrCtrl");
+    if (event.ctrlKey) parts.push("Control");
+  } else if (event.ctrlKey || event.metaKey) {
+    parts.push("CmdOrCtrl");
+  }
+  if (event.altKey) parts.push("OptionOrAlt");
+  if (event.shiftKey) parts.push("Shift");
+  parts.push(keyToken);
+  return { accel: parts.join("+") };
+}
+function stopShortcutRecording({ restore = true } = {}) {
+  if (!shortcutRecordingId) return;
+  const id = shortcutRecordingId;
+  shortcutRecordingId = null;
+  window.removeEventListener("keydown", onShortcutRecordKeydown, true);
+  const li = document.querySelector(`#shortcuts-list [data-shortcut="${id}"]`);
+  const kbd = li && li.querySelector("[data-shortcut-display]");
+  if (kbd) {
+    kbd.classList.remove("is-recording");
+    kbd.removeAttribute("aria-pressed");
+  }
+  if (restore) {
+    void api("DesktopPrefs").then((prefs) => applyShortcutsPrefs(prefs)).catch(() => {});
+  }
+}
+function onShortcutRecordKeydown(event) {
+  if (!shortcutRecordingId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const parsed = keyboardEventToAccelerator(event);
+  if (!parsed) return; // bare modifier
+  if (parsed.cancel) {
+    stopShortcutRecording({ restore: true });
+    return;
+  }
+  if (parsed.invalid || !parsed.accel) {
+    setMessage(t("shortcut.invalid"), true);
+    return;
+  }
+  const id = shortcutRecordingId;
+  void run(async () => {
+    const prefs = await api("DesktopPrefs");
+    const current = Object.assign({}, DEFAULT_SHORTCUTS, (prefs && prefs.shortcuts) || {});
+    const want = normalizeAccelCompare(parsed.accel);
+    for (const otherId of Object.keys(current)) {
+      if (otherId === id) continue;
+      if (normalizeAccelCompare(current[otherId]) === want && current[otherId] !== "") {
+        const label = t(SHORTCUT_LABEL_KEYS[otherId] || otherId);
+        setMessage(t("shortcut.conflict", label), true);
+        // stay in recording
+        return;
+      }
+    }
+    current[id] = parsed.accel;
+    try {
+      const updated = await api("SetShortcuts", current);
+      stopShortcutRecording({ restore: false });
+      applyShortcutsPrefs(updated);
+      setMessage(t("dashboard.ready_message"));
+    } catch (error) {
+      setMessage(errorText(error), true);
+      // keep recording so the user can try another combo
+    }
+  });
+}
+function startShortcutRecording(id) {
+  if (shortcutRecordingId === id) {
+    stopShortcutRecording({ restore: true });
+    return;
+  }
+  stopShortcutRecording({ restore: true });
+  shortcutRecordingId = id;
+  const li = document.querySelector(`#shortcuts-list [data-shortcut="${id}"]`);
+  const kbd = li && li.querySelector("[data-shortcut-display]");
+  if (kbd) {
+    kbd.classList.add("is-recording");
+    kbd.classList.remove("is-cleared");
+    kbd.removeAttribute("data-i18n");
+    kbd.setAttribute("aria-pressed", "true");
+    kbd.textContent = t("shortcut.recording");
+  }
+  window.addEventListener("keydown", onShortcutRecordKeydown, true);
+}
 function applyShortcutsPrefs(prefs) {
   const map = (prefs && prefs.shortcuts && typeof prefs.shortcuts === "object") ? prefs.shortcuts : {};
   document.querySelectorAll("#shortcuts-list [data-shortcut]").forEach((li) => {
@@ -423,7 +556,8 @@ function applyShortcutsPrefs(prefs) {
     const kbd = li.querySelector("[data-shortcut-display]");
     const btn = li.querySelector(".shortcut-toggle");
     const cleared = accel === "";
-    if (kbd) {
+    const recording = shortcutRecordingId === id;
+    if (kbd && !recording) {
       if (cleared) {
         kbd.setAttribute("data-i18n", "shortcut.cleared");
         kbd.textContent = t("shortcut.cleared");
@@ -432,6 +566,10 @@ function applyShortcutsPrefs(prefs) {
         kbd.textContent = shortcutDisplayLabel(accel, kbd);
       }
       kbd.classList.toggle("is-cleared", cleared);
+      kbd.classList.remove("is-recording");
+      kbd.setAttribute("tabindex", "0");
+      kbd.setAttribute("role", "button");
+      kbd.setAttribute("title", t("shortcut.recording"));
     }
     if (btn) {
       btn.dataset.action = cleared ? "reset" : "clear";
@@ -483,11 +621,20 @@ async function loadDesktopPrefs() {
 const shortcutsList = $("shortcuts-list");
 if (shortcutsList) {
   shortcutsList.addEventListener("click", (event) => {
+    const kbd = event.target.closest("[data-shortcut-display]");
+    if (kbd && shortcutsList.contains(kbd)) {
+      const li = kbd.closest("[data-shortcut]");
+      if (!li) return;
+      event.preventDefault();
+      startShortcutRecording(li.getAttribute("data-shortcut"));
+      return;
+    }
     const btn = event.target.closest(".shortcut-toggle");
     if (!btn || !shortcutsList.contains(btn)) return;
     const li = btn.closest("[data-shortcut]");
     if (!li) return;
     const id = li.getAttribute("data-shortcut");
+    stopShortcutRecording({ restore: false });
     void run(async () => {
       const prefs = await api("DesktopPrefs");
       const current = Object.assign({}, DEFAULT_SHORTCUTS, (prefs && prefs.shortcuts) || {});
@@ -497,10 +644,20 @@ if (shortcutsList) {
       applyShortcutsPrefs(updated);
     });
   });
+  shortcutsList.addEventListener("keydown", (event) => {
+    const kbd = event.target.closest("[data-shortcut-display]");
+    if (!kbd || !shortcutsList.contains(kbd)) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (shortcutRecordingId) return;
+    event.preventDefault();
+    const li = kbd.closest("[data-shortcut]");
+    if (li) startShortcutRecording(li.getAttribute("data-shortcut"));
+  });
 }
 const resetAllBtn = $("shortcuts-reset-all");
 if (resetAllBtn) {
   resetAllBtn.onclick = () => run(async () => {
+    stopShortcutRecording({ restore: false });
     const updated = await api("SetShortcuts", Object.assign({}, DEFAULT_SHORTCUTS));
     applyShortcutsPrefs(updated);
   });
