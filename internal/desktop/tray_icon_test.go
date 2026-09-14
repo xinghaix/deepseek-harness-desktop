@@ -37,23 +37,22 @@ func TestTrayIconWithRunningBadgeAddsPip(t *testing.T) {
 		t.Fatalf("busy tray icon canvas = %dx%d, want %dx%d (menu-bar readable)", b.Dx(), b.Dy(), trayIconCanvasSize, trayIconCanvasSize)
 	}
 	found := false
-	cyan := 0
+	teal := 0
+	// Top-right third: deep-teal R2 pip (G and B both strong vs R).
 	for y := b.Min.Y; y < b.Min.Y+b.Dy()/3; y++ {
 		for x := b.Max.X - b.Dx()/3; x < b.Max.X; x++ {
 			r, g, bl, a := img.At(x, y).RGBA()
-			// Cyan/tech pip: strong blue-green, not the pale icon background.
-			if a > 0 && bl > r+15<<8 && g > r+10<<8 {
+			if a > 0 && g > r+8<<8 && bl > r+5<<8 && g > 40<<8 {
 				found = true
-				cyan++
+				teal++
 			}
 		}
 	}
 	if !found {
-		t.Fatal("expected a cyan running pip in the top-right third of the icon")
+		t.Fatal("expected a teal running pip in the top-right third of the icon")
 	}
-	// At 64px canvas with ~24% ring + dark well, expect a clear cyan cluster.
-	if cyan < 28 {
-		t.Fatalf("cyan badge too small for menu-bar visibility: %d pixels", cyan)
+	if teal < 28 {
+		t.Fatalf("teal badge too small for menu-bar visibility: %d pixels", teal)
 	}
 }
 
@@ -67,23 +66,20 @@ func loadSharedAppIcon(t *testing.T) []byte {
 	return data
 }
 
-func TestTrayIconBusyFramesLoop(t *testing.T) {
+func TestTrayIconBusyFramesStatic(t *testing.T) {
 	base := loadSharedAppIcon(t)
 	frames, err := trayIconBusyFrames(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(frames) != trayBusyFrameCount {
-		t.Fatalf("got %d frames, want %d", len(frames), trayBusyFrameCount)
+	if len(frames) != 1 {
+		t.Fatalf("got %d frames, want 1 static frame", len(frames))
 	}
-	if bytes.Equal(frames[0], frames[trayBusyFrameCount/2]) {
-		t.Fatal("animation frames should differ across the cycle")
-	}
-	img0, err := png.Decode(bytes.NewReader(frames[0]))
+	still, err := trayIconWithRunningBadge(base, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if img0.Bounds().Dx() != trayIconCanvasSize {
-		t.Fatalf("frame canvas width = %d, want %d", img0.Bounds().Dx(), trayIconCanvasSize)
+	if !bytes.Equal(frames[0], still) {
+		t.Fatal("busy frames should match the static running badge")
 	}
 }

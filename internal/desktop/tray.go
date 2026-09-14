@@ -36,7 +36,7 @@ func (d *Service) ensureTray() {
 		return
 	}
 	tray := app.SystemTray.New()
-	// Colorful app icon + cyan busy badge. Never SetTemplateIcon — template/monochrome
+	// Colorful app icon + top-right deep-teal running badge (R2). Never SetTemplateIcon — template/monochrome
 	// washes out the activity indicator on macOS menu bar.
 	d.tray = tray
 	d.applyTrayAppearanceLocked(true, running)
@@ -124,7 +124,7 @@ func (d *Service) applyTrayAppearanceLocked(force bool, running bool) {
 	}
 	if running {
 		if len(d.trayIconBusyFrames) == 0 {
-			if frames, err := trayIconBusyFrames(d.icon); err == nil && len(frames) >= 2 {
+			if frames, err := trayIconBusyFrames(d.icon); err == nil && len(frames) >= 1 {
 				d.trayIconBusyFrames = frames
 			} else if still, err := trayIconWithRunningBadge(d.icon, true); err == nil && len(still) > 0 {
 				d.trayIconBusyFrames = [][]byte{still}
