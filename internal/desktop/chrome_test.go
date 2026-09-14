@@ -93,6 +93,12 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	if !strings.Contains(script, "elementFromPoint") || !strings.Contains(script, "interactiveSel") || !strings.Contains(script, "main.DSH.ToggleChatZoom") {
 		t.Fatal("macOS 命中带必须 poke-through 可交互控件，并走 ToggleChatZoom")
 	}
+	if !strings.Contains(script, "event.detail >= 2") {
+		t.Fatal("macOS 必须用 detail>=2 触发缩放（避开原生首击拖拽竞态）")
+	}
+	if strings.Contains(script, "[role='button']") {
+		t.Fatal("interactiveSel 不应包含 [role=button]（Chat 顶栏大块会误伤缩放）")
+	}
 	if !strings.Contains(script, "const zoomBand = topInset") {
 		t.Fatal("macOS zoomBand 必须等于 topInset")
 	}

@@ -280,19 +280,21 @@ const desktopNativeWindowInsetJS = `
   if (!isManagement) {
     const trafficLightClearance = 78;
     const zoomBand = topInset;
-    const interactiveSel = "a,button,input,textarea,select,label,summary,[role='button'],[contenteditable='true'],[data-no-window-zoom]";
+    // Tight controls only — [role=button] matches huge Chat chrome and blocked zoom.
+    const interactiveSel = "a[href],button,input,textarea,select,label,summary,[contenteditable='true'],[data-no-window-zoom]";
     const toggleZoom = () => {
+      const current = window.wails && window.wails.Window;
+      if (current && typeof current.ToggleMaximise === "function") {
+        current.ToggleMaximise();
+      }
       const call = window.wails && window.wails.Call && window.wails.Call.ByName;
       if (typeof call === "function") {
         void call("main.DSH.ToggleChatZoom");
         return;
       }
-      const current = window.wails && window.wails.Window;
-      if (current && typeof current.ToggleMaximise === "function") {
-        current.ToggleMaximise();
-        return;
+      if (!(current && typeof current.ToggleMaximise === "function")) {
+        window.setTimeout(toggleZoom, 100);
       }
-      window.setTimeout(toggleZoom, 100);
     };
     const applyDragOverlayStyles = (drag) => {
       drag.style.position = "fixed";
@@ -302,6 +304,7 @@ const desktopNativeWindowInsetJS = `
       drag.style.right = "0";
       drag.style.height = zoomBand + "px";
       drag.style.pointerEvents = "auto";
+      // no-drag: keep Wails drag.ts from routing dblclick to AppleActionOnDoubleClick.
       drag.style.setProperty("--wails-draggable", "no-drag");
     };
     let lastZoomClickTs = 0;
@@ -313,7 +316,12 @@ const desktopNativeWindowInsetJS = `
       const under = document.elementFromPoint(clientX, clientY);
       band.style.pointerEvents = "auto";
       if (!under || !(under instanceof Element)) return null;
-      return under.closest(interactiveSel);
+      const hit = under.closest(interactiveSel);
+      if (!hit) return null;
+      const r = hit.getBoundingClientRect();
+      // Ignore huge layout shells mistaken for controls.
+      if (r.width > Math.min(320, window.innerWidth * 0.4) || r.height > zoomBand + 12) return null;
+      return hit;
     };
     const passClickThrough = (band, event, under) => {
       passThroughUntilUp = true;
@@ -347,18 +355,27 @@ const desktopNativeWindowInsetJS = `
       if (event.clientX < trafficLightClearance) return;
       const band = document.getElementById("dsh-desktop-native-drag");
       if (!band) return;
-      // event.target is usually the band itself — peek underneath for real controls.
       const under = underInteractive(event.clientX, event.clientY, band);
       if (under) {
         lastZoomClickTs = 0;
         passClickThrough(band, event, under);
         return;
       }
+      // Native InvisibleTitleBarHeight starts drag on clickCount==1 and skips
+      // drag on the 2nd click so JS can zoom. Prefer detail>=2 (reliable) over
+      // cross-event click-timing (1st mousedown often races the native drag).
+      if (event.detail >= 2) {
+        lastZoomClickTs = 0;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleZoom();
+        return;
+      }
       const now = typeof event.timeStamp === "number" && event.timeStamp > 0 ? event.timeStamp : Date.now();
       const dt = now - lastZoomClickTs;
       const dx = Math.abs(event.clientX - lastZoomClickX);
       const dy = Math.abs(event.clientY - lastZoomClickY);
-      if (lastZoomClickTs > 0 && dt > 0 && dt <= 400 && dx <= 8 && dy <= 8) {
+      if (lastZoomClickTs > 0 && dt > 0 && dt <= 500 && dx <= 12 && dy <= 12) {
         lastZoomClickTs = 0;
         event.preventDefault();
         event.stopPropagation();
@@ -377,6 +394,11 @@ const desktopNativeWindowInsetJS = `
         drag.className = "dsh-desktop-native-drag";
         applyDragOverlayStyles(drag);
         drag.addEventListener("mousedown", onZoomBandMouseDown, true);
+        drag.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleZoom();
+        });
         (document.documentElement || document.body).appendChild(drag);
         return drag;
       }
