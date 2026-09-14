@@ -112,7 +112,7 @@ Versioning (baseline `0.1.0`):
 
 ## Data and process boundaries (summary)
 
-- Only `DSH_HOME` is passed explicitly to the child; the desktop-owned dir is `DSH_HOME/.deepseek-harness-desktop` (mode `0700`), and it is not DSH’s cwd.
+- Only `DSH_HOME` is passed explicitly to the child; the desktop runtime dir is `DSH_HOME/.deepseek-harness-desktop` (mode `0700`, holds `desktop-state.json` plus process/bridge hot state), and it is not DSH’s cwd.
 - Chat workspace is configurable (default: `DSH_HOME/workspaces`); project dirs are also allowed.
 - Single-instance app lock + DSH lock: at most one desktop-owned DSH per user; reopening reuses windows.
 - On abnormal exit, the owned process tree is cleaned up; restart is blocked until exit is confirmed. Windows uses a Job Object (`taskkill /T` fallback); Unix uses a separate process group.

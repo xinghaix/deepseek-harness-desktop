@@ -83,3 +83,17 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 func jsonMarshal(v any) ([]byte, error) {
 	return json.MarshalIndent(v, "", "  ")
 }
+
+func TestDirUsesDSHHome(t *testing.T) {
+	t.Setenv(StateDirEnv, "")
+	t.Setenv("DSH_HOME", filepath.Join(t.TempDir(), "dsh-home"))
+	ResetCacheForTest()
+	dir, err := Dir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(os.Getenv("DSH_HOME"), StateDirName)
+	if dir != want {
+		t.Fatalf("Dir()=%q want %q", dir, want)
+	}
+}

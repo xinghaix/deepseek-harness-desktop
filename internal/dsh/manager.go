@@ -3,6 +3,7 @@ package dsh
 import (
 	"bytes"
 	"context"
+	"deepseek-harness-desktop/internal/desktopstate"
 	"deepseek-harness-desktop/internal/i18n"
 	"encoding/json"
 	"errors"
@@ -147,14 +148,12 @@ func ensureDesktopDataDir(home string) (string, error) {
 }
 
 func desktopProcessDataDir() (string, error) {
-	if configured := strings.TrimSpace(os.Getenv(desktopStateDirEnv)); configured != "" {
-		return absolutePath(configured)
-	}
-	home, err := os.UserHomeDir()
+	// Same dir as desktop-state.json: DSH_HOME/.deepseek-harness-desktop (or DSH_DESKTOP_STATE_DIR).
+	dir, err := desktopstate.Dir()
 	if err != nil {
 		return "", err
 	}
-	return desktopDataDirPath(home), nil
+	return absolutePath(dir)
 }
 
 func ensureDesktopProcessDataDir() (string, error) {

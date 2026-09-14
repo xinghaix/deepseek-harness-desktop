@@ -1,8 +1,8 @@
 // Package desktopstate stores durable desktop-shell preferences in one file:
-// ~/.deepseek-harness-desktop/desktop-state.json
+// DSH_HOME/.deepseek-harness-desktop/desktop-state.json
+// (same desktop runtime dir as desktop-process / desktop-bridge-endpoint).
 //
-// It does NOT hold DSH_HOME runtime artifacts (desktop-bridge-endpoint, desktop-process,
-// webview-boot, profiles, storages, settings.yaml).
+// Override with DSH_DESKTOP_STATE_DIR. DSH_HOME defaults to $DSH_HOME or ~/.dsh.
 package desktopstate
 
 import (
@@ -56,28 +56,65 @@ type UpdatePrefs struct {
 }
 
 var (
-	mu       sync.Mutex
-	cached   File
-	cacheOK  bool
+	mu      sync.Mutex
+	cached  File
+	cacheOK bool
 )
 
 func Dir() (string, error) {
-	if dir := strings.TrimSpace(os.Getenv(StateDirEnv)); dir != "" {
-		return dir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, StateDirName), nil
+	mu.Lock()
+	defer mu.Unlock()
+	return dirUnlocked()
 }
 
 func Path() (string, error) {
-	dir, err := Dir()
+	mu.Lock()
+	defer mu.Unlock()
+	return pathUnlocked()
+}
+
+func dirUnlocked() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv(StateDirEnv)); dir != "" {
+		return dir, nil
+	}
+	// Prefer Home already loaded into cache (user-configured DSH Home).
+	if cacheOK {
+		if home := strings.TrimSpace(cached.Launch.Options.Home); home != "" {
+			return dataDirForHome(home), nil
+		}
+	}
+	home, err := resolveDSHHome()
+	if err != nil {
+		return "", err
+	}
+	return dataDirForHome(home), nil
+}
+
+func pathUnlocked() (string, error) {
+	dir, err := dirUnlocked()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, FileName), nil
+}
+
+func resolveDSHHome() (string, error) {
+	if home := strings.TrimSpace(os.Getenv("DSH_HOME")); home != "" {
+		return home, nil
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(userHome, ".dsh"), nil
+}
+
+func dataDirForHome(home string) string {
+	home = filepath.Clean(home)
+	if filepath.Base(home) == StateDirName {
+		return home
+	}
+	return filepath.Join(home, StateDirName)
 }
 
 func emptyFile() File {
@@ -99,7 +136,7 @@ func Load() (File, error) {
 }
 
 func loadUnlocked() (File, error) {
-	path, err := Path()
+	path, err := pathUnlocked()
 	if err != nil {
 		return File{}, err
 	}
@@ -141,7 +178,7 @@ func hasAny(f File) bool {
 
 func migrateLegacyUnlocked() File {
 	f := emptyFile()
-	dir, err := Dir()
+	dir, err := dirUnlocked()
 	if err != nil {
 		return f
 	}
@@ -182,7 +219,7 @@ func migrateLegacyUnlocked() File {
 }
 
 func removeLegacyUnlocked() {
-	dir, err := Dir()
+	dir, err := dirUnlocked()
 	if err != nil {
 		return
 	}
@@ -195,7 +232,7 @@ func writeUnlocked(f File) error {
 	if f.Version == 0 {
 		f.Version = 1
 	}
-	path, err := Path()
+	path, err := pathUnlocked()
 	if err != nil {
 		return err
 	}
