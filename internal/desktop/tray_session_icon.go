@@ -14,7 +14,7 @@ import (
 // does [menuItem setImage:] without setSize; a 32×32 PNG becomes 32pt and is
 // typically clipped/invisible in NSMenuItem. Colors: running = emerald 翠绿 #10B981;
 // error = red #DC4446. SetBitmap alone is still unreliable in macOS status-item
-// menus — traySessionMenuLabel uses 🟢/🔴 so menu rows show color; idle padded.
+// menus — session rows use title emoji only (no SetBitmap); idle unmarked for alignment.
 var (
 	traySessionPipOnce sync.Once
 	traySessionPipRun  []byte

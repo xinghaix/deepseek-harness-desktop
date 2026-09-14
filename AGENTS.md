@@ -1,6 +1,8 @@
 # AGENTS.md — Deepseek Harness Desktop
 
-给在本仓库工作的编码助手用的项目说明。人类可读总览见 [`README.md`](README.md)（中文）与 [`README.en.md`](README.en.md)（English）；这里偏架构、边界和发版约定。
+给在本仓库工作的**编码助手与贡献者**用的技术说明（架构、边界、构建、发版）。
+
+面向最终使用者的安装与日常使用说明见 [`README.md`](README.md)（中文）与 [`README.en.md`](README.en.md)（English）——请勿把实现细节写回 README。
 
 ## 产品定位
 
@@ -89,8 +91,8 @@ Node 默认 16KiB header（HTTP 431）。
 - Windows / Linux：页面内悬浮窗控 + 内容安全区。
 - 宿主菜单承载「打开配置 / 打开 Chat / 关闭窗口 / 退出」等（macOS 应用菜单；Win/Linux「文件」），不单独挂「设置」菜单。
 - 配置盖在 Chat 上的模态：有未保存改动时关闭需确认。
-- 快捷键可清除（`prefs.shortcuts`；缺省=内置默认；`""`=无加速键但仍可点菜单；变更后 `rebuildApplicationMenu`）。默认：⌘, / Ctrl+, 打开设置；⌘W / Ctrl+W 关闭/隐藏 Chat（`CloseChatToTray`：绑定存在时始终隐藏窗口；仅 `trayEnabled` 时进托盘，否则回程序坞/任务栏；**不** `RequestQuit`）；⌘Q / Ctrl+Q 退出；macOS ⌘H / ⌥⌘H 系统隐藏（保留 `SetRole`）。窗口 **X** 才遵循 `closeToTray`。勿使用 Wails `CloseWindow` role（其会 `Close()` 而非藏托盘）。暂不支持任意改键。
-- 托盘相关三项：`trayEnabled`（总开关，默认 false）、`traySessionLimit`（任务显示数量）、`closeToTray`（关闭窗口到托盘；依赖 `trayEnabled`）。关闭总开关时后两项不可用，并会关掉 `closeToTray`、销毁托盘。开启总开关后创建托盘图标；仅当 `closeToTray` 开启时 **X** 关窗隐藏到托盘。⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。⌘W / Ctrl+W 始终隐藏窗口；仅在 `trayEnabled` 时才会创建/使用托盘图标，否则回到程序坞/任务栏。旧配置仅有 `closeToTray=true` 时会迁移为同时开启 `trayEnabled`。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。会话状态用标题左侧可见前缀（运行中 `🟢`（翠绿语义）/ 出错 `🔴` + 空闲等宽占位 via `traySessionMenuLabel`；角标与 SetBitmap 点为 `#10B981` / `#DC4446`），因 NSMenuItem `SetBitmap` 在 macOS status-item 菜单中不可靠（Wails darwin `setMenuItemBitmap` 不 `setSize`）；仍可附带 `SetBitmap` 16×16 PNG 点作 best-effort：运行中翠绿 `#10B981`、粘性错误红 `#DC4446`（`api-session/error` 与 `turn/end` 的 `error`/`interrupted`；`aborted` 不算；再次 running、成为当前会话、或点击该菜单项可清除）；tooltip 保留「运行中」/「错误」。`selectTraySessions` 优先 running → error → `UpdatedAt`，保证活跃会话落在 `traySessionLimit` 内。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
+- 快捷键：`prefs.shortcuts`（缺省=内置默认；`""`=无加速键仍可点菜单；非空=Wails accelerator）。设置 UI 可**清除 / 恢复 / 点击录制改键**（`SetShortcuts` → 校验冲突 → `rebuildApplicationMenu`）。默认：⌘, / Ctrl+, 打开设置；⌘W / Ctrl+W 关闭/隐藏 Chat（`CloseChatToTray`：绑定存在时始终隐藏；仅 `trayEnabled` 时进托盘，否则回程序坞/任务栏；**不** `RequestQuit`）；⌘Q / Ctrl+Q 退出；macOS ⌘H / ⌥⌘H 系统隐藏（保留 `SetRole`）。窗口 **X** 才遵循 `closeToTray`。勿使用 Wails `CloseWindow` role（其会 `Close()` 而非藏托盘）。
+- 托盘相关三项：`trayEnabled`（总开关，默认 false）、`traySessionLimit`（任务显示数量）、`closeToTray`（关闭窗口到托盘；依赖 `trayEnabled`）。关闭总开关时后两项不可用，并会关掉 `closeToTray`、销毁托盘。开启总开关后创建托盘图标；仅当 `closeToTray` 开启时 **X** 关窗隐藏到托盘。⌘Q / Ctrl+Q / 托盘「退出」仍走 `RequestQuit`。⌘W / Ctrl+W 始终隐藏窗口；仅在 `trayEnabled` 时才会创建/使用托盘图标，否则回到程序坞/任务栏。旧配置仅有 `closeToTray=true` 时会迁移为同时开启 `trayEnabled`。托盘菜单可列出最近会话（`traySessionLimit`，默认 5，0 隐藏；数据来自 Chat `sessions.list` 经 `/v1/report-sessions`）。会话状态：空闲标题不加前缀（与菜单其它项左对齐）；运行中/出错用标题前缀 `🟢`/`🔴`（via `traySessionMenuLabel`）。**不要**给空闲项加 em 空格占位，也**不要**对会话行 `SetBitmap`（与 emoji 混用会导致 macOS status 菜单错位）。菜单栏角标仍为翠绿 `#10B981`；粘性错误语义不变（`api-session/error` 与 `turn/end` 的 `error`/`interrupted`；`aborted` 不算；再次 running、成为当前会话、或点击该菜单项可清除）；tooltip 保留「运行中」/「错误」。`selectTraySessions` 优先 running → error → `UpdatedAt`，保证活跃会话落在 `traySessionLimit` 内。关窗钩子同时绑定 Common + 各端原生事件（darwin `WindowShouldClose` / windows `WindowClosing` / linux `WindowDeleteEvent`）；`ApplicationShouldTerminateAfterLastWindowClosed` 固定为 false，避免 Hide/关最后一窗误杀进程。Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator。
 - Chat 窗口拖拽：macOS 用 `InvisibleTitleBarHeight` 原生拖条；Windows/Linux 用自绘 `--wails-draggable: drag` 顶栏（窗控 `no-drag`）。**已取消**顶栏双击放大/还原（命中带与原生拖拽冲突，且易挡工具栏按钮）。Win/Linux 仍可通过窗控「最大化」走 `ToggleChatZoom`。
 
 ## 跨平台
@@ -146,6 +148,8 @@ Node 默认 16KiB header（HTTP 431）。
 
 ## 开发命令
 
+常用入口（完整说明见「构建与测试（细节）」）：
+
 ```bash
 go test -race ./...
 go test -race -tags wails ./...
@@ -155,6 +159,66 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 ```
 
 依赖：Go 1.27、目标平台 WebView（macOS Xcode / Linux GTK4+WebKitGTK6 / Windows WebView2）。
+
+
+## 仓库布局
+
+| 路径 | 说明 |
+|------|------|
+| `main.go` | Wails 入口、资源嵌入、`main.DSH.*` 绑定 |
+| `internal/dsh` | 进程生命周期、CLI 发现、回环控制面（无 Wails 依赖） |
+| `internal/desktop` | 窗口、菜单、托盘、快捷键、文件对话框、prefs |
+| `internal/desktopstate` | `desktop-state.json` 冷配置 |
+| `internal/i18n` | 嵌入 locales、T / TActive |
+| `internal/update` | GitHub Release 检查与安装 |
+| `internal/version` | `Version` 默认 `"dev"`；构建用 ldflags / `app-version.sh` 戳号 |
+| `assets/web` | 配置页 UI |
+| `assets/shared` | 跨平台图标源（`app-icon.svg`） |
+| `assets/{darwin,linux,windows}` | 各平台打包输入 |
+| `internal/dsh/desktopbridge` | 内置桌面桥接（`--patch` 覆盖） |
+| `internal/dsh/webviewboot*` | WKWebView combo / HTTP 431 补丁 |
+| `dist/` | 构建产物（git 忽略） |
+| `scripts/` | `build.sh`、签名、版本、DMG 等 |
+| `Makefile` | `test` / `build` / `darwin-build` / `icons` 等入口 |
+
+## 桥接插件（实现要点）
+
+- 每次由本应用拉起的 `dsh web` 经 Cordis `--patch` 注入 `desktop-bridge`（与 `webview-boot` 同类），**不改用户 profile**。
+- Chat「设置 → 桌面设置」注册为 `settings.section`（一级导航）。
+- 控制面仅 `127.0.0.1`；白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面 / 日志 / 状态 JSON；无任意 shell。
+- 监听异常退出时重建（新令牌）并写 endpoint 文件供插件重连。
+- 不必再 `dsh plugin --profile web add file:…`；若残留 profile 副本，内置 patch 会移除同 id。
+
+## 构建与测试（细节）
+
+依赖：Go 1.27、Wails 3，目标平台 WebView（macOS Xcode；Linux GTK 4 / WebKitGTK 6；Windows WebView2）。
+
+```bash
+make test
+make build                      # 如 0.1.4-dev
+make build VERSION=0.1.4
+./scripts/build.sh 0.1.4
+make darwin-build VERSION=0.1.4
+make linux-build GOARCH=amd64 VERSION=0.1.4
+make windows-build GOARCH=amd64 VERSION=0.1.4
+```
+
+版本戳入 `internal/version.Version`（`scripts/app-version.sh`）：
+
+- 显式参数 / `VERSION=` → 照用
+- HEAD 正好在 release tag → 正式号
+- 其它提交 → 最新发布号 + `-dev`
+- 尚无 tag → `0.0.0-dev`
+
+产物在 `dist/`。macOS 额外生成 DMG。构建按平台自签名（非 Developer ID / EV，未公证）：
+
+- macOS：ad-hoc `codesign` + DMG
+- Windows：当前用户自签 Authenticode
+- Linux：写出 `.sha256`
+
+图标源：`assets/shared/app-icon.svg`；生成物已提交，**日常 `make build` 不重跑**。改源图后：`make icons`。
+
+未在目标机实测的交叉组合不宣称已验收。
 
 ## 给助手的约束
 

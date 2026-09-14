@@ -2,121 +2,96 @@
 
 English · [中文](README.md)
 
-Deepseek Harness Desktop is a lightweight desktop client for DSH. It reuses the `dsh` CLI and DSH Home already on the machine, and runs DSH Chat inside its own desktop WebView. It does not copy DSH, install a second CLI, migrate config, or take over other processes.
+A desktop window for the [DSH](https://github.com/deepseek-ai/dsh) you already installed—no second CLI, no config migration, no duplicate DSH Home.
 
-Architecture and process boundaries: [AGENTS.md](AGENTS.md) (Chinese; agent-oriented).
+See [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases) for builds. Architecture and contributor docs: [AGENTS.md](AGENTS.md).
+
+## Who it’s for
+
+- You already have `dsh` on the machine and want a dedicated window, tray, and OS shortcuts
+- You want to manage the DSH process **owned by this desktop app** from Chat (start / stop / restart, desktop prefs)
+
+## Install
+
+1. Open [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases) and download your platform build:
+   - **macOS (Apple Silicon):** `deepseek-harness-desktop-darwin-arm64.dmg` (Intel Macs can run the arm64 build via Rosetta)
+   - **Linux:** `deepseek-harness-desktop-linux-amd64` or `…-arm64`
+   - **Windows:** `deepseek-harness-desktop-windows-amd64.exe` or `…-arm64.exe`
+2. macOS: open the DMG and drag the app to Applications. If Gatekeeper blocks it, use Finder → Right-click → Open.
+3. Builds are self-signed and not notarized; Windows SmartScreen prompts are expected.
+
+Building from source is covered in [AGENTS.md](AGENTS.md) (dev commands / release).
+
+## Before you start
+
+- A working `dsh` on PATH (`dsh --version` succeeds in a terminal)
+- An existing or creatable DSH Home (the desktop only passes it through; it does not copy it)
 
 ## First launch
 
-1. On start, the app checks the home directory, login-shell `PATH`, and common global Node locations, and passes those paths to the CLI child process.
-2. If `dsh` is found, it starts and opens Chat. Otherwise you get the setup page; after a successful start, Chat opens and setup closes.
-3. To change `DSH Home`, Chat workspace, or the local port, reopen setup from the app menu (macOS) / File menu (Windows, Linux), the Chat settings control, or Chat Desktop settings. Port `0` means an OS-assigned free loopback port.
-4. A successful start is remembered so the next cold start can skip repeating CLI discovery. Setup can still change paths and ports.
-5. On failure, setup shows a redacted error and lets you copy the full log; use **Retry start** after fixing the issue.
-6. UI follows the system light/dark appearance. macOS uses native traffic lights; Windows / Linux use in-page floating window controls and never jump to the system browser.
+1. The app looks for `dsh` in common places (home, login-shell `PATH`, typical Node global dirs).
+2. **Found:** starts DSH and opens Chat.
+3. **Not found:** shows setup. Pick the `dsh` binary, DSH Home, and Chat workspace, then start; Chat opens on success.
+4. On failure, setup shows a redacted error and lets you copy the full log; use **Retry** after fixing the issue.
 
-In DSH Chat under **Settings → Desktop settings**, you can manage the DSH process **owned by this desktop app** (bridge is built in).
+The UI follows system light/dark mode. Chat always stays in the app WebView—never jumps to the system browser.
 
-## Repository layout
+## Day-to-day
 
-| Path | Role |
-|------|------|
-| `main.go` | Wails entry, embedded assets, `main.DSH.*` bindings |
-| `internal/dsh` | Process lifecycle, CLI discovery, loopback control plane (no Wails) |
-| `internal/desktop` | Windows, title-bar injection, file dialogs |
-| `assets/web` | Setup UI |
-| `assets/shared` | Shared icon source |
-| `assets/{darwin,linux,windows}` | Per-platform packaging inputs |
-| `internal/dsh/desktopbridge` | Built-in desktop bridge (`--patch` overlay) |
-| `dist/` | Build output (gitignored) |
-| `scripts/` | Build, signing, version helpers |
+### Open desktop settings
 
-## Bridge plugin (built-in)
+Reopen setup from any of:
 
-Each time the desktop app starts its owned `dsh web`, it injects the built-in bridge via Cordis `--patch`
-(source: [`internal/dsh/desktopbridge/`](internal/dsh/desktopbridge/)), same class as `webview-boot`,
-**without changing the user profile**. In DSH Chat open **Settings → Desktop settings** (top-level left nav, same level as Models / Plugins) to manage the DSH process owned by this app.
+- macOS app menu; Windows / Linux **File** menu
+- Shortcut: default `⌘,` / `Ctrl+,` (clearable / remappable in settings)
+- DSH Chat → **Settings → Desktop settings**
 
-Do **not** run `dsh plugin --profile web add file:./plugins/...` anymore. If a profile copy remains, the built-in patch removes the same id; you can also `dsh plugin --profile web remove @deepseek-ai/deepseek-harness-desktop-bridge`.
+### System tray
 
-The control plane listens only on `127.0.0.1`, with a whitelisted RPC surface and a random token (constant-time compare). The token never appears in the page, logs, or status payloads, and there is no arbitrary shell endpoint. If the listener dies it is recreated (new token) and written to an endpoint file so the plugin can reconnect.
+In setup or Desktop settings:
 
+| Option | What it does |
+|--------|----------------|
+| Enable system tray | Master switch; off = no tray icon |
+| Session list count | How many recent sessions appear in the tray menu (`0` hides the list) |
+| Close window to tray | The Chat window **close** button hides to tray instead of quitting |
 
-## Build and test
+Notes:
 
-Requires Go 1.27, Wails 3, and native WebView deps for the target OS (macOS: Xcode; Linux: GTK 4 / WebKitGTK 6; Windows: WebView2). Use `make` or the scripts directly:
+- `⌘W` / `Ctrl+W` (if not cleared) hides Chat; a tray icon is used only when the tray is enabled, otherwise the app returns to the Dock / taskbar.
+- The tray menu can open Chat, desktop settings, recent sessions, and Quit.
+- While a session is running, the menu-bar icon shows an **emerald** badge; in the session list, running is `🟢` and error is `🔴`.
 
-```bash
-make test
-make build                      # e.g. 0.1.1-dev
-make build VERSION=0.2.0        # explicit version
-./scripts/build.sh 0.2.0        # equivalent, without make
-```
+Linux tray support depends on StatusNotifier / AppIndicator in your desktop environment.
 
-Version is stamped into `internal/version.Version` via `scripts/app-version.sh`:
+### Shortcuts
 
-- Explicit arg / `VERSION=` → used as-is
-- HEAD exactly on a release tag → release number (e.g. `0.1.1`)
-- Otherwise → latest release + `-dev` (e.g. `0.1.1-dev`)
-- No tags → `0.0.0-dev`
+In setup or **Desktop settings → Shortcuts** you can:
 
-Platform targets: `make darwin-build` / `make linux-build` / `make windows-build` (was Taskfile `*:build`).
+- **Click a key chip** to record a new combo
+- **Clear** a shortcut (no accelerator; menu items still work)
+- **Restore defaults** for one or all
 
-Artifacts land in `dist/`. macOS also builds a drag-to-Applications DMG. Builds self-sign per platform (not Developer ID / EV, not notarized; downloaded macOS builds may need Open via context menu; Windows may hit SmartScreen):
+Defaults include open desktop settings, close/hide Chat, and quit; on macOS also system Hide / Hide Others. Conflicts are blocked.
 
-- macOS: ad-hoc `codesign` + DMG
-- Windows: per-user self-signed Authenticode
-- Linux: `.sha256` checksum (no equivalent code-signing API)
+### Updates
 
-Cross-compile examples:
+Check for updates manually in setup, or enable daily auto-check. New versions are **never** installed until you confirm.
 
-```bash
-make darwin-build GOARCH=arm64 VERSION=0.2.0
-make linux-build GOARCH=amd64 VERSION=0.2.0
-make linux-build GOARCH=arm64 VERSION=0.2.0
-make windows-build GOARCH=amd64 VERSION=0.2.0
-make windows-build GOARCH=arm64 VERSION=0.2.0
-# or: GOOS=… GOARCH=… ./scripts/build.sh 0.2.0
-```
+### “Desktop settings” inside Chat
 
-Combinations not actually built or run on the target OS are not claimed as verified.
+Chat **Settings** has a top-level **Desktop settings** entry (same level as Models / Plugins) for bridge status and the DSH process owned by this app. The bridge is injected automatically—you usually do not install a plugin by hand.
 
-The setup page can check GitHub Releases manually, or enable daily auto-check (first check ~1 hour after launch, then about once a day). New versions are **not** installed automatically.
+After upgrading, restart the desktop app or reload / reopen Chat if new options are missing.
 
-### Icons
+## Privacy & boundaries (user view)
 
-Shared source: `assets/shared/app-icon.svg`. Generated assets are committed under `assets/`; **everyday `make build` does not regenerate them**. After changing the source or generator:
+- Only the DSH process started by this app is managed; other `dsh` processes you started in a terminal are left alone.
+- No workspace scanning for chat contents; no rewriting of DSH credentials or a second config copy.
+- Desktop preferences live under a desktop runtime folder inside DSH Home; DSH’s own data stays managed by DSH.
 
-```bash
-make icons
-# or: go run ./tools/icons
-```
+## Need help?
 
-Linux packaging can use `assets/linux/deepseek-harness-desktop.desktop` and install `assets/linux/icons/hicolor` into the system icon theme.
-
-### Release
-
-Only version tags **on main** are packaged. On a commit already on main:
-
-```bash
-git tag -a vX.Y.Z -m "…"
-git push origin vX.Y.Z
-```
-
-GitHub Actions (`.github/workflows/release.yml`) builds and self-signs **darwin-arm64 / linux-amd64 / linux-arm64 / windows-amd64 / windows-arm64**, then creates a Release with `SHA256SUMS`. Tags not ancestral to `origin/main` are rejected. Runtime version comes from `-ldflags`; no source edit required.
-
-Versioning (baseline `0.1.0`):
-
-- Small bugfix / feature → bump patch (`0.1.1`…)
-- Larger change or important fix → bump minor, reset patch (`0.2.0`…)
-
-## Data and process boundaries (summary)
-
-- Only `DSH_HOME` is passed explicitly to the child; the desktop runtime dir is `DSH_HOME/.deepseek-harness-desktop` (mode `0700`, holds `desktop-state.json` plus process/bridge hot state), and it is not DSH’s cwd.
-- Chat workspace is configurable (default: `DSH_HOME/workspaces`); project dirs are also allowed.
-- Single-instance app lock + DSH lock: at most one desktop-owned DSH per user; reopening reuses windows.
-- On abnormal exit, the owned process tree is cleaned up; restart is blocked until exit is confirmed. Windows uses a Job Object (`taskkill /T` fallback); Unix uses a separate process group.
-- No workspace scanning, no credential read/write, no second YAML; `settings.yaml` only opens an existing file. Occupied ports fail closed—other processes are never taken over.
-- Startup raises Node `max-http-header-size` and applies a process-local `--patch` (`webview-boot`) for client combo loading without changing the user profile.
-
-More detail: [AGENTS.md](AGENTS.md).
+- Downloads & notes: [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases)
+- Bugs: repository Issues
+- Architecture, process boundaries, build & release: [AGENTS.md](AGENTS.md)

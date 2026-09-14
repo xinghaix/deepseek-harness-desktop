@@ -261,8 +261,6 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 		untitled := i18n.T(locale, "tray.session_untitled")
 		runningL := i18n.T(locale, "tray.session_running")
 		errorL := i18n.T(locale, "tray.session_error")
-		runPip := traySessionRunningPipPNG()
-		errPip := traySessionErrorPipPNG()
 		for _, session := range sessions {
 			sess := session
 			full := fullTraySessionTitle(sess, untitled)
@@ -273,16 +271,6 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 				d.acknowledgeTraySessionError(sess.ID)
 				d.revealChatFromTray()
 			})
-			switch status {
-			case "running":
-				if len(runPip) > 0 {
-					item.SetBitmap(runPip)
-				}
-			case "error":
-				if len(errPip) > 0 {
-					item.SetBitmap(errPip)
-				}
-			}
 			tip := full
 			switch status {
 			case "running":

@@ -85,17 +85,14 @@ func traySessionTitle(s dsh.BridgeSession, untitled string) string {
 	return truncateRunes(title, traySessionTitleRunes)
 }
 
-// traySessionMenuLabel applies a compact left status column for non-idle rows.
-// NSMenuItem SetBitmap is unreliable in macOS status-item menus (Wails
-// setMenuItemBitmap has no setSize), so the title itself must carry the mark.
-// Color must live in the title: NSMenu plain strings cannot tint ●.
-// Use compact colored circle emoji (翠绿 running / 红 error) plus thin space;
-// idle rows get a double em-space pad so titles stay roughly aligned.
-// SetBitmap remains best-effort with matching emerald/red PNG pips.
+// traySessionMenuLabel prefixes only non-idle rows. Idle titles stay unmarked
+// so they share the same left edge as other tray items. Do not pad idle with
+// em-spaces: emoji width ≠ em space, and mixing SetBitmap with padded titles
+// makes macOS status menus look misaligned. Color lives in the title emoji
+// because NSMenu plain strings cannot tint ●; skip SetBitmap on session rows.
 const (
 	traySessionMarkRunning = "🟢"
 	traySessionMarkError   = "🔴"
-	traySessionMarkPad     = "  "
 	traySessionMarkGap     = " "
 )
 
@@ -109,12 +106,10 @@ func traySessionMenuLabel(title, status string) string {
 	case "error":
 		return traySessionMarkError + traySessionMarkGap + title
 	default:
-		return traySessionMarkPad + traySessionMarkGap + title
+		return title
 	}
 }
 
-// formatTraySessionLabel is kept for callers that only know the running bit;
-// prefer traySessionMenuLabel when error status is available.
 func formatTraySessionLabel(title, runningLabel, idleLabel string, running bool) string {
 	_ = runningLabel
 	_ = idleLabel

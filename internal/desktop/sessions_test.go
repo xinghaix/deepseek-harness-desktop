@@ -89,8 +89,8 @@ func TestTraySessionTitleFallback(t *testing.T) {
 	if got := traySessionMenuLabel("My task", "error"); got != "🔴 My task" {
 		t.Fatalf("error prefix: %q", got)
 	}
-	if got := traySessionMenuLabel("My task", "idle"); got != "   My task" {
-		t.Fatalf("idle padded: %q", got)
+	if got := traySessionMenuLabel("My task", "idle"); got != "My task" {
+		t.Fatalf("idle unmarked: %q", got)
 	}
 	if got := traySessionMenuLabel("", "running"); got != "🟢 Untitled" {
 		t.Fatalf("empty title fallback: %q", got)
@@ -98,7 +98,7 @@ func TestTraySessionTitleFallback(t *testing.T) {
 	if got := formatTraySessionLabel("My task", "运行中", "空闲", true); got != "🟢 My task" {
 		t.Fatalf("formatTray running: %q", got)
 	}
-	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "   My task" {
+	if got := formatTraySessionLabel("My task", "运行中", "空闲", false); got != "My task" {
 		t.Fatalf("formatTray idle: %q", got)
 	}
 	if got := traySessionStatus(true, true); got != "running" {

@@ -2,120 +2,96 @@
 
 [English](README.en.md) · 中文
 
-Deepseek Harness Desktop 是 DSH 的轻量桌面客户端：复用本机已安装的 `dsh` CLI 与现有 DSH Home，在桌面 WebView 中打开 DSH Chat。它不复制 DSH、不另装 CLI、不迁移配置，也不接管其他进程。
+把本机已安装的 [DSH](https://github.com/deepseek-ai/dsh) 放进桌面窗口里用：不另装 CLI、不搬配置、不改你的 DSH Home。
 
-更细的架构与边界见 [AGENTS.md](AGENTS.md)。
+当前版本见 [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases)。参与开发 / 架构说明见 [AGENTS.md](AGENTS.md)。
 
-## 首次启动
+## 它适合谁
 
-1. 启动后检查用户目录、登录 shell 的 `PATH` 和常见 Node 全局目录，并把这些路径传给 CLI 子进程。
-2. 找到 `dsh` 后自动启动并打开 Chat；找不到则进入配置页，配置成功后打开 Chat 并关闭配置窗。
-3. 需要改 `DSH Home`、Chat 工作目录或本机端口时，可从应用菜单（macOS）/「文件」菜单（Windows、Linux）、Chat 顶部设置，或 Chat 内「桌面设置」再开配置页。端口 `0` 表示由系统分配空闲 loopback 端口。
-4. 成功启动后会记住配置；下次冷启动优先直接起 DSH。配置页仍可改路径与端口并重新检测。
-5. 启动失败时配置页展示已脱敏错误，可复制完整日志；修好后点「重试启动」。
-6. 界面跟随系统深浅色。macOS 用原生 traffic lights，Chat 对齐 DSH 折叠轨道；Windows / Linux 用页面内悬浮窗控，不跳系统浏览器。
+- 已经用 `npm` / 其它方式装好了 `dsh`，希望有独立桌面窗口、托盘和系统快捷键
+- 想在 Chat 里顺手管理「由这个桌面端拉起」的 DSH（启动 / 停止 / 重启、桌面偏好）
 
-桌面管理桥接已内置：每次由本应用拉起的 `dsh web` 都会通过 `--patch` 注入。在 DSH Chat「设置 → 桌面设置」查看状态，以及启动 / 停止 / 重启**本桌面端拥有**的 DSH 进程。
+## 安装
 
-## 仓库布局
+1. 打开 [Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases)，下载对应平台附件：
+   - **macOS（Apple Silicon）**：`deepseek-harness-desktop-darwin-arm64.dmg`（Intel Mac 可用 Rosetta 运行 arm64 包）
+   - **Linux**：`deepseek-harness-desktop-linux-amd64` 或 `…-arm64`
+   - **Windows**：`deepseek-harness-desktop-windows-amd64.exe` 或 `…-arm64.exe`
+2. macOS：打开 DMG，把应用拖到「应用程序」。若提示来自未识别开发者，可在 Finder 中右键 → 打开。
+3. 发布包为自签名、未公证；Windows 可能被 SmartScreen 拦截，属预期。
 
-| 路径 | 说明 |
+也可用源码自行构建，见 [AGENTS.md](AGENTS.md)「开发命令 / 发版」。
+
+## 使用前准备
+
+- 本机已安装可用的 `dsh`（终端执行 `dsh --version` 能成功）
+- 已有或可创建的 DSH Home（桌面端只把它传给子进程，不会复制一份）
+
+## 第一次打开
+
+1. 启动应用后，会在常见位置查找 `dsh`（用户目录、登录 shell 的 `PATH`、常见 Node 全局目录等）。
+2. **找到了**：自动启动并打开 Chat。
+3. **没找到**：进入配置页。选好 `dsh` 路径、DSH Home、Chat 工作目录后，再启动；成功后会打开 Chat。
+4. 启动失败时，配置页会显示已脱敏的错误，可复制完整日志排查；修好后点「重试」。
+
+界面跟随系统浅色 / 深色。Chat 始终在应用内的窗口中打开，不会跳到系统浏览器。
+
+## 日常使用
+
+### 打开配置
+
+可用下列任一方式再开桌面配置（改路径、语言、托盘、更新等）：
+
+- macOS：应用菜单；Windows / Linux：「文件」菜单
+- 快捷键：默认 `⌘,` / `Ctrl+,`（可在设置里改或清除）
+- DSH Chat → **设置 → 桌面设置**
+
+### 托盘
+
+在配置或「桌面设置」里可分别控制：
+
+| 选项 | 作用 |
 |------|------|
-| `main.go` | Wails 入口、资源嵌入、`main.DSH.*` 绑定 |
-| `internal/dsh` | 进程生命周期、CLI 发现、回环控制面（无 Wails 依赖） |
-| `internal/desktop` | 窗口、标题栏注入、文件对话框 |
-| `assets/web` | 配置页 |
-| `assets/shared` | 跨平台图标源 |
-| `assets/{darwin,linux,windows}` | 各平台打包输入 |
-| `internal/dsh/desktopbridge` | 内置桌面桥接（`--patch` 覆盖） |
-| `dist/` | 构建产物（git 忽略） |
-| `scripts/` | 构建、签名、版本号等脚本 |
+| 开启系统托盘 | 总开关；关闭后不显示托盘图标 |
+| 任务显示数量 | 托盘菜单里「最近会话」条数（`0` 表示不显示列表） |
+| 关闭窗口到托盘 | 点 Chat 窗口 **关闭按钮** 时隐藏到托盘，而不是退出 |
 
-## 桥接插件（已内置）
+补充说明：
 
-桌面端每次启动自己拥有的 `dsh web` 时，会经 Cordis `--patch` 注入内置桥接（源码：[`internal/dsh/desktopbridge/`](internal/dsh/desktopbridge/)），
-与 `webview-boot` 同类，**不改用户 profile**。在 DSH Chat 打开「设置 → 桌面设置」（设置左侧一级导航）即可管理本桌面端拉起的 DSH。
+- `⌘W` / `Ctrl+W`（若未清除）会隐藏 Chat；只有开启了托盘时才会用到托盘图标，否则回到程序坞 / 任务栏。
+- 托盘菜单可打开 Chat、桌面配置、最近会话，以及退出。
+- 有任务在跑时，菜单栏图标右上角会显示**翠绿**角标；最近会话里运行中为 `🟢`，出错为 `🔴`。
 
-不必再执行 `dsh plugin --profile web add file:./plugins/...`。若以前装过 profile 副本，内置 patch 会移除同 id；也可手动 `dsh plugin --profile web remove @deepseek-ai/deepseek-harness-desktop-bridge`。
+Linux 托盘依赖桌面环境的 StatusNotifier / AppIndicator 支持。
 
-控制面仅监听 `127.0.0.1`，白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面、日志或状态 JSON，也没有任意 shell 端点。监听异常退出时会重建（新令牌）并写入端点文件供插件重连。
+### 快捷键
 
+在配置页或「桌面设置 → 快捷键」中可以：
 
-## 构建与测试
+- **点击按键位**录制新组合
+- **清除**某项（清除后该加速键不再生效，菜单里仍可点）
+- **恢复默认** / 全部恢复
 
-需要 Go 1.27、Wails 3，以及目标平台原生 WebView 依赖（macOS：Xcode；Linux：GTK 4 / WebKitGTK 6；Windows：WebView2）。可用 `make` 或直接跑脚本：
+默认包括：打开桌面设置、关闭/隐藏 Chat、退出；macOS 另有系统「隐藏应用 / 隐藏其他」。与其它项冲突时会提示且不保存。
 
-```bash
-make test
-make build                      # 例如 0.1.1-dev
-make build VERSION=0.2.0        # 显式版本
-./scripts/build.sh 0.2.0        # 等价，不经过 make
-```
+### 更新
 
-版本写入 `internal/version.Version`（见 `scripts/app-version.sh`）：
+可在配置页手动检查更新，或开启「每天自动检查」。发现新版本后**不会**自动安装，由你确认后再装。
 
-- 显式参数 / `VERSION=` → 照用
-- HEAD 正好在 release tag → 正式号（如 `0.1.1`）
-- 其它提交 → 最新发布号 + `-dev`（如 `0.1.1-dev`）
-- 尚无 tag → `0.0.0-dev`
+### Chat 里的「桌面设置」
 
-平台目标：`make darwin-build` / `make linux-build` / `make windows-build`（对应旧 Taskfile 的 `*:build`）。
+DSH Chat **设置**左侧有一级入口「桌面设置」（与模型、插件同级），可查看与桌面端的连接状态，并管理**本应用拉起的** DSH 进程与桌面偏好。桥接由桌面端自动注入，一般不必再手动装插件。
 
-产物在 `dist/`。macOS 会额外生成可拖入 Applications 的 DMG。构建会按平台自签名（非 Developer ID / EV，未公证；下载后 macOS 可能需右键打开，Windows 可能被 SmartScreen 拦截）：
+若升级后看不到新选项，请重启桌面应用，或在 Chat 中重新加载 / 重新打开 Chat。
 
-- macOS：ad-hoc `codesign` + DMG
-- Windows：当前用户自签 Authenticode
-- Linux：写出 `.sha256`（无等价代码签名 API）
+## 隐私与边界（使用者视角）
 
-交叉编译示例：
+- 只管理本应用启动的那一个 DSH；不会去结束其它终端里自己开的 `dsh`。
+- 不会扫描工作区去读你的对话内容，也不会改写 DSH 凭据或另存一份配置。
+- 桌面自己的偏好存在 DSH Home 下的桌面运行目录里；DSH 自己的数据仍由 DSH 管理。
 
-```bash
-make darwin-build GOARCH=arm64 VERSION=0.2.0
-make linux-build GOARCH=amd64 VERSION=0.2.0
-make linux-build GOARCH=arm64 VERSION=0.2.0
-make windows-build GOARCH=amd64 VERSION=0.2.0
-make windows-build GOARCH=arm64 VERSION=0.2.0
-# 或：GOOS=… GOARCH=… ./scripts/build.sh 0.2.0
-```
+## 需要帮助？
 
-未在目标机实际构建或运行的组合，不宣称已验收。
-
-配置页可手动检查 GitHub Release，也可开启「每天自动检查更新」（约启动 1 小时后首次，之后约每天一次）。发现新版本后**不会**自动安装。
-
-### 图标
-
-统一源：`assets/shared/app-icon.svg`；生成物已提交到 `assets/`，**日常 `make build` 不会重跑**。改源图或生成器后再生成：
-
-```bash
-make icons
-# 或：go run ./tools/icons
-```
-
-Linux 可用 `assets/linux/deepseek-harness-desktop.desktop`，并把 `assets/linux/icons/hicolor` 装到系统 icon theme。
-
-### 发布
-
-只对 **main 上的版本 tag** 打包。在已合入 main 的提交上：
-
-```bash
-git tag -a vX.Y.Z -m "…"
-git push origin vX.Y.Z
-```
-
-GitHub Actions（`.github/workflows/release.yml`）构建并自签名 **darwin-arm64 / linux-amd64 / linux-arm64 / windows-amd64 / windows-arm64**，创建含 `SHA256SUMS` 的 Release。不在 main 上的 tag 会被拒绝。运行时版本由 `-ldflags` 从 tag 注入，不必改源码。
-
-版本约定（基线 `0.1.0`）：
-
-- 小 bugfix / 小特性 → 升补丁（`0.1.1`…）
-- 较大改动或重要修复 → 升次版本、补丁归零（`0.2.0`…）
-
-## 数据与进程边界（摘要）
-
-- 只向子进程显式传入 `DSH_HOME`；桌面运行目录为 `DSH_HOME/.deepseek-harness-desktop`（0700），内含 `desktop-state.json` 与 process/bridge 热状态；不作为 DSH 的 cwd。
-- Chat workspace 可配置，默认 `DSH_HOME/workspaces`；也可选用项目目录。
-- 单实例应用锁 + DSH 锁：同一用户同时只有一个本端拥有的 DSH；重复打开只复用窗口。
-- 异常退出清理自有进程树；未确认退出前禁止再启。Windows 用 Job Object（`taskkill /T` 兜底），Unix 用独立进程组。
-- 不扫 workspace、不读写凭据、不另写 YAML；`settings.yaml` 只打开已存在文件。端口占用则失败，不接管他人进程。
-- 启动时抬高 Node `max-http-header-size`，并用本次进程的 `--patch`（`webview-boot`）优化 client combo 加载，不改用户 profile。
-
-细节见 [AGENTS.md](AGENTS.md)。
+- 发行说明与下载：[Releases](https://github.com/xinghaix/deepseek-harness-desktop/releases)
+- 问题反馈：仓库 Issues
+- 架构、进程边界、构建与发版：[AGENTS.md](AGENTS.md)
