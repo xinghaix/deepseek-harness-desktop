@@ -11,6 +11,9 @@ const (
 	// 紧凑统一标题栏比默认 unified 少一段垂直留白；注入层与它共用 36px
 	// 安全区，保证交通灯与侧栏内容的定位基准一致。
 	desktopNativeTopInset = 36
+	// Chat 顶栏（标题/工具图标同一行）视觉高度约 52；命中带需盖住空白区，
+	// 按钮靠 poke-through（含 cursor:pointer 的 div 图标），不能只靠 36。
+	desktopZoomBandHeight = 52
 	desktopCustomTopInset = 48
 )
 
@@ -177,16 +180,16 @@ body > .app-shell {
 }
 
 /* Zoom hit-band over the native titlebar (Chat only).
-   InvisibleTitleBarHeight owns native drag; blank-area events never reach JS without
-   this no-drag band. Height MUST equal desktopNativeTopInset (36) — taller bands
-   cover Chat toolbar buttons. Left clears traffic lights. Buttons use poke-through. */
+   InvisibleTitleBarHeight (36) owns native drag; blank-area events there never reach
+   JS without this no-drag band. Height is desktopZoomBandHeight (52) to cover the
+   Chat title row; toolbar icons use poke-through (not height 36 alone). */
 .dsh-desktop-native-drag {
   position: fixed;
   z-index: 2147483646;
   top: 0;
   left: 78px;
   right: 0;
-  height: 36px;
+  height: 52px;
   --wails-draggable: no-drag;
   pointer-events: auto;
 }
@@ -273,14 +276,12 @@ const desktopNativeWindowInsetJS = `
   }
 
   // Chat: InvisibleTitleBarHeight supplies native drag (Wails #5900). Blank-area
-  // clicks never reach the WebView without a no-drag hit-band. Height = topInset
-  // only (never 52). On mousedown, peek under the band; if the real target is
-  // interactive, pass the click through. Otherwise click-timing → ToggleChatZoom
-  // (not AppleActionOnDoubleClick / wails:drag:doubleclick).
+  // clicks in that strip never reach the WebView without a no-drag hit-band.
+  // Band height follows Chat title row (~52). Peek underneath for real controls
+  // (many icons are div[cursor=pointer], not <button>). detail>=2 → ToggleChatZoom.
   if (!isManagement) {
     const trafficLightClearance = 78;
-    const zoomBand = topInset;
-    // Tight controls only — [role=button] matches huge Chat chrome and blocked zoom.
+    const zoomBand = Math.max(topInset, %d);
     const interactiveSel = "a[href],button,input,textarea,select,label,summary,[contenteditable='true'],[data-no-window-zoom]";
     const toggleZoom = () => {
       const current = window.wails && window.wails.Window;
@@ -312,16 +313,29 @@ const desktopNativeWindowInsetJS = `
     let lastZoomClickY = 0;
     let passThroughUntilUp = false;
     const underInteractive = (clientX, clientY, band) => {
-      band.style.pointerEvents = "none";
-      const under = document.elementFromPoint(clientX, clientY);
-      band.style.pointerEvents = "auto";
-      if (!under || !(under instanceof Element)) return null;
-      const hit = under.closest(interactiveSel);
-      if (!hit) return null;
-      const r = hit.getBoundingClientRect();
-      // Ignore huge layout shells mistaken for controls.
-      if (r.width > Math.min(320, window.innerWidth * 0.4) || r.height > zoomBand + 12) return null;
-      return hit;
+      if (band) band.style.pointerEvents = "none";
+      const stack = typeof document.elementsFromPoint === "function"
+        ? document.elementsFromPoint(clientX, clientY)
+        : [document.elementFromPoint(clientX, clientY)];
+      if (band) band.style.pointerEvents = "auto";
+      for (const under of stack) {
+        if (!under || !(under instanceof Element)) continue;
+        if (under.id === "dsh-desktop-native-drag" || under.classList.contains("dsh-desktop-native-drag")) continue;
+        const hit = under.closest(interactiveSel);
+        if (hit) {
+          const r = hit.getBoundingClientRect();
+          if (r.width <= Math.min(360, window.innerWidth * 0.45) && r.height <= zoomBand + 24) return hit;
+        }
+        // Chat toolbar icons are often plain divs with pointer cursor / tabindex.
+        try {
+          const st = window.getComputedStyle(under);
+          if (st.cursor === "pointer" || (under.tabIndex >= 0 && under.tagName !== "DIV" && under.tagName !== "SPAN")) {
+            const r = under.getBoundingClientRect();
+            if (r.width <= 96 && r.height <= zoomBand + 8) return under;
+          }
+        } catch (_) {}
+      }
+      return null;
     };
     const passClickThrough = (band, event, under) => {
       passThroughUntilUp = true;
@@ -413,6 +427,15 @@ const desktopNativeWindowInsetJS = `
       });
       dragObserver.observe(dragRoot, { childList: true, subtree: true });
     }
+    // Backup: title-row clicks that miss the overlay node (SPA gaps / y>native strip).
+    document.addEventListener("mousedown", (event) => {
+      const t = event.target;
+      if (t && t.closest && t.closest("#dsh-desktop-native-drag")) return;
+      onZoomBandMouseDown(event);
+    }, true);
+    window.setInterval(() => {
+      if (!document.getElementById("dsh-desktop-native-drag")) ensureDragOverlay();
+    }, 1500);
   }
 
   applyInset();
@@ -556,7 +579,7 @@ const desktopChromeJS = `
 
 func desktopChromeScript(nativeMac bool) string {
 	if nativeMac {
-		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
+		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS), desktopZoomBandHeight)
 	}
 	return fmt.Sprintf(
 		desktopChromeJS,

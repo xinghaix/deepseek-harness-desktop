@@ -81,11 +81,14 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	if !strings.Contains(script, "dsh-desktop-native-drag") || !strings.Contains(script, "lastZoomClickTs") || !strings.Contains(script, "onZoomBandMouseDown") || !strings.Contains(script, "ensureDragOverlay") {
 		t.Fatal("macOS Chat 必须用 no-drag 命中带 + click-timing 才能收到空白区双击")
 	}
-	if !strings.Contains(desktopNativeWindowInsetCSS, "dsh-desktop-native-drag") || !strings.Contains(desktopNativeWindowInsetCSS, "height: 36px") {
-		t.Fatal("macOS inset CSS 命中带高度必须为 36px")
+	if !strings.Contains(desktopNativeWindowInsetCSS, "dsh-desktop-native-drag") || !strings.Contains(desktopNativeWindowInsetCSS, "height: 52px") {
+		t.Fatal("macOS inset CSS 命中带高度必须为 52px（盖住 Chat 标题行）")
 	}
-	if strings.Contains(desktopNativeWindowInsetCSS, "height: 52px") || strings.Contains(script, "Math.max(topInset, 52)") {
-		t.Fatal("macOS 命中带不得再高于 topInset（52 会挡住工具栏）")
+	if !strings.Contains(script, "Math.max(topInset, 52)") && !strings.Contains(script, "const zoomBand = Math.max(topInset, 52)") {
+		t.Fatal("macOS zoomBand 必须至少 52")
+	}
+	if !strings.Contains(script, "elementsFromPoint") && !strings.Contains(script, "cursor === \"pointer\"") && !strings.Contains(script, "cursor === 'pointer'") {
+		t.Fatal("macOS poke-through 必须覆盖 cursor:pointer 图标")
 	}
 	if !strings.Contains(script, "InvisibleTitleBarHeight") && !strings.Contains(script, "InvisibleTitleBarHeight supplies") {
 		t.Fatal("macOS Chat 应保留原生拖拽说明（InvisibleTitleBarHeight）")
@@ -99,8 +102,8 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	if strings.Contains(script, "[role='button']") {
 		t.Fatal("interactiveSel 不应包含 [role=button]（Chat 顶栏大块会误伤缩放）")
 	}
-	if !strings.Contains(script, "const zoomBand = topInset") {
-		t.Fatal("macOS zoomBand 必须等于 topInset")
+	if !strings.Contains(script, "Math.max(topInset,") {
+		t.Fatal("macOS zoomBand 必须覆盖 Chat 标题行高度")
 	}
 	if !strings.Contains(script, "MutationObserver") {
 		t.Fatal("macOS sidebar 折叠观察仍应保留 MutationObserver")
