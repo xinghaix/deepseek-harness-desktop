@@ -77,6 +77,8 @@
   "field.tray_session_limit": "トレイのタスク数",
   "field.tray_session_limit_hint": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20, by recent activity.",
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
+  "field.show_copy_session_id": "「セッションIDをコピー」メニューを表示",
+  "field.show_copy_session_id_hint": "デバッグ、スクリプト実行、問題報告のため、セッション操作メニューに「セッションIDをコピー」を表示します。",
   "field.language": "インターフェース言語",
   "field.language_hint": "システム言語に従うか、固定言語を選びます。desktop-state.json に保存されます。",
   "lang.system": "システム",

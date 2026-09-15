@@ -21,6 +21,18 @@ window.__ModuleLoader__.load({
 			reconnecting: "正在重连桌面端…",
 			"desktop-not-running": "桌面端未运行"
 		});
+		const SHOW_COPY_SESSION_ID_GLOBAL = "__DSH_DESKTOP_SHOW_COPY_SESSION_ID__";
+		const SHOW_COPY_SESSION_ID_EVENT = "dsh-desktop-show-copy-session-id";
+		if (typeof window !== "undefined" && typeof window[SHOW_COPY_SESSION_ID_GLOBAL] !== "boolean") {
+			window[SHOW_COPY_SESSION_ID_GLOBAL] = true;
+		}
+		function publishShowCopySessionId(value) {
+			if (typeof value?.showCopySessionId !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.showCopySessionId;
+			window[SHOW_COPY_SESSION_ID_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(SHOW_COPY_SESSION_ID_EVENT, { detail: enabled }));
+		}
 
 		function installStyle() {
 			if (typeof document === "undefined") return;
@@ -619,6 +631,237 @@ window.__ModuleLoader__.load({
 		}
 
 
+		// The official workspace package has no session-menu slot. Keep this extension
+		// in our plugin: observe its stable menu roles, read the owning row's node.id
+		// from React's host fiber, and never replace or mutate the official module.
+		const COPY_SESSION_ID_MENU_ATTRIBUTE = "data-dsh-copy-session-id";
+		const COPY_SESSION_ID_WRAPPER_ATTRIBUTE = "data-dsh-copy-session-id-wrapper";
+		const COPY_SESSION_ID_VALUE_ATTRIBUTE = "data-dsh-copy-session-id-value";
+		const COPY_SESSION_ID_LABEL_ATTRIBUTE = "data-dsh-copy-session-id-label";
+		const SESSION_MENU_LABELS = Object.freeze({
+			zh: Object.freeze({ rename: "重命名", fork: "分叉会话", archive: "归档会话", copy: "复制会话ID", copied: "已复制", copyFailed: "复制失败" }),
+			en: Object.freeze({ rename: "Rename", fork: "Fork session", archive: "Archive session", copy: "Copy session ID", copied: "Copied", copyFailed: "Copy failed" })
+		});
+		const PENDING_SESSION_ID_TTL_MS = 5000;
+
+		function reactFiberFromElement(element) {
+			try {
+				for (let current = element, depth = 0; current && depth < 8; current = current.parentElement, depth += 1) {
+					const key = Object.getOwnPropertyNames(current).find((name) => name.startsWith("__reactFiber$") || name.startsWith("__reactInternalInstance$"));
+					if (key) return current[key];
+				}
+			} catch (_) {
+				// React internals are an optional compatibility hint; fail closed.
+			}
+			return undefined;
+		}
+
+		function sessionIdFromReactFiber(fiber) {
+			try {
+				for (let current = fiber, depth = 0; current && depth < 80; current = current.return, depth += 1) {
+					const props = current.memoizedProps || current.pendingProps;
+					const node = props?.node;
+					if (node && typeof node.id === "string" && (typeof props.onRename === "function" || typeof props.onFork === "function" || typeof props.onArchive === "function")) {
+						return node.id;
+					}
+				}
+			} catch (_) {
+				// React internals are an optional compatibility hint; fail closed.
+			}
+			return "";
+		}
+
+		function sessionIdFromElement(element) {
+			return sessionIdFromReactFiber(reactFiberFromElement(element));
+		}
+
+		function menuLabels(menu) {
+			return [...menu.querySelectorAll("button[role='menuitem']")].map((item) => (item.textContent || "").replace(/\s+/g, " ").trim());
+		}
+
+		function sessionMenuLocale(menu) {
+			const labels = menuLabels(menu);
+			for (const [locale, copy] of Object.entries(SESSION_MENU_LABELS)) {
+				if (labels.includes(copy.rename) && labels.includes(copy.fork) && labels.includes(copy.archive)) return locale;
+			}
+			return "";
+		}
+
+		function copySessionIdIconSVG() {
+			if (typeof document.createElementNS !== "function") return undefined;
+			const ns = "http://www.w3.org/2000/svg";
+			const svg = document.createElementNS(ns, "svg");
+			svg.setAttribute("width", "16");
+			svg.setAttribute("height", "16");
+			svg.setAttribute("viewBox", "0 0 16 16");
+			svg.setAttribute("fill", "none");
+			svg.setAttribute("aria-hidden", "true");
+			// Match the official IconCopyOutline16 geometry so the injected item
+			// has the same visible size as Rename/Fork/Archive.
+			const path = document.createElementNS(ns, "path");
+			path.setAttribute("d", "M6.14929 4.02032C7.11197 4.02032 7.87983 4.02016 8.49597 4.07598C9.12128 4.13269 9.65792 4.25188 10.1415 4.53106C10.7202 4.8653 11.2008 5.3459 11.535 5.92462C11.8142 6.40818 11.9334 6.94481 11.9901 7.57012C12.0459 8.18625 12.0458 8.95419 12.0458 9.9168C12.0458 10.8795 12.0459 11.6473 11.9901 12.2635C11.9334 12.8888 11.8142 13.4254 11.535 13.909C11.2008 14.4877 10.7202 14.9683 10.1415 15.3025C9.65792 15.5817 9.12128 15.7009 8.49597 15.7576C7.87984 15.8134 7.11196 15.8133 6.14929 15.8133C5.18667 15.8133 4.41874 15.8134 3.80261 15.7576C3.1773 15.7009 2.64067 15.5817 2.1571 15.3025C1.5784 14.9683 1.09778 14.4877 0.76355 13.909C0.484366 13.4254 0.365184 12.8888 0.308472 12.2635C0.252649 11.6473 0.252808 10.8795 0.252808 9.9168C0.252808 8.95418 0.252664 8.18625 0.308472 7.57012C0.365184 6.94481 0.484366 6.40818 0.76355 5.92462C1.09777 5.34589 1.57839 4.86529 2.1571 4.53106C2.64067 4.25188 3.1773 4.13269 3.80261 4.07598C4.41874 4.02017 5.18666 4.02032 6.14929 4.02032ZM6.14929 5.37774C5.16181 5.37774 4.46634 5.37761 3.92566 5.42657C3.39434 5.47472 3.07859 5.56574 2.83582 5.70587C2.4632 5.92106 2.15354 6.2307 1.93835 6.60333C1.79823 6.8461 1.70721 7.16185 1.65906 7.69317C1.6101 8.23385 1.61023 8.92933 1.61023 9.9168C1.61023 10.9043 1.61009 11.5998 1.65906 12.1404C1.70721 12.6717 1.79823 12.9875 1.93835 13.2303C2.15356 13.6029 2.46321 13.9126 2.83582 14.1277C3.07859 14.2679 3.39434 14.3589 3.92566 14.407C4.46634 14.456 5.16182 14.4559 6.14929 14.4559C7.13682 14.4559 7.83224 14.456 8.37292 14.407C8.90425 14.3589 9.21999 14.2679 9.46277 14.1277C9.83535 13.9126 10.145 13.6029 10.3602 13.2303C10.5004 12.9875 10.5914 12.6717 10.6395 12.1404C10.6885 11.5998 10.6884 10.9043 10.6884 9.9168C10.6884 8.92934 10.6885 8.23384 10.6395 7.69317C10.5914 7.16185 10.5004 6.8461 10.3602 6.60333C10.1451 6.23071 9.83536 5.92107 9.46277 5.70587C9.21999 5.56574 8.90424 5.47472 8.37292 5.42657C7.83224 5.3776 7.13682 5.37774 6.14929 5.37774ZM9.80164 0.367975C10.7638 0.367975 11.5314 0.36788 12.1473 0.423639C12.7726 0.480307 13.3093 0.598759 13.7928 0.877741C14.3717 1.21192 14.8521 1.69355 15.1864 2.27227C15.4655 2.75574 15.5857 3.29164 15.6425 3.9168C15.6983 4.53301 15.6971 5.3016 15.6971 6.26446V7.82989C15.6971 8.29264 15.6989 8.58993 15.6649 8.84844C15.4668 10.3525 14.401 11.5738 12.9833 11.9988V10.5467C13.6973 10.1903 14.2105 9.49662 14.3192 8.67169C14.3387 8.52347 14.3407 8.3358 14.3407 7.82989V6.26446C14.3407 5.27706 14.3398 4.58149 14.2909 4.04083C14.2428 3.50968 14.1526 3.19372 14.0126 2.95098C13.7974 2.57849 13.4876 2.26869 13.1151 2.05352C12.8724 1.91347 12.5564 1.82237 12.0253 1.77423C11.4847 1.72528 10.7888 1.7254 9.80164 1.7254H7.71472C6.7562 1.72558 5.92665 2.27697 5.52332 3.07891H4.07019C4.54221 1.51132 5.9932 0.368186 7.71472 0.367975H9.80164Z");
+			path.setAttribute("fill", "currentColor");
+			svg.appendChild(path);
+			return svg;
+		}
+
+		function makeCopySessionMenuItem(template, sessionId, locale) {
+			const labels = SESSION_MENU_LABELS[locale] || SESSION_MENU_LABELS.zh;
+			const item = template.cloneNode(true);
+			item.removeAttribute("disabled");
+			item.removeAttribute("aria-haspopup");
+			item.removeAttribute("aria-expanded");
+			item.setAttribute(COPY_SESSION_ID_MENU_ATTRIBUTE, "");
+			item.setAttribute(COPY_SESSION_ID_VALUE_ATTRIBUTE, sessionId);
+			item.setAttribute("aria-label", labels.copy);
+			item.__dshCopySessionIdLabels = labels;
+			const spans = item.querySelectorAll("span");
+			const label = spans.length > 0 ? spans[spans.length - 1] : document.createElement("span");
+			if (spans.length === 0) item.appendChild(label);
+			label.setAttribute(COPY_SESSION_ID_LABEL_ATTRIBUTE, "");
+			label.textContent = labels.copy;
+			if (spans.length > 1) {
+				spans[0].textContent = "";
+				spans[0].setAttribute("aria-hidden", "true");
+				const icon = copySessionIdIconSVG();
+				if (icon) spans[0].appendChild(icon);
+			}
+			item.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				copySessionIdFromMenuItem(item);
+			});
+			return item;
+		}
+
+		function showCopySessionIdFeedback(item, text, fallback, delay) {
+			if (!item.isConnected) return;
+			const label = item.querySelector(`[${COPY_SESSION_ID_LABEL_ATTRIBUTE}]`);
+			if (!label) return;
+			if (item.__dshCopySessionIdTimer !== undefined) window.clearTimeout(item.__dshCopySessionIdTimer);
+			label.textContent = text;
+			item.setAttribute("aria-label", text);
+			item.__dshCopySessionIdTimer = window.setTimeout(() => {
+				item.__dshCopySessionIdTimer = undefined;
+				if (!item.isConnected) return;
+				label.textContent = fallback;
+				item.setAttribute("aria-label", fallback);
+			}, delay);
+		}
+
+		function copySessionIdFromMenuItem(item) {
+			const sessionId = item.getAttribute(COPY_SESSION_ID_VALUE_ATTRIBUTE) || "";
+			const labels = item.__dshCopySessionIdLabels || SESSION_MENU_LABELS.zh;
+			if (!sessionId || typeof navigator === "undefined" || !navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
+				return;
+			}
+			let result;
+			try {
+				result = navigator.clipboard.writeText(sessionId);
+			} catch (_) {
+				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
+				return;
+			}
+			Promise.resolve(result).then(() => {
+				showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
+			}).catch(() => {
+				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
+			});
+		}
+
+		function removeCopySessionIdMenuItem(item) {
+			if (!item) return;
+			if (item.__dshCopySessionIdTimer !== undefined && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+				window.clearTimeout(item.__dshCopySessionIdTimer);
+				item.__dshCopySessionIdTimer = undefined;
+			}
+			const wrapper = item.parentElement?.hasAttribute(COPY_SESSION_ID_WRAPPER_ATTRIBUTE) ? item.parentElement : item;
+			wrapper.remove();
+		}
+
+		function installCopySessionIdMenu() {
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
+			let enabled = typeof window === "undefined" || window[SHOW_COPY_SESSION_ID_GLOBAL] !== false;
+			let pendingSessionId = "";
+			let pendingAt = 0;
+			let scheduled = false;
+			const isFreshPending = () => pendingSessionId && Date.now() - pendingAt < PENDING_SESSION_ID_TTL_MS;
+			const rememberSessionAction = (event) => {
+				const button = event.target?.closest?.("button");
+				if (!button || button.closest("[role='menu']")) return;
+				const row = button.closest("[role='treeitem']");
+				if (!row) return;
+				const sessionId = sessionIdFromElement(button) || sessionIdFromElement(row);
+				if (!sessionId) return;
+				pendingSessionId = sessionId;
+				pendingAt = Date.now();
+			};
+			const decorate = () => {
+				const menus = [...document.querySelectorAll("[role='menu']")];
+				for (const menu of menus) {
+					const existing = menu.querySelector(`[${COPY_SESSION_ID_MENU_ATTRIBUTE}]`);
+					if (!enabled) {
+						removeCopySessionIdMenuItem(existing);
+						continue;
+					}
+					const locale = sessionMenuLocale(menu);
+					if (existing || !locale) continue;
+					const fiberSessionId = sessionIdFromElement(menu);
+					const fromPending = !fiberSessionId && isFreshPending();
+					const sessionId = fiberSessionId || (fromPending ? pendingSessionId : "");
+					if (!sessionId) continue;
+					const items = [...menu.querySelectorAll("button[role='menuitem']")];
+					const archive = items.find((item) => (item.textContent || "").replace(/\s+/g, " ").trim() === SESSION_MENU_LABELS[locale].archive);
+					const template = archive || items[items.length - 1];
+					if (!template) continue;
+					const item = makeCopySessionMenuItem(template, sessionId, locale);
+					// The opener is consumed once a matching portal menu is decorated;
+					// keeping it would risk assigning a stale id to a later menu.
+					pendingSessionId = "";
+					pendingAt = 0;
+					const templateWrapper = template.parentElement;
+					const wrapper = templateWrapper?.cloneNode(false);
+					if (wrapper) {
+						wrapper.setAttribute(COPY_SESSION_ID_WRAPPER_ATTRIBUTE, "");
+						wrapper.appendChild(item);
+						if (archive?.parentElement) archive.parentElement.before(wrapper);
+						else if (templateWrapper?.parentElement) templateWrapper.parentElement.appendChild(wrapper);
+					} else {
+						menu.appendChild(item);
+					}
+				}
+			};
+			const schedule = () => {
+				if (scheduled) return;
+				scheduled = true;
+				const run = () => {
+					scheduled = false;
+					decorate();
+				};
+				if (typeof queueMicrotask === "function") queueMicrotask(run);
+				else if (typeof window.setTimeout === "function") window.setTimeout(run, 0);
+				else setTimeout(run, 0);
+			};
+			const onSettingChange = (event) => {
+				enabled = event.detail !== false;
+				schedule();
+			};
+			document.addEventListener("pointerdown", rememberSessionAction, true);
+			document.addEventListener("click", rememberSessionAction, true);
+			window.addEventListener(SHOW_COPY_SESSION_ID_EVENT, onSettingChange);
+			const observer = new MutationObserver(schedule);
+			observer.observe(document.documentElement, { childList: true, subtree: true });
+			schedule();
+			return () => {
+				document.removeEventListener("pointerdown", rememberSessionAction, true);
+				document.removeEventListener("click", rememberSessionAction, true);
+				window.removeEventListener(SHOW_COPY_SESSION_ID_EVENT, onSettingChange);
+				observer.disconnect();
+				for (const item of document.querySelectorAll(`[${COPY_SESSION_ID_MENU_ATTRIBUTE}]`)) removeCopySessionIdMenuItem(item);
+			};
+		}
+
 		function keyboardEventToAccelerator(event, isMac) {
 			const code = event.code || "";
 			const key = event.key || "";
@@ -708,6 +951,7 @@ window.__ModuleLoader__.load({
 					]);
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
+					publishShowCopySessionId(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
 					if (syncDraft) {
@@ -755,12 +999,13 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
 				if (looksLikeUpdate) setUpdate(value);
 				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
+				publishShowCopySessionId(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
 					if (key) {
@@ -773,7 +1018,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -1348,6 +1593,36 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "DSH增强设置" }),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "显示“复制会话ID”菜单" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: "在会话右侧菜单中显示“复制会话ID”选项，便于调试、脚本调用和问题反馈。" })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.showCopySessionId !== false,
+										checked: prefs?.showCopySessionId !== false,
+										disabled: !connected || pending || !prefs,
+										onChange: (event) => void invoke("setShowCopySessionId", { enabled: event.target.checked })
+									})
+								})
+							]
+						})
+						]
+					}),
+					jsxs("div", {
+						className: "dshDesktopBridgeCard",
+						children: [
 						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "快捷键" }),
 						jsx("div", {
 							className: "dshDesktopBridgeDesc",
@@ -1505,9 +1780,16 @@ window.__ModuleLoader__.load({
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
 		function apply(ctx) {
 			installStyle();
+			void ctx.connection.rpc.call(CHANNEL, "prefs", {}).then((result) => {
+				if (result?.ok) publishShowCopySessionId(result.value);
+			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
+			const stopCopySessionIdMenu = installCopySessionIdMenu();
 			if (typeof ctx.effect === "function") {
-				ctx.effect(() => () => stopNavIcon());
+				ctx.effect(() => () => {
+					stopNavIcon();
+					stopCopySessionIdMenu();
+				});
 			}
 			// First-class settings nav entry (same slot as Models / Plugins / Market).
 			// Do NOT use a sticky globalThis guard: Cordis HMR disposes the fiber and

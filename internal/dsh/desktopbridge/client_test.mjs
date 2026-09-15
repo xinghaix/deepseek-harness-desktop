@@ -57,6 +57,15 @@ vm.runInNewContext(
   { filename: "desktop-bridge-client.js" },
 );
 assert.ok(registration, "client registration missing");
+assert.match(source, /installCopySessionIdMenu/, "copy-session menu installer missing");
+assert.match(source, /sessionIdFromReactFiber/, "session-id fiber adapter missing");
+assert.match(source, /archive\.parentElement\.before\(wrapper\)/, "copy item must be a sibling menu wrapper");
+assert.match(source, /navigator\.clipboard\.writeText/, "copy item must use the browser clipboard API");
+assert.match(source, /复制会话ID/, "Chinese copy-session label missing");
+assert.match(source, /复制失败/, "clipboard failure feedback missing");
+assert.match(source, /PENDING_SESSION_ID_TTL_MS/, "pending session id compatibility window missing");
+assert.match(source, /removeCopySessionIdMenuItem/, "menu cleanup helper missing");
+assert.doesNotMatch(source, /dsh-client-ui-workspace[\\/]lib/, "desktop bridge must not patch the official workspace bundle");
 
 const react = {
   useState: (value) => [value, () => {}],

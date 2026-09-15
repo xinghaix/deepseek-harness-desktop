@@ -16,6 +16,7 @@ type DesktopPrefs struct {
 	TrayEnabled         bool              `json:"trayEnabled"`
 	CloseToTray         bool              `json:"closeToTray"`
 	TraySessionLimit    int               `json:"traySessionLimit"`
+	ShowCopySessionId   bool              `json:"showCopySessionId"`
 	Language            string            `json:"language"`
 	ResolvedLocale      string            `json:"resolvedLocale"`
 	SystemLocale        string            `json:"systemLocale"`
@@ -48,6 +49,7 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		TrayEnabled:         trayOn,
 		CloseToTray:         trayOn && d.prefs.closeToTray.Load(),
 		TraySessionLimit:    int(d.prefs.traySessionLimit.Load()),
+		ShowCopySessionId:   d.prefs.showCopySessionId.Load(),
 		Language:            pref,
 		ResolvedLocale:      resolved,
 		SystemLocale:        i18n.Normalize(system),
@@ -105,6 +107,14 @@ func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
 		return d.DesktopPrefs(), err
 	}
 	d.refreshTrayMenu()
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetShowCopySessionId(enabled bool) (DesktopPrefs, error) {
+	d.prefs.showCopySessionId.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
 	return d.DesktopPrefs(), nil
 }
 

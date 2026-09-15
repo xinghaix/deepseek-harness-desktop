@@ -77,6 +77,8 @@
   "field.tray_session_limit": "Tray-Aufgabenanzahl",
   "field.tray_session_limit_hint": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20, by recent activity.",
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
+  "field.show_copy_session_id": "Menü „Sitzungs-ID kopieren“ anzeigen",
+  "field.show_copy_session_id_hint": "„Sitzungs-ID kopieren“ im Sitzungsmenü für Debugging, Skripte und Fehlerberichte anzeigen.",
   "field.language": "Oberflächensprache",
   "field.language_hint": "Systemsprache folgen oder eine feste Sprache wählen. Gespeichert in desktop-state.json.",
   "lang.system": "System",

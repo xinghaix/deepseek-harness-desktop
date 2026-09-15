@@ -165,3 +165,31 @@ func TestShortcutOverridesRoundTripIncludingCleared(t *testing.T) {
 		t.Fatalf("reloaded quit = %q", eff2[ShortcutQuit])
 	}
 }
+
+func TestShowCopySessionIdDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.showCopySessionId.Load() {
+		t.Fatal("showCopySessionId must default to on")
+	}
+	p.showCopySessionId.Store(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.ShowCopySessionId == nil || *file.Prefs.ShowCopySessionId {
+		t.Fatalf("showCopySessionId persisted = %v, want false", file.Prefs.ShowCopySessionId)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.showCopySessionId.Load() {
+		t.Fatal("disabled showCopySessionId was not reloaded")
+	}
+}

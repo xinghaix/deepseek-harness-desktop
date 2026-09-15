@@ -36,6 +36,7 @@ type Prefs struct {
 	TrayEnabled         *bool             `json:"trayEnabled,omitempty"`
 	CloseToTray         *bool             `json:"closeToTray,omitempty"`
 	TraySessionLimit    *int              `json:"traySessionLimit,omitempty"`
+	ShowCopySessionId   *bool             `json:"showCopySessionId,omitempty"`
 	Language            *string           `json:"language,omitempty"`
 	Shortcuts           map[string]string `json:"shortcuts,omitempty"`
 }
@@ -168,7 +169,7 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
-	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
+	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}
 	if f.Update.AutoCheck != nil {

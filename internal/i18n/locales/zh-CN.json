@@ -77,6 +77,8 @@
   "field.tray_session_limit": "任务显示数量",
   "field.tray_session_limit_hint": "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条，按最近活动排序。",
   "field.tray_session_limit_hint_dashboard": "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条。",
+  "field.show_copy_session_id": "显示“复制会话ID”菜单",
+  "field.show_copy_session_id_hint": "在会话右侧菜单中显示“复制会话ID”选项，便于调试、脚本调用和问题反馈。",
   "field.language": "界面语言",
   "field.language_hint": "跟随系统语言，或选择固定语言。保存在 desktop-state.json。",
   "lang.system": "跟随系统",

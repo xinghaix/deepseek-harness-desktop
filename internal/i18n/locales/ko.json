@@ -77,6 +77,8 @@
   "field.tray_session_limit": "트레이 작업 수",
   "field.tray_session_limit_hint": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20, by recent activity.",
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
+  "field.show_copy_session_id": "‘세션 ID 복사’ 메뉴 표시",
+  "field.show_copy_session_id_hint": "디버깅, 스크립트 호출 및 문제 보고를 위해 세션 작업 메뉴에 ‘세션 ID 복사’를 표시합니다.",
   "field.language": "인터페이스 언어",
   "field.language_hint": "시스템 언어를 따르거나 고정 언어를 선택합니다. desktop-state.json에 저장됩니다.",
   "lang.system": "시스템",
