@@ -302,11 +302,17 @@ func (d *Service) openChatSession(id string) {
 	if id != "" {
 		d.pendingOpen.set(id)
 	}
+	if id != "" {
+		// Start WebView navigation before the synchronous native Show/Focus calls.
+		// On a warm Chat window this overlaps window activation with DSH's session
+		// selection/history request; on cold start the pending claim still covers
+		// the case where no Chat WebView exists yet.
+		d.dispatchOpenSession(id)
+	}
 	d.revealChatFromTray()
 	if id == "" {
 		return
 	}
-	d.dispatchOpenSession(id)
 }
 
 func (d *Service) dispatchOpenSession(id string) {
