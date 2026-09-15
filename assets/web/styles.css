@@ -369,8 +369,8 @@ html.dsh-desktop-config-modal .lead { margin-top: 10px; font-size: 13px; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35); }
   50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12); }
 }
-.shortcut-list button.shortcut-toggle { padding: 2px 10px; font-size: 12px; min-height: 28px; }
-.shortcut-footer { margin-top: 10px; }
+.shortcut-list button.shortcut-clear,
+.shortcut-list button.shortcut-reset { padding: 2px 10px; font-size: 12px; min-height: 28px; }
 html:not([data-platform="mac"]) .shortcut-mac-only { display: none; }
 
 .tray-dependent.is-disabled { opacity: 0.45; pointer-events: none; }

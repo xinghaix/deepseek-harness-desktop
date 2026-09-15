@@ -135,13 +135,13 @@ func TestCloseChatToTrayHidesWithoutQuit(t *testing.T) {
 		t.Fatal(err)
 	}
 	menuSrc := string(menu)
-	if !strings.Contains(menuSrc, `SetAccelerator("CmdOrCtrl+w")`) {
-		t.Fatal("menu must bind CmdOrCtrl+w to Close Window")
+	if !strings.Contains(menuSrc, "shortcuts[ShortcutCloseChat]") {
+		t.Fatal("menu must bind Close Window to ShortcutCloseChat (default CmdOrCtrl+w)")
 	}
 	if !strings.Contains(menuSrc, "CloseChatToTray") {
 		t.Fatal("Close Window menu path must call CloseChatToTray, not RequestQuit")
 	}
-	if !strings.Contains(menuSrc, `SetAccelerator("CmdOrCtrl+q")`) {
-		t.Fatal("quit must keep CmdOrCtrl+q")
+	if !strings.Contains(menuSrc, "shortcuts[ShortcutQuit]") {
+		t.Fatal("quit must keep ShortcutQuit (default CmdOrCtrl+q)")
 	}
 }

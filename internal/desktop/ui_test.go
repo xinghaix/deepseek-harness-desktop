@@ -113,6 +113,18 @@ func TestManagementUIContract(t *testing.T) {
 	if !strings.Contains(html, "shortcut.recording") || !strings.Contains(html, "shortcut.conflict") {
 		t.Fatal("locales must expose shortcut recording/conflict copy")
 	}
+	if strings.Contains(html, `id="shortcuts-reset-all"`) || strings.Contains(html, "shortcut.reset_all") || strings.Contains(html, "全部恢复默认") {
+		t.Fatal("shortcuts panel must not expose restore-all; reset is per-row")
+	}
+	if !strings.Contains(html, `class="secondary shortcut-reset"`) || !strings.Contains(html, `class="secondary shortcut-clear"`) {
+		t.Fatal("each shortcut row must expose clear and restore-default")
+	}
+	if !strings.Contains(html, "onShortcutRecordPointerDown") {
+		t.Fatal("recording must cancel when clicking away without a new combo")
+	}
+	if !strings.Contains(html, "applyPreferenceShortcutHints") {
+		t.Fatal("preference hints must follow the configured shortcut bindings")
+	}
 	if strings.Contains(html, "暂不支持改键") || strings.Contains(html, "Remapping is not supported") {
 		t.Fatal("shortcuts hint must no longer say remapping is unsupported")
 	}

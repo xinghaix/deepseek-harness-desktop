@@ -289,6 +289,7 @@ function syncLanguageSelects() {
 async function applyLocaleBundle(bundle) {
   if (!bundle || !window.DSHI18n) return;
   window.DSHI18n.setBundle(bundle);
+  applyPreferenceShortcutHints();
   syncLanguageSelects();
   updateButtons();
   void loadDesktopPrefs();
@@ -394,6 +395,7 @@ const SHORTCUT_LABEL_KEYS = {
   hideOthers: "shortcut.hide_others_label",
 };
 let shortcutRecordingId = null;
+let lastShortcutPrefs = null;
 function isMacPlatform() {
   return document.documentElement.dataset.platform === "mac";
 }
@@ -480,15 +482,30 @@ function stopShortcutRecording({ restore = true } = {}) {
   const id = shortcutRecordingId;
   shortcutRecordingId = null;
   window.removeEventListener("keydown", onShortcutRecordKeydown, true);
+  window.removeEventListener("pointerdown", onShortcutRecordPointerDown, true);
+  if (restore) {
+    applyShortcutsPrefs(lastShortcutPrefs);
+    return;
+  }
   const li = document.querySelector(`#shortcuts-list [data-shortcut="${id}"]`);
   const kbd = li && li.querySelector("[data-shortcut-display]");
   if (kbd) {
     kbd.classList.remove("is-recording");
     kbd.removeAttribute("aria-pressed");
   }
-  if (restore) {
-    void api("DesktopPrefs").then((prefs) => applyShortcutsPrefs(prefs)).catch(() => {});
+}
+function onShortcutRecordPointerDown(event) {
+  if (!shortcutRecordingId) return;
+  if (event.button != null && event.button !== 0) return;
+  const target = event.target;
+  if (target && typeof target.closest === "function") {
+    const kbd = target.closest("[data-shortcut-display]");
+    if (kbd) {
+      const li = kbd.closest("[data-shortcut]");
+      if (li && li.getAttribute("data-shortcut") === shortcutRecordingId) return;
+    }
   }
+  stopShortcutRecording({ restore: true });
 }
 function onShortcutRecordKeydown(event) {
   if (!shortcutRecordingId) return;
@@ -547,15 +564,40 @@ function startShortcutRecording(id) {
     kbd.textContent = t("shortcut.recording");
   }
   window.addEventListener("keydown", onShortcutRecordKeydown, true);
+  window.addEventListener("pointerdown", onShortcutRecordPointerDown, true);
+}
+function effectiveShortcutAccel(id) {
+  const map = (lastShortcutPrefs && lastShortcutPrefs.shortcuts && typeof lastShortcutPrefs.shortcuts === "object") ? lastShortcutPrefs.shortcuts : {};
+  return Object.prototype.hasOwnProperty.call(map, id) ? map[id] : (DEFAULT_SHORTCUTS[id] || "");
+}
+function applyPreferenceShortcutHints() {
+  const quit = formatAccelerator(effectiveShortcutAccel("quit"));
+  const close = formatAccelerator(effectiveShortcutAccel("closeChat"));
+  const pairs = [
+    ["field.confirm_quit_hint", "field.confirm_quit_hint_none", quit],
+    ["field.confirm_quit_hint_dashboard", "field.confirm_quit_hint_dashboard_none", quit],
+    ["field.tray_enabled_hint", "field.tray_enabled_hint_none", close],
+    ["field.tray_enabled_hint_dashboard", "field.tray_enabled_hint_dashboard_none", close],
+    ["field.close_to_tray_hint", "field.close_to_tray_hint_none", quit],
+    ["field.close_to_tray_hint_dashboard", "field.close_to_tray_hint_dashboard_none", quit],
+  ];
+  pairs.forEach(([withKey, noneKey, label]) => {
+    document.querySelectorAll(`[data-i18n="${withKey}"], [data-i18n="${noneKey}"]`).forEach((el) => {
+      el.textContent = label ? t(withKey, label) : t(noneKey);
+    });
+  });
 }
 function applyShortcutsPrefs(prefs) {
-  const map = (prefs && prefs.shortcuts && typeof prefs.shortcuts === "object") ? prefs.shortcuts : {};
+  if (prefs) lastShortcutPrefs = prefs;
+  const map = (lastShortcutPrefs && lastShortcutPrefs.shortcuts && typeof lastShortcutPrefs.shortcuts === "object") ? lastShortcutPrefs.shortcuts : {};
   document.querySelectorAll("#shortcuts-list [data-shortcut]").forEach((li) => {
     const id = li.getAttribute("data-shortcut");
     const accel = Object.prototype.hasOwnProperty.call(map, id) ? map[id] : (DEFAULT_SHORTCUTS[id] || "");
     const kbd = li.querySelector("[data-shortcut-display]");
-    const btn = li.querySelector(".shortcut-toggle");
+    const clearBtn = li.querySelector(".shortcut-clear");
+    const resetBtn = li.querySelector(".shortcut-reset");
     const cleared = accel === "";
+    const isDefault = normalizeAccelCompare(accel) === normalizeAccelCompare(DEFAULT_SHORTCUTS[id] || "");
     const recording = shortcutRecordingId === id;
     if (kbd && !recording) {
       if (cleared) {
@@ -571,12 +613,10 @@ function applyShortcutsPrefs(prefs) {
       kbd.setAttribute("role", "button");
       kbd.setAttribute("title", t("shortcut.recording"));
     }
-    if (btn) {
-      btn.dataset.action = cleared ? "reset" : "clear";
-      btn.setAttribute("data-i18n", cleared ? "shortcut.reset" : "shortcut.clear");
-      btn.textContent = t(cleared ? "shortcut.reset" : "shortcut.clear");
-    }
+    if (clearBtn) clearBtn.disabled = cleared;
+    if (resetBtn) resetBtn.disabled = isDefault;
   });
+  applyPreferenceShortcutHints();
 }
 async function loadDesktopPrefs() {
   try {
@@ -629,7 +669,7 @@ if (shortcutsList) {
       startShortcutRecording(li.getAttribute("data-shortcut"));
       return;
     }
-    const btn = event.target.closest(".shortcut-toggle");
+    const btn = event.target.closest(".shortcut-clear, .shortcut-reset");
     if (!btn || !shortcutsList.contains(btn)) return;
     const li = btn.closest("[data-shortcut]");
     if (!li) return;
@@ -638,7 +678,7 @@ if (shortcutsList) {
     void run(async () => {
       const prefs = await api("DesktopPrefs");
       const current = Object.assign({}, DEFAULT_SHORTCUTS, (prefs && prefs.shortcuts) || {});
-      if (btn.dataset.action === "reset") current[id] = DEFAULT_SHORTCUTS[id] || "";
+      if (btn.classList.contains("shortcut-reset")) current[id] = DEFAULT_SHORTCUTS[id] || "";
       else current[id] = "";
       const updated = await api("SetShortcuts", current);
       applyShortcutsPrefs(updated);
@@ -652,14 +692,6 @@ if (shortcutsList) {
     event.preventDefault();
     const li = kbd.closest("[data-shortcut]");
     if (li) startShortcutRecording(li.getAttribute("data-shortcut"));
-  });
-}
-const resetAllBtn = $("shortcuts-reset-all");
-if (resetAllBtn) {
-  resetAllBtn.onclick = () => run(async () => {
-    stopShortcutRecording({ restore: false });
-    const updated = await api("SetShortcuts", Object.assign({}, DEFAULT_SHORTCUTS));
-    applyShortcutsPrefs(updated);
   });
 }
 bindLanguageSelect("ui-language");

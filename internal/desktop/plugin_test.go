@@ -105,4 +105,19 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if strings.Contains(host, `stop: Object.freeze`) || strings.Contains(host, `path: "/v1/stop"`) {
 		t.Fatal("host Cordis allowlist must not expose stop")
 	}
+	if strings.Contains(client, "全部恢复默认") {
+		t.Fatal("client shortcuts must not expose restore-all; reset is per-row")
+	}
+	if !strings.Contains(client, `children: "恢复默认"`) || !strings.Contains(client, `children: "清除"`) {
+		t.Fatal("client shortcut rows must expose per-row clear and restore default")
+	}
+	if !strings.Contains(client, `addEventListener("pointerdown"`) {
+		t.Fatal("client must cancel shortcut recording on pointerdown outside the chip")
+	}
+	if strings.Contains(client, `children: "▾"`) || strings.Contains(client, "⌘Q / Ctrl+Q") {
+		t.Fatal("language dropdown must use the stroke chevron; preference hints must follow the configured shortcut")
+	}
+	if !strings.Contains(client, "dshDesktopBridgeInlineKbd") || !strings.Contains(client, "boundShortcutLabel") {
+		t.Fatal("preference hints must render the current shortcut binding")
+	}
 }

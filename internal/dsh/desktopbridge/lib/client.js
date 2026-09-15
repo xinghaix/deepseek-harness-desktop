@@ -372,9 +372,28 @@ window.__ModuleLoader__.load({
 				}
 				.dshDesktopBridgePillChevron {
 					flex: none;
-					font-size: 11px;
-					line-height: 1;
-					opacity: .65;
+					display: block;
+					width: 14px;
+					height: 14px;
+					color: var(--dsw-alias-label-secondary);
+					transition: transform .15s ease;
+				}
+				.dshDesktopBridgePillChevron[data-open="true"] {
+					transform: rotate(180deg);
+				}
+				.dshDesktopBridgeInlineKbd {
+					display: inline-block;
+					font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+					font-size: 12px;
+					font-style: normal;
+					padding: 0 6px;
+					margin: 0 1px;
+					border-radius: 6px;
+					border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,.28));
+					background: var(--dsw-alias-bg-module-platform, rgba(127,127,127,.08));
+					line-height: 18px;
+					vertical-align: 1px;
+					white-space: nowrap;
 				}
 				.dshDesktopBridgePillMenu {
 					position: absolute;
@@ -512,7 +531,20 @@ window.__ModuleLoader__.load({
 						onClick: () => setOpen((prev) => !prev),
 						children: [
 							jsx("span", { className: "dshDesktopBridgePillLabel", children: selected?.label || "" }),
-							jsx("span", { className: "dshDesktopBridgePillChevron", "aria-hidden": true, children: "▾" })
+							jsx("svg", {
+								className: "dshDesktopBridgePillChevron",
+								"data-open": open ? "true" : "false",
+								viewBox: "0 0 16 16",
+								fill: "none",
+								"aria-hidden": true,
+								children: jsx("path", {
+									d: "M4 6.5L8 10.5L12 6.5",
+									stroke: "currentColor",
+									strokeWidth: "1.5",
+									strokeLinecap: "round",
+									strokeLinejoin: "round"
+								})
+							})
 						]
 					}),
 					open
@@ -842,9 +874,32 @@ window.__ModuleLoader__.load({
 				window.addEventListener("keydown", onKey, true);
 				return () => window.removeEventListener("keydown", onKey, true);
 			}, [recordingShortcutId, isMac, prefs]);
+			react.useEffect(() => {
+				if (!recordingShortcutId) return undefined;
+				const onPointerDown = (event) => {
+					if (event.button != null && event.button !== 0) return;
+					const el = event.target;
+					if (el && typeof el.closest === "function" && el.closest(".dshDesktopBridgeKbd.is-recording")) {
+						return;
+					}
+					setRecordingShortcutId(null);
+				};
+				window.addEventListener("pointerdown", onPointerDown, true);
+				return () => window.removeEventListener("pointerdown", onPointerDown, true);
+			}, [recordingShortcutId]);
+			const boundShortcutLabel = (id) => {
+				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : (DEFAULT_SHORTCUTS[id] || "");
+				if (!accel) return "";
+				return formatAccel(accel) || accel;
+			};
+			const quitShortcutLabel = boundShortcutLabel("quit");
+			const closeChatShortcutLabel = boundShortcutLabel("closeChat");
+			const inlineShortcut = (id, label) => jsx("kbd", { className: "dshDesktopBridgeInlineKbd", children: label }, id);
 			const shortcutRows = shortcutIds.map((id) => {
 				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : DEFAULT_SHORTCUTS[id];
+				const defaultAccel = DEFAULT_SHORTCUTS[id] || "";
 				const cleared = accel === "";
+				const isDefault = normalizeAccelCompare(accel) === normalizeAccelCompare(defaultAccel);
 				const recording = recordingShortcutId === id;
 				return jsxs("div", {
 					className: "dshDesktopBridgeShortcutRow",
@@ -875,12 +930,22 @@ window.__ModuleLoader__.load({
 								jsx("button", {
 									className: "dshDesktopBridgeSelector",
 									type: "button",
-									disabled: !connected || pending || !prefs,
+									disabled: !connected || pending || !prefs || cleared,
 									onClick: () => {
 										setRecordingShortcutId(null);
-										void setOneShortcut(id, cleared ? DEFAULT_SHORTCUTS[id] : "");
+										void setOneShortcut(id, "");
 									},
-									children: cleared ? "恢复默认" : "清除"
+									children: "清除"
+								}),
+								jsx("button", {
+									className: "dshDesktopBridgeSelector",
+									type: "button",
+									disabled: !connected || pending || !prefs || isDefault,
+									onClick: () => {
+										setRecordingShortcutId(null);
+										void setOneShortcut(id, defaultAccel);
+									},
+									children: "恢复默认"
 								})
 							]
 						})
@@ -1180,7 +1245,10 @@ window.__ModuleLoader__.load({
 									className: "dshDesktopBridgeRowText",
 									children: [
 										jsx("div", { className: "dshDesktopBridgeTitle", children: "退出确认" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "仅在有会话任务正在运行时，关闭窗口或 ⌘Q / Ctrl+Q 会二次确认；空闲时直接退出。" })
+										jsxs("div", { className: "dshDesktopBridgeDesc", children: quitShortcutLabel
+											? ["仅在有会话任务正在运行时，关闭窗口或 ", inlineShortcut("quit", quitShortcutLabel), " 会二次确认；空闲时直接退出。"]
+											: "仅在有会话任务正在运行时，关闭窗口会二次确认；空闲时直接退出。"
+										})
 									]
 								}),
 								jsx("div", {
@@ -1204,7 +1272,10 @@ window.__ModuleLoader__.load({
 									className: "dshDesktopBridgeRowText",
 									children: [
 										jsx("div", { className: "dshDesktopBridgeTitle", children: "开启系统托盘" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。" })
+										jsxs("div", { className: "dshDesktopBridgeDesc", children: closeChatShortcutLabel
+											? ["总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。", inlineShortcut("closeChat", closeChatShortcutLabel), " 仍会隐藏窗口（无托盘时回到程序坞/任务栏）。"]
+											: "总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。"
+										})
 									]
 								}),
 								jsx("div", {
@@ -1252,7 +1323,10 @@ window.__ModuleLoader__.load({
 									className: "dshDesktopBridgeRowText",
 									children: [
 										jsx("div", { className: "dshDesktopBridgeTitle", children: "关闭窗口到托盘" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。" })
+										jsxs("div", { className: "dshDesktopBridgeDesc", children: quitShortcutLabel
+											? ["需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。", inlineShortcut("quit-tray", quitShortcutLabel), " 和「退出」仍会退出。"]
+											: "需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。「退出」仍会退出。"
+										})
 									]
 								}),
 								jsx("div", {
@@ -1278,20 +1352,9 @@ window.__ModuleLoader__.load({
 						jsx("div", {
 							className: "dshDesktopBridgeDesc",
 							style: { padding: "0 0 8px" },
-							children: "点击按键可录制新快捷键；清除可取消加速键（菜单仍可点）；全部恢复默认还原内置绑定。绑定的关闭/隐藏 Chat 快捷键始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。"
+							children: "点击按键可录制新快捷键；清除可取消加速键（菜单仍可点）；恢复默认还原该条内置绑定。未按下新组合时点击空白处取消录制。绑定的关闭/隐藏 Chat 快捷键始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。"
 						}),
 						...shortcutRows,
-						jsx("div", {
-							className: "dshDesktopBridgeActions",
-							style: { paddingTop: "8px" },
-							children: jsx("button", {
-								className: "dshDesktopBridgeSelector",
-								type: "button",
-								disabled: !connected || pending || !prefs,
-								onClick: () => { setRecordingShortcutId(null); void invoke("setShortcuts", { shortcuts: { ...DEFAULT_SHORTCUTS } }); },
-								children: "全部恢复默认"
-							})
-						})
 						]
 					}),
 					jsxs("div", {

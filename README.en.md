@@ -68,9 +68,9 @@ Linux tray support depends on StatusNotifier / AppIndicator in your desktop envi
 
 In setup or **Desktop settings → Shortcuts** you can:
 
-- **Click a key chip** to record a new combo
+- **Click a key chip** to record a new combo; click elsewhere to cancel without saving
 - **Clear** a shortcut (no accelerator; menu items still work)
-- **Restore defaults** for one or all
+- **Restore default** for that shortcut
 
 Defaults include open desktop settings, close/hide Chat, and quit; on macOS also system Hide / Hide Others. Conflicts are blocked.
 
