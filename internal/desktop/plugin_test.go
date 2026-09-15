@@ -70,6 +70,7 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"/v1/prefs", "/v1/check-update",
 		"configFromEndpointFile", "desktop-bridge/unavailable",
 		"blank: Boolean(raw.blank)",
+		"origin: typeof raw.origin === \"string\" ? raw.origin : \"\"",
 		"/v1/claim-open-session",
 		"claimOpenSession",
 	} {
@@ -97,14 +98,22 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"sessions",
 		"role: \"switch\"",
 		"blank: Boolean(s.blank)",
+		"archivedSessionIds",
+		"archived: archived.has(sid)",
+		"origin: typeof s.origin === \"string\" ? s.origin : \"\"",
+		"const seen = new Set()",
 		"dsh-desktop-open-session",
 		"uiWorkspace.openSession",
 		"claimOpenSession",
 		`"uiWorkspace"`,
+		`"workspaces"`,
 	} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client bridge missing %q", fragment)
 		}
+	}
+	if strings.Contains(client, "ctx.sessions.open(id)") {
+		t.Fatal("tray navigation must not bypass uiWorkspace.openSession")
 	}
 	for _, forbidden := range []string{"停止 DSH", `invoke("stop"`} {
 		if strings.Contains(client, forbidden) {

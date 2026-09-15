@@ -91,6 +91,13 @@ type BridgeSession struct {
 	// Blank mirrors Chat SessionSummary.blank (empty-log "新会话"). Tray recent
 	// lists drop these: displayTitle falls back to the workspace basename.
 	Blank bool `json:"blank,omitempty"`
+	// Archived mirrors the workspace controller's global archivedSessionIds set.
+	// The desktop keeps archived rows for running-state accounting, but never
+	// exposes them in the recent-session menu.
+	Archived bool `json:"archived,omitempty"`
+	// Origin mirrors SessionSummary.origin. The Chat sidebar keeps subagent
+	// children in their parent catalog instead of the main session list.
+	Origin string `json:"origin,omitempty"`
 }
 
 // BridgeUpdate mirrors update.Snapshot for the bridge JSON surface.

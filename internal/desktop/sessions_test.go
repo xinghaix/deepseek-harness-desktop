@@ -100,6 +100,20 @@ func TestSelectTraySessionsDropsBlank(t *testing.T) {
 	}
 }
 
+func TestSelectTraySessionsDropsArchivedAndDuplicateIDs(t *testing.T) {
+	all := []dsh.BridgeSession{
+		{ID: "visible", Title: "same title", UpdatedAt: 30},
+		{ID: "visible", Title: "same title", UpdatedAt: 20},
+		{ID: "archived", Title: "same title", UpdatedAt: 40, Archived: true},
+		{ID: "subagent", Title: "same title", UpdatedAt: 60, Origin: "subagent"},
+		{ID: "", Title: "invalid", UpdatedAt: 50},
+	}
+	got := selectTraySessions(all, 5)
+	if len(got) != 1 || got[0].ID != "visible" {
+		t.Fatalf("archived/subagent/duplicate/invalid rows must be removed, got %+v", got)
+	}
+}
+
 func TestSelectTraySessionsPrefersRunningAndError(t *testing.T) {
 	all := []dsh.BridgeSession{
 		{ID: "idle-new", Title: "IdleNew", UpdatedAt: 100},

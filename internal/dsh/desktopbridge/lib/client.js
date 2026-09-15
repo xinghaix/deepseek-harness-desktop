@@ -1451,9 +1451,10 @@ window.__ModuleLoader__.load({
 			return true;
 		}
 
-		function sessionsFromSnapshot(listState) {
+		function sessionsFromSnapshot(listState, archivedSessionIds = []) {
 			const byId = listState && listState.byId;
 			if (!byId) return { sessions: [], clearErrors: [] };
+			const archived = new Set(Array.isArray(archivedSessionIds) ? archivedSessionIds.map(String) : []);
 			const clearErrors = [];
 			const current = listState.current;
 			if (current && stickySessionErrors.has(current)) {
@@ -1461,10 +1462,13 @@ window.__ModuleLoader__.load({
 				clearErrors.push(current);
 			}
 			const out = [];
+			const seen = new Set();
 			for (const id of Object.keys(byId)) {
 				const s = byId[id];
 				if (!s) continue;
-				const sid = s.sessionId || s.id || id;
+				const sid = String(s.sessionId || s.id || id).trim();
+				if (!sid || seen.has(sid)) continue;
+				seen.add(sid);
 				const running = Boolean(s.running);
 				if (running) stickySessionErrors.delete(sid);
 				const title = typeof s.title === "string" && s.title.trim()
@@ -1477,7 +1481,11 @@ window.__ModuleLoader__.load({
 					running,
 					error: !running && stickySessionErrors.has(sid),
 					// Chat empty-log bit. Tray drops these; displayTitle is the cwd basename.
-					blank: Boolean(s.blank)
+					blank: Boolean(s.blank),
+					// Workspace controller archive state is global to all workspaces.
+					archived: archived.has(sid) || Boolean(s.archived) || Boolean(s.isArchived),
+					// Subagent children are rendered below their parent, not as top-level rows.
+					origin: typeof s.origin === "string" ? s.origin : ""
 				});
 			}
 			return { sessions: out, clearErrors };
@@ -1492,7 +1500,7 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
-		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace"];
+		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		function apply(ctx) {
 			installStyle();
@@ -1526,6 +1534,14 @@ window.__ModuleLoader__.load({
 				if (lastSessionsKey === key) return;
 				lastSessionsKey = key;
 				void ctx.connection.rpc.call(CHANNEL, "reportSessions", payload).catch(() => {});
+			};
+			const archivedSessionIds = () => {
+				try {
+					const workspaces = typeof ctx.get === "function" ? ctx.get("workspaces") : ctx.workspaces;
+					return workspaces?.list?.getSnapshot?.()?.archivedSessionIds || [];
+				} catch (_) {
+					return [];
+				}
 			};
 
 			// A tray click can race the asynchronous Session-list baseline. Keep the
@@ -1571,7 +1587,7 @@ window.__ModuleLoader__.load({
 						? ctx.sessions.list.getSnapshot()
 						: null;
 					pushBusy(anySessionRunning(snap));
-					pushSessions(sessionsFromSnapshot(snap));
+					pushSessions(sessionsFromSnapshot(snap, archivedSessionIds()));
 					flushPendingOpenSession();
 				} catch (_) { /* keep last */ }
 			};
@@ -1585,6 +1601,10 @@ window.__ModuleLoader__.load({
 					syncBusy();
 					return ctx.sessions.list.subscribe(syncBusy);
 				});
+			}
+			const workspaces = typeof ctx.get === "function" ? ctx.get("workspaces") : ctx.workspaces;
+			if (workspaces?.list && typeof workspaces.list.subscribe === "function") {
+				ctx.effect(() => workspaces.list.subscribe(syncBusy));
 			}
 
 			const handleClaimedOpenSession = (result) => {

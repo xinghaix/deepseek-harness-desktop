@@ -74,6 +74,9 @@ const flushMicrotasks = async () => {
 
 let snapshot = { byId: {}, ids: [], current: undefined };
 let listListener = () => {};
+let workspaceListener = () => {};
+const workspaceSnapshot = { archivedSessionIds: [] };
+const reportedSessions = [];
 const opened = [];
 let claimResult = "";
 let claimCalls = 0;
@@ -83,16 +86,19 @@ const ctx = {
     fn();
   },
   get(name) {
-    return name === "uiWorkspace" ? this.uiWorkspace : undefined;
+    if (name === "uiWorkspace") return this.uiWorkspace;
+    if (name === "workspaces") return this.workspaces;
+    return undefined;
   },
   remote: null,
   connection: {
     rpc: {
-      call(_channel, method) {
+      call(_channel, method, payload) {
         if (method === "claimOpenSession") {
           claimCalls += 1;
           return Promise.resolve({ ok: true, value: { sessionId: claimResult } });
         }
+        if (method === "reportSessions") reportedSessions.push(payload);
         return Promise.resolve({ ok: true, value: {} });
       },
     },
@@ -116,6 +122,15 @@ const ctx = {
       if (!snapshot.byId[id]) throw new Error(`unknown session ${id}`);
       snapshot.current = id;
       opened.push(id);
+    },
+  },
+  workspaces: {
+    list: {
+      getSnapshot: () => workspaceSnapshot,
+      subscribe(fn) {
+        workspaceListener = fn;
+        return () => {};
+      },
     },
   },
 };
@@ -160,6 +175,37 @@ ctx.uiWorkspace = officialWorkspace;
 listListener();
 await flushMicrotasks();
 assert.deepEqual(opened, ["session-late", "session-workspace"], "workspace navigation must retry when the service becomes ready");
+
+// The sidebar owns archive state in the workspace controller, not in the
+// SessionSummary row. Reports must preserve that bit and deduplicate IDs.
+snapshot = {
+  byId: {
+    first: { id: "session-visible", title: "same title", running: false },
+    duplicate: { id: "session-visible", title: "same title", running: false },
+    archived: { id: "session-archived", title: "same title", running: false },
+    subagent: { id: "session-subagent", title: "same title", running: false, origin: "subagent" },
+  },
+  ids: ["session-visible", "session-visible", "session-archived", "session-subagent"],
+  current: "session-workspace",
+};
+workspaceSnapshot.archivedSessionIds = ["session-archived"];
+listListener();
+workspaceListener();
+await flushMicrotasks();
+const latestReport = reportedSessions[reportedSessions.length - 1];
+assert.deepEqual(
+  Array.from(latestReport.sessions, (session) => ({
+    id: session.id,
+    archived: Boolean(session.archived),
+    origin: session.origin || "",
+  })),
+  [
+    { id: "session-visible", archived: false, origin: "" },
+    { id: "session-archived", archived: true, origin: "" },
+    { id: "session-subagent", archived: false, origin: "subagent" },
+  ],
+  "session reports must deduplicate IDs and preserve authoritative archive state",
+);
 
 // The WebView event can also be missed after apply() has already completed.
 // A later claim must still reach the navigation queue without another page load.

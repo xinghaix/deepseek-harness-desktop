@@ -41,13 +41,24 @@ func selectTraySessions(all []dsh.BridgeSession, limit int) []dsh.BridgeSession 
 		return nil
 	}
 	cp := make([]dsh.BridgeSession, 0, len(all))
+	seen := make(map[string]struct{}, len(all))
 	for _, s := range all {
-		// Chat SessionSummary.blank: empty-log "新会话". Sidebar only shows the
-		// current one (localized title); displayTitle is the workspace basename
-		// (e.g. "dsh-sol-pi"), which is not a useful tray jump target.
-		if s.Blank {
+		// Chat SessionSummary.blank: empty-log "新会话". The workspace
+		// controller owns archivedSessionIds; subagent children are rendered in
+		// their parent's catalog. None is a useful top-level tray jump target.
+		// Keep running rows in d.sessions for busy accounting, but omit them from
+		// this menu projection.
+		if s.Blank || s.Archived || s.Origin == "subagent" {
 			continue
 		}
+		id := strings.TrimSpace(s.ID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
 		cp = append(cp, s)
 	}
 	if len(cp) == 0 {

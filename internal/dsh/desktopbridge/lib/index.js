@@ -66,10 +66,12 @@ function clearStickySessionError(sessionId) {
 function mergeTraySessionErrors(sessions, clearErrors) {
 	for (const id of clearErrors || []) clearStickySessionError(id);
 	const out = [];
+	const seen = new Set();
 	for (const raw of sessions || []) {
 		if (!raw || typeof raw !== "object") continue;
 		const id = String(raw.id || "").trim();
-		if (!id) continue;
+		if (!id || seen.has(id)) continue;
+		seen.add(id);
 		const running = Boolean(raw.running);
 		if (running) clearStickySessionError(id);
 		out.push({
@@ -78,7 +80,9 @@ function mergeTraySessionErrors(sessions, clearErrors) {
 			updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
 			running,
 			error: !running && (Boolean(raw.error) || stickySessionErrors.has(id)),
-			blank: Boolean(raw.blank)
+			blank: Boolean(raw.blank),
+			archived: Boolean(raw.archived),
+			origin: typeof raw.origin === "string" ? raw.origin : ""
 		});
 	}
 	return out;
