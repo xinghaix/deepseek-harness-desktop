@@ -105,6 +105,9 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"dsh-desktop-open-session",
 		"uiWorkspace.openSession",
 		"claimOpenSession",
+		"OPEN_SESSION_PENDING_GLOBAL",
+		"consumeQueuedOpenSession",
+		"drainQueuedOpenSession",
 		`"uiWorkspace"`,
 		`"workspaces"`,
 	} {

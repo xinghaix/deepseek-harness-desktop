@@ -55,6 +55,9 @@ func TestOpenChatSessionJSEncodesID(t *testing.T) {
 	if !strings.Contains(got, `"session-4514df73-e4a8-4326-a8c7-747860b4a4de"`) {
 		t.Fatalf("id must be JSON-encoded: %s", got)
 	}
+	if !strings.Contains(got, `window.__DSH_DESKTOP_OPEN_SESSION_PENDING__=id`) {
+		t.Fatalf("missing pending marker: %s", got)
+	}
 	if openChatSessionJS("  ") != "" || openChatSessionJS("") != "" {
 		t.Fatal("empty id must not emit JS")
 	}

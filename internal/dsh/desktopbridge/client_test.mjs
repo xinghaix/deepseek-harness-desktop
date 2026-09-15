@@ -72,7 +72,11 @@ const flushMicrotasks = async () => {
   for (let i = 0; i < 4; i += 1) await Promise.resolve();
 };
 
-let snapshot = { byId: {}, ids: [], current: undefined };
+let snapshot = {
+  byId: { "session-queued": { id: "session-queued", running: false } },
+  ids: ["session-queued"],
+  current: undefined,
+};
 let listListener = () => {};
 let workspaceListener = () => {};
 const workspaceSnapshot = { archivedSessionIds: [] };
@@ -134,8 +138,13 @@ const ctx = {
     },
   },
 };
+window.__DSH_DESKTOP_OPEN_SESSION_PENDING__ = "session-queued";
 
 client.apply(ctx);
+assert.deepEqual(opened, ["session-queued"], "apply must drain a pending WebView request immediately");
+assert.equal(window.__DSH_DESKTOP_OPEN_SESSION_PENDING__, "", "apply must consume the pending marker");
+opened.length = 0;
+snapshot = { byId: {}, ids: [], current: undefined };
 const handler = listeners.get("dsh-desktop-open-session");
 assert.ok(handler, "open-session listener missing");
 
@@ -233,9 +242,37 @@ assert.deepEqual(
 // If polling wins the race, the delayed event for the same request must not
 // navigate twice; a later independent click remains allowed.
 claimResult = "";
+window.__DSH_DESKTOP_OPEN_SESSION_PENDING__ = "session-poll";
 handler({ detail: "session-poll" });
+assert.equal(window.__DSH_DESKTOP_OPEN_SESSION_PENDING__, "", "delivered event must consume its pending marker");
 await flushMicrotasks();
 assert.deepEqual(opened, ["session-late", "session-workspace", "session-poll"], "duplicate tray event must be suppressed");
+
+// Event delivery and the immediate claim can race before list.current publishes.
+// The same tray click must not invoke the official navigation API twice.
+const savedOpenSession = officialWorkspace.openSession;
+let holdCurrent = true;
+officialWorkspace.openSession = (id) => {
+  if (!snapshot.byId[id]) throw new Error(`unknown session ${id}`);
+  opened.push(id);
+  if (!holdCurrent) snapshot.current = id;
+};
+claimResult = "session-race";
+snapshot = {
+  byId: { "session-race": { id: "session-race", running: false } },
+  ids: ["session-race"],
+  current: undefined,
+};
+handler({ detail: "session-race" });
+await flushMicrotasks();
+claimResult = "";
+assert.deepEqual(
+  opened,
+  ["session-late", "session-workspace", "session-poll", "session-race"],
+  "event/claim race must not invoke navigation twice",
+);
+officialWorkspace.openSession = savedOpenSession;
+holdCurrent = false;
 
 const backoffDelays = [];
 for (let i = 0; i < 7; i += 1) {

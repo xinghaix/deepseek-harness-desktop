@@ -43,5 +43,5 @@ func openChatSessionJS(id string) string {
 	if err != nil {
 		return ""
 	}
-	return `(function(){try{window.dispatchEvent(new CustomEvent("` + openChatSessionEvent + `",{detail:` + string(payload) + `}));}catch(_){}})();`
+	return `(function(){try{var id=` + string(payload) + `;window.__DSH_DESKTOP_OPEN_SESSION_PENDING__=id;window.dispatchEvent(new CustomEvent("` + openChatSessionEvent + `",{detail:id}));}catch(_){}})();`
 }

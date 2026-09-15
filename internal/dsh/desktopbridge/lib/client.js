@@ -1502,6 +1502,7 @@ window.__ModuleLoader__.load({
 
 		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
+		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
 		function apply(ctx) {
 			installStyle();
 			const stopNavIcon = installDesktopNavIcon();
@@ -1581,6 +1582,17 @@ window.__ModuleLoader__.load({
 				pendingOpenSessionId = id;
 				flushPendingOpenSession();
 			};
+			const consumeQueuedOpenSession = (sessionId) => {
+				if (typeof window === "undefined") return;
+				const id = String(sessionId || "").trim();
+				if (id && window[OPEN_SESSION_PENDING_GLOBAL] === id) window[OPEN_SESSION_PENDING_GLOBAL] = "";
+			};
+			const drainQueuedOpenSession = () => {
+				if (typeof window === "undefined") return;
+				const id = String(window[OPEN_SESSION_PENDING_GLOBAL] || "").trim();
+				window[OPEN_SESSION_PENDING_GLOBAL] = "";
+				if (id) queueOpenSession(id);
+			};
 			const syncBusy = () => {
 				try {
 					const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
@@ -1610,6 +1622,12 @@ window.__ModuleLoader__.load({
 			const handleClaimedOpenSession = (result) => {
 				const id = result && result.ok && result.value ? result.value.sessionId : "";
 				if (!id) return false;
+				// The native click dispatches a WebView event and leaves the same id
+				// claimable for missed-event recovery. If the event path already opened
+				// it, consume the claim without starting a second history/layout update.
+				if (lastOpenedSessionId === id && Date.now() - lastOpenedSessionAt < OPEN_SESSION_DEDUPE_MS) {
+					return true;
+				}
 				let current = "";
 				try {
 					current = ctx.sessions?.list?.getSnapshot?.()?.current || "";
@@ -1622,7 +1640,9 @@ window.__ModuleLoader__.load({
 				.then(handleClaimedOpenSession)
 				.catch(() => false);
 			const onOpenSession = (event) => {
-				queueOpenSession(event && event.detail, true);
+				const id = event && event.detail;
+				consumeQueuedOpenSession(id);
+				queueOpenSession(id, true);
 				void claimOpenSession();
 			};
 			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
@@ -1630,6 +1650,7 @@ window.__ModuleLoader__.load({
 				if (typeof ctx.effect === "function") {
 					ctx.effect(() => () => window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession));
 				}
+				drainQueuedOpenSession();
 			}
 			if (typeof setTimeout === "function") {
 				ctx.effect(() => {
