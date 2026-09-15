@@ -122,6 +122,10 @@ func (a bridgeHostAdapter) ReportSessions(sessions []dsh.BridgeSession) {
 	a.service.ReportSessions(sessions)
 }
 
+func (a bridgeHostAdapter) ClaimOpenSession() string {
+	return a.service.claimOpenSession()
+}
+
 func snapshotToBridge(s update.Snapshot) dsh.BridgeUpdate {
 	return dsh.BridgeUpdate{
 		State:          s.State,

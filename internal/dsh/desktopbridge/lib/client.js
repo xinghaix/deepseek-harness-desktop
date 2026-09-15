@@ -1492,7 +1492,8 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
-		const inject = ["slots", "connection", "sessions", "remote"];
+		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace"];
+		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		function apply(ctx) {
 			installStyle();
 			const stopNavIcon = installDesktopNavIcon();
@@ -1526,6 +1527,44 @@ window.__ModuleLoader__.load({
 				lastSessionsKey = key;
 				void ctx.connection.rpc.call(CHANNEL, "reportSessions", payload).catch(() => {});
 			};
+
+			// A tray click can race the asynchronous Session-list baseline. Keep the
+			// id until it is listed, then use the official DSH UI navigation API.
+			const OPEN_SESSION_CLAIM_POLL_INITIAL_MS = 500;
+			const OPEN_SESSION_CLAIM_POLL_MAX_MS = 10000;
+			const OPEN_SESSION_DEDUPE_MS = 1000;
+			let pendingOpenSessionId = "";
+			let lastOpenedSessionId = "";
+			let lastOpenedSessionAt = 0;
+			const flushPendingOpenSession = () => {
+				const id = pendingOpenSessionId;
+				if (!id) return;
+				const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
+					? ctx.sessions.list.getSnapshot()
+					: null;
+				if (!snap?.byId || !snap.byId[id]) return;
+				try {
+					const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
+					if (!uiWorkspace || typeof uiWorkspace.openSession !== "function") return;
+					uiWorkspace.openSession(id);
+					if (pendingOpenSessionId === id) pendingOpenSessionId = "";
+					lastOpenedSessionId = id;
+					lastOpenedSessionAt = Date.now();
+				} catch (_) { /* list/service may still be settling; retry on next snapshot */ }
+			};
+			const queueOpenSession = (sessionId, fromEvent = false) => {
+				const id = String(sessionId || "").trim();
+				if (!id) return;
+				if (fromEvent && lastOpenedSessionId === id && Date.now() - lastOpenedSessionAt < OPEN_SESSION_DEDUPE_MS) {
+					let current = "";
+					try {
+						current = ctx.sessions?.list?.getSnapshot?.()?.current || "";
+					} catch (_) { /* allow the event to retry */ }
+					if (current === id) return;
+				}
+				pendingOpenSessionId = id;
+				flushPendingOpenSession();
+			};
 			const syncBusy = () => {
 				try {
 					const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
@@ -1533,6 +1572,7 @@ window.__ModuleLoader__.load({
 						: null;
 					pushBusy(anySessionRunning(snap));
 					pushSessions(sessionsFromSnapshot(snap));
+					flushPendingOpenSession();
 				} catch (_) { /* keep last */ }
 			};
 			if (ctx.remote && typeof ctx.remote.$on === "function") {
@@ -1545,6 +1585,56 @@ window.__ModuleLoader__.load({
 					syncBusy();
 					return ctx.sessions.list.subscribe(syncBusy);
 				});
+			}
+
+			const handleClaimedOpenSession = (result) => {
+				const id = result && result.ok && result.value ? result.value.sessionId : "";
+				if (!id) return false;
+				let current = "";
+				try {
+					current = ctx.sessions?.list?.getSnapshot?.()?.current || "";
+				} catch (_) { /* keep the claim */ }
+				if (lastOpenedSessionId === id && current === id) return true;
+				queueOpenSession(id);
+				return true;
+			};
+			const claimOpenSession = () => ctx.connection.rpc.call(CHANNEL, "claimOpenSession", {})
+				.then(handleClaimedOpenSession)
+				.catch(() => false);
+			const onOpenSession = (event) => {
+				queueOpenSession(event && event.detail, true);
+				void claimOpenSession();
+			};
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				window.addEventListener(OPEN_SESSION_EVENT, onOpenSession);
+				if (typeof ctx.effect === "function") {
+					ctx.effect(() => () => window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession));
+				}
+			}
+			if (typeof setTimeout === "function") {
+				ctx.effect(() => {
+					let stopped = false;
+					let timer = null;
+					let pollDelay = OPEN_SESSION_CLAIM_POLL_INITIAL_MS;
+					const poll = () => {
+						if (stopped) return;
+						void claimOpenSession().then((claimed) => {
+							pollDelay = claimed
+								? OPEN_SESSION_CLAIM_POLL_INITIAL_MS
+								: Math.min(pollDelay * 2, OPEN_SESSION_CLAIM_POLL_MAX_MS);
+						}).finally(() => {
+							flushPendingOpenSession();
+							if (!stopped) timer = setTimeout(poll, pollDelay);
+						});
+					};
+					poll();
+					return () => {
+						stopped = true;
+						if (timer !== null) clearTimeout(timer);
+					};
+				}, "desktop-bridge: poll pending open session");
+			} else {
+				void claimOpenSession();
 			}
 		}
 		exports.apply = apply;

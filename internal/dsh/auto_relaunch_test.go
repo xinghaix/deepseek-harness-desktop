@@ -67,6 +67,7 @@ func (h *recordingBridgeHost) SetShortcuts(map[string]string) (BridgePrefs, erro
 	return BridgePrefs{}, nil
 }
 func (h *recordingBridgeHost) ReportSessions([]BridgeSession)   {}
+func (h *recordingBridgeHost) ClaimOpenSession() string         { return "" }
 func (h *recordingBridgeHost) BridgeUpdateStatus() BridgeUpdate { return BridgeUpdate{} }
 func (h *recordingBridgeHost) CheckUpdate() (BridgeUpdate, error) {
 	return BridgeUpdate{}, nil

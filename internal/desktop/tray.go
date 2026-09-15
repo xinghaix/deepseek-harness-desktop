@@ -269,7 +269,7 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 			label := traySessionMenuLabel(short, status)
 			item := menu.Add(label).OnClick(func(*application.Context) {
 				d.acknowledgeTraySessionError(sess.ID)
-				d.revealChatFromTray()
+				d.openChatSession(sess.ID)
 			})
 			tip := full
 			switch status {
@@ -295,6 +295,38 @@ func (d *Service) newTrayMenu(app *application.App) *application.Menu {
 		}
 	})
 	return menu
+}
+
+func (d *Service) openChatSession(id string) {
+	id = normalizeSessionID(id)
+	if id != "" {
+		d.pendingOpen.set(id)
+	}
+	d.revealChatFromTray()
+	if id == "" {
+		return
+	}
+	d.dispatchOpenSession(id)
+}
+
+func (d *Service) dispatchOpenSession(id string) {
+	script := openChatSessionJS(id)
+	if script == "" {
+		return
+	}
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	chat, ok := app.Window.GetByName(chatWindowName)
+	if !ok || chat == nil {
+		return
+	}
+	chat.ExecJS(script)
+}
+
+func (d *Service) claimOpenSession() string {
+	return d.pendingOpen.claim()
 }
 
 func (d *Service) revealChatFromTray() {

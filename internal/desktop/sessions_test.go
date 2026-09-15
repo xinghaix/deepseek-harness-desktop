@@ -47,6 +47,38 @@ func TestSelectTraySessionsSortsAndTruncates(t *testing.T) {
 	}
 }
 
+func TestOpenChatSessionJSEncodesID(t *testing.T) {
+	got := openChatSessionJS("session-4514df73-e4a8-4326-a8c7-747860b4a4de")
+	if !strings.Contains(got, `new CustomEvent("`+openChatSessionEvent+`"`) {
+		t.Fatalf("missing event name: %s", got)
+	}
+	if !strings.Contains(got, `"session-4514df73-e4a8-4326-a8c7-747860b4a4de"`) {
+		t.Fatalf("id must be JSON-encoded: %s", got)
+	}
+	if openChatSessionJS("  ") != "" || openChatSessionJS("") != "" {
+		t.Fatal("empty id must not emit JS")
+	}
+	quoted := openChatSessionJS(`sess"id`)
+	if !strings.Contains(quoted, `sess\"id`) {
+		t.Fatalf("quotes must be escaped: %s", quoted)
+	}
+}
+
+func TestPendingOpenSessionClaimDrains(t *testing.T) {
+	var p pendingOpenSession
+	p.set("  session-abc  ")
+	if got := p.claim(); got != "session-abc" {
+		t.Fatalf("claim = %q", got)
+	}
+	if got := p.claim(); got != "" {
+		t.Fatalf("second claim = %q, want empty", got)
+	}
+	p.set("")
+	if got := p.claim(); got != "" {
+		t.Fatalf("empty set should claim empty, got %q", got)
+	}
+}
+
 func TestSelectTraySessionsDropsBlank(t *testing.T) {
 	all := []dsh.BridgeSession{
 		{ID: "blank-new", Title: "dsh-sol-pi", UpdatedAt: 200, Blank: true},

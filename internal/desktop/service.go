@@ -51,6 +51,7 @@ type Service struct {
 	sessionsMu         sync.Mutex
 	sessions           []dsh.BridgeSession
 	trayErrorAcks      map[string]struct{} // local ack after tray click
+	pendingOpen        pendingOpenSession
 }
 
 func New(icon []byte) *Service {

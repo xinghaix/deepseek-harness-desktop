@@ -39,7 +39,8 @@ const routes = Object.freeze({
 	setAutoCheckUpdate: Object.freeze({ method: "POST", path: "/v1/set-auto-check-update" }),
 	appVersion: Object.freeze({ method: "GET", path: "/v1/app-version" }),
 	reportChatBusy: Object.freeze({ method: "POST", path: "/v1/report-chat-busy" }),
-	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" })
+	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" }),
+	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" })
 });
 
 /** Host-side sticky tray errors (turn/end error|interrupted + api-session/error). */

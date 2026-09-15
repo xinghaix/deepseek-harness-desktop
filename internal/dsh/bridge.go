@@ -50,6 +50,8 @@ type BridgeHost interface {
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
 	ReportChatBusy(busy bool)
 	ReportSessions(sessions []BridgeSession)
+	// ClaimOpenSession drains a tray-queued session id for Chat to open.
+	ClaimOpenSession() string
 	BridgeUpdateStatus() BridgeUpdate
 	CheckUpdate() (BridgeUpdate, error)
 	InstallUpdate() error
@@ -547,6 +549,17 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		host.ReportSessions(body.Sessions)
 		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true, "count": len(body.Sessions)})
+	case "/v1/claim-open-session":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]string{"sessionId": host.ClaimOpenSession()})
 	case "/v1/update-status":
 		if r.Method != http.MethodGet {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

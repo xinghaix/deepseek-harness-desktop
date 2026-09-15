@@ -37,6 +37,9 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if !strings.Contains(inject, "@deepseek-ai/dsh-client-ui-settings") {
 		t.Fatalf("client inject missing settings shell: %v", manifest.DSH.Client.Inject)
 	}
+	if !strings.Contains(inject, "@deepseek-ai/dsh-client-ui-workspace") {
+		t.Fatalf("client inject missing workspace UI (openSession): %v", manifest.DSH.Client.Inject)
+	}
 	if strings.Contains(inject, "dsh-client-ui-settings-plugins") {
 		t.Fatalf("client inject still targets plugins tab package: %v", manifest.DSH.Client.Inject)
 	}
@@ -67,6 +70,8 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"/v1/prefs", "/v1/check-update",
 		"configFromEndpointFile", "desktop-bridge/unavailable",
 		"blank: Boolean(raw.blank)",
+		"/v1/claim-open-session",
+		"claimOpenSession",
 	} {
 		if !strings.Contains(host, fragment) {
 			t.Fatalf("host bridge missing %q", fragment)
@@ -92,6 +97,10 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"sessions",
 		"role: \"switch\"",
 		"blank: Boolean(s.blank)",
+		"dsh-desktop-open-session",
+		"uiWorkspace.openSession",
+		"claimOpenSession",
+		`"uiWorkspace"`,
 	} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client bridge missing %q", fragment)
