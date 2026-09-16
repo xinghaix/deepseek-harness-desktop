@@ -22,7 +22,7 @@ import (
 //go:embed assets/darwin/app-icon.png
 var assets embed.FS
 
-type DSH struct{ *desktop.Service }
+type DSH struct{ *desktop.WailsFacade }
 
 func main() {
 	if dsh.RunSupervisorIfRequested() {
@@ -43,7 +43,7 @@ func main() {
 
 	icon := appIcon()
 	service := desktop.New(icon)
-	manager := &DSH{Service: service}
+	manager := &DSH{WailsFacade: desktop.NewWailsFacade(service)}
 	app := application.New(application.Options{
 		Name:        "Deepseek Harness Desktop",
 		Description: "管理本机已安装的 DSH CLI，并在桌面 WebView 中运行 DSH Chat",
