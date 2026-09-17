@@ -114,6 +114,18 @@ func (f *WailsFacade) ToggleChatZoom(ctx context.Context) {
 		f.service.ToggleChatZoom()
 	}
 }
+func (f *WailsFacade) OpenExternalURL(ctx context.Context, raw string) error {
+	if err := f.allow(ctx, "OpenExternalURL", setupWindowName, configWindowName, chatWindowName); err != nil {
+		return err
+	}
+	return openExternalURL(raw)
+}
+func (f *WailsFacade) SearchInBrowser(ctx context.Context, query string) error {
+	if err := f.allow(ctx, "SearchInBrowser", setupWindowName, configWindowName, chatWindowName); err != nil {
+		return err
+	}
+	return searchInBrowser(query)
+}
 func (f *WailsFacade) ReloadChat(ctx context.Context, o dsh.Options) error {
 	if err := f.management(ctx, "ReloadChat"); err != nil {
 		return err

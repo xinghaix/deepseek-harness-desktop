@@ -10,6 +10,7 @@ import (
 // TuneNativeWebView applies platform WebView runtime tweaks that Wails does not
 // expose as window options. Safe to call more than once per window.
 func TuneNativeWebView(window application.Window) {
+	installNativeContextMenu()
 	if window == nil {
 		return
 	}

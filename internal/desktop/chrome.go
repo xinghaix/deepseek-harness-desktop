@@ -368,9 +368,10 @@ const desktopChromeJS = `
 })();
 `
 
-const desktopNavigationGuardJS = `
+const desktopExternalJSTemplate = `
 (() => {
   if (document.querySelector("body > .app-shell")) return;
+  const useCustomMenu = @@USE_CUSTOM_MENU@@;
   const allowed = (value) => {
     try {
       const url = new URL(value, location.href);
@@ -378,6 +379,38 @@ const desktopNavigationGuardJS = `
     } catch (err) {
       return false;
     }
+  };
+  const resolveExternal = (value) => {
+    try {
+      const url = new URL(value, location.href);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+      if (allowed(url.href)) return "";
+      return url.href;
+    } catch (err) {
+      return "";
+    }
+  };
+  const callDesktop = (method, arg) => {
+    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
+    if (typeof call !== "function") return;
+    void call("main.DSH." + method, arg);
+  };
+  const contextPayload = (event) => {
+    const sel = ((window.getSelection() && window.getSelection().toString()) || "").trim();
+    let href = "";
+    const node = event.target && event.target.closest && event.target.closest("a[href]");
+    if (node) {
+      const raw = node.getAttribute("href") || "";
+      if (raw && raw.charAt(0) !== "#" && raw.indexOf("javascript:") !== 0) {
+        href = resolveExternal(raw);
+      }
+    }
+    return { text: sel.slice(0, 2048), href: href };
+  };
+  const isEditable = (el) => {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    return Boolean(el.closest && el.closest("input, textarea, select, [contenteditable='true']"));
   };
   const originalOpen = window.open;
   window.open = function(url) {
@@ -390,17 +423,40 @@ const desktopNavigationGuardJS = `
     if (!link) return;
     const href = link.getAttribute("href");
     if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) return;
-    if (!allowed(href)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    if (allowed(href)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const external = resolveExternal(href);
+    if (external) callDesktop("OpenExternalURL", external);
+  }, true);
+  document.addEventListener("contextmenu", (event) => {
+    const payload = contextPayload(event);
+    window.__DSH_CTX__ = payload;
+    const el = event.target instanceof Element ? event.target : (event.target && event.target.parentElement) || document.body;
+    if (!el || !el.style) return;
+    el.style.removeProperty("--custom-contextmenu");
+    el.style.removeProperty("--custom-contextmenu-data");
+    if (!useCustomMenu || isEditable(el)) return;
+    if (!payload.text && !payload.href) return;
+    const id = payload.text && payload.href ? "dsh-both" : payload.href ? "dsh-link" : "dsh-search";
+    el.style.setProperty("--custom-contextmenu", id);
+    el.style.setProperty("--custom-contextmenu-data", JSON.stringify(payload));
   }, true);
 })();
 `
 
+func desktopExternalJS(useCustomMenu bool) string {
+	flag := "false"
+	if useCustomMenu {
+		flag = "true"
+	}
+	return strings.Replace(desktopExternalJSTemplate, "@@USE_CUSTOM_MENU@@", flag, 1)
+}
+
 func desktopChromeScript(nativeMac bool) string {
+	external := desktopExternalJS(!nativeMac)
 	if nativeMac {
-		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + desktopNavigationGuardJS
+		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + external
 	}
 	return fmt.Sprintf(
 		desktopChromeJS,
@@ -410,5 +466,5 @@ func desktopChromeScript(nativeMac bool) string {
 		strconv.Quote(i18n.TActive("chrome.minimize")),
 		strconv.Quote(i18n.TActive("chrome.maximize")),
 		strconv.Quote(i18n.TActive("chrome.close")),
-	) + desktopNavigationGuardJS
+	) + external
 }

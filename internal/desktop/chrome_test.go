@@ -101,3 +101,22 @@ func TestEscapeWailsCSS(t *testing.T) {
 		t.Fatalf("escapeWailsCSS() = %q", got)
 	}
 }
+
+func TestDesktopExternalJSOpensLinksAndStashesContext(t *testing.T) {
+	mac := desktopChromeScript(true)
+	other := desktopChromeScript(false)
+	for _, script := range []string{mac, other} {
+		if !strings.Contains(script, "main.DSH.") || !strings.Contains(script, "OpenExternalURL") || !strings.Contains(script, "window.__DSH_CTX__") || !strings.Contains(script, "contextmenu") {
+			t.Fatal("Chat must stash right-click context and open external links in the default browser")
+		}
+		if !strings.Contains(script, "window.open") || !strings.Contains(script, "preventDefault") {
+			t.Fatal("Chat must keep loopback navigation protection")
+		}
+	}
+	if !strings.Contains(mac, "const useCustomMenu = false") {
+		t.Fatal("macOS must keep the native WKWebView menu")
+	}
+	if !strings.Contains(other, "const useCustomMenu = true") || !strings.Contains(other, "--custom-contextmenu") {
+		t.Fatal("Windows/Linux must opt into the Wails context menu for search/open-link")
+	}
+}

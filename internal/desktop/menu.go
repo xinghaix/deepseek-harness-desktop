@@ -46,7 +46,9 @@ func ApplicationMenu(app *application.App, controller menuController) *applicati
 			shortcuts = eff
 		}
 	}
-	return newApplicationMenu(runtime.GOOS, app.NewMenu, controller, app.Quit, locale, shortcuts)
+	menu := newApplicationMenu(runtime.GOOS, app.NewMenu, controller, app.Quit, locale, shortcuts)
+	registerExternalContextMenus()
+	return menu
 }
 
 func newApplicationMenu(goos string, newMenu func() *application.Menu, controller menuController, quitFallback func(), locale string, shortcuts map[string]string) *application.Menu {
