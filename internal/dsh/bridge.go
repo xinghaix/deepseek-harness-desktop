@@ -55,6 +55,7 @@ type PrefsHost interface {
 	SetCloseToTray(enabled bool) (BridgePrefs, error)
 	SetTraySessionLimit(n int) (BridgePrefs, error)
 	SetShowCopySessionId(enabled bool) (BridgePrefs, error)
+	SetChatContentVisibility(enabled bool) (BridgePrefs, error)
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
 }
 
@@ -84,17 +85,18 @@ type BridgeHost interface {
 
 // BridgePrefs is the JSON shape returned on /v1/prefs.
 type BridgePrefs struct {
-	ConfirmQuitWhenBusy bool                 `json:"confirmQuitWhenBusy"`
-	TrayEnabled         bool                 `json:"trayEnabled"`
-	CloseToTray         bool                 `json:"closeToTray"`
-	TraySessionLimit    int                  `json:"traySessionLimit"`
-	ShowCopySessionId   bool                 `json:"showCopySessionId"`
-	Language            string               `json:"language"`
-	ResolvedLocale      string               `json:"resolvedLocale"`
-	SystemLocale        string               `json:"systemLocale"`
-	Source              string               `json:"source"`
-	Supported           []BridgeLocaleOption `json:"supported"`
-	Shortcuts           map[string]string    `json:"shortcuts"`
+	ConfirmQuitWhenBusy   bool                 `json:"confirmQuitWhenBusy"`
+	TrayEnabled           bool                 `json:"trayEnabled"`
+	CloseToTray           bool                 `json:"closeToTray"`
+	TraySessionLimit      int                  `json:"traySessionLimit"`
+	ShowCopySessionId     bool                 `json:"showCopySessionId"`
+	ChatContentVisibility bool                 `json:"chatContentVisibility"`
+	Language              string               `json:"language"`
+	ResolvedLocale        string               `json:"resolvedLocale"`
+	SystemLocale          string               `json:"systemLocale"`
+	Source                string               `json:"source"`
+	Supported             []BridgeLocaleOption `json:"supported"`
+	Shortcuts             map[string]string    `json:"shortcuts"`
 }
 
 // BridgeLocaleOption is one language choice in BridgePrefs.
@@ -549,6 +551,29 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetShowCopySessionId(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-chat-content-visibility":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var cvBody struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &cvBody); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetChatContentVisibility(cvBody.Enabled)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return

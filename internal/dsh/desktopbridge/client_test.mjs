@@ -71,6 +71,10 @@ assert.match(source, /复制会话ID/, "Chinese copy-session label missing");
 assert.match(source, /复制失败/, "clipboard failure feedback missing");
 assert.match(source, /PENDING_SESSION_ID_TTL_MS/, "pending session id compatibility window missing");
 assert.match(source, /removeCopySessionIdMenuItem/, "menu cleanup helper missing");
+assert.match(source, /installChatContentVisibility/, "chat content-visibility installer missing");
+assert.match(source, /content-visibility:auto/, "chat content-visibility CSS missing");
+assert.match(source, /setChatContentVisibility/, "chat content-visibility setter missing");
+assert.match(source, /Chat 滚动渲染优化/, "chat content-visibility settings label missing");
 assert.doesNotMatch(source, /dsh-client-ui-workspace[\\/]lib/, "desktop bridge must not patch the official workspace bundle");
 
 const react = {

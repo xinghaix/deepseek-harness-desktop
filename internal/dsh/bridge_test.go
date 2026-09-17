@@ -145,7 +145,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := string(clientBytes)
-	for _, fragment := range []string{"settings.section", "桌面设置", "DSH增强设置", "showCopySessionId", "setShowCopySessionId", "快捷键", "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
+	for _, fragment := range []string{"settings.section", "桌面设置", "DSH增强设置", "showCopySessionId", "setShowCopySessionId", "chatContentVisibility", "setChatContentVisibility", "Chat 滚动渲染优化", "快捷键", "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client overlay missing %q", fragment)
 		}

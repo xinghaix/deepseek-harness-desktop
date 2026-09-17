@@ -63,17 +63,18 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		supported = append(supported, dsh.BridgeLocaleOption{Code: code, NativeName: i18n.NativeName(code)})
 	}
 	return dsh.BridgePrefs{
-		ConfirmQuitWhenBusy: prefs.ConfirmQuitWhenBusy,
-		TrayEnabled:         prefs.TrayEnabled,
-		CloseToTray:         prefs.CloseToTray,
-		TraySessionLimit:    prefs.TraySessionLimit,
-		ShowCopySessionId:   prefs.ShowCopySessionId,
-		Language:            prefs.Language,
-		ResolvedLocale:      prefs.ResolvedLocale,
-		SystemLocale:        prefs.SystemLocale,
-		Source:              prefs.Source,
-		Supported:           supported,
-		Shortcuts:           prefs.Shortcuts,
+		ConfirmQuitWhenBusy:   prefs.ConfirmQuitWhenBusy,
+		TrayEnabled:           prefs.TrayEnabled,
+		CloseToTray:           prefs.CloseToTray,
+		TraySessionLimit:      prefs.TraySessionLimit,
+		ShowCopySessionId:     prefs.ShowCopySessionId,
+		ChatContentVisibility: prefs.ChatContentVisibility,
+		Language:              prefs.Language,
+		ResolvedLocale:        prefs.ResolvedLocale,
+		SystemLocale:          prefs.SystemLocale,
+		Source:                prefs.Source,
+		Supported:             supported,
+		Shortcuts:             prefs.Shortcuts,
 	}
 }
 
@@ -114,6 +115,13 @@ func (a bridgeHostAdapter) SetTraySessionLimit(n int) (dsh.BridgePrefs, error) {
 
 func (a bridgeHostAdapter) SetShowCopySessionId(enabled bool) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetShowCopySessionId(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetChatContentVisibility(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetChatContentVisibility(enabled); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil

@@ -32,13 +32,14 @@ type File struct {
 }
 
 type Prefs struct {
-	ConfirmQuitWhenBusy *bool             `json:"confirmQuitWhenBusy,omitempty"`
-	TrayEnabled         *bool             `json:"trayEnabled,omitempty"`
-	CloseToTray         *bool             `json:"closeToTray,omitempty"`
-	TraySessionLimit    *int              `json:"traySessionLimit,omitempty"`
-	ShowCopySessionId   *bool             `json:"showCopySessionId,omitempty"`
-	Language            *string           `json:"language,omitempty"`
-	Shortcuts           map[string]string `json:"shortcuts,omitempty"`
+	ConfirmQuitWhenBusy   *bool             `json:"confirmQuitWhenBusy,omitempty"`
+	TrayEnabled           *bool             `json:"trayEnabled,omitempty"`
+	CloseToTray           *bool             `json:"closeToTray,omitempty"`
+	TraySessionLimit      *int              `json:"traySessionLimit,omitempty"`
+	ShowCopySessionId     *bool             `json:"showCopySessionId,omitempty"`
+	ChatContentVisibility *bool             `json:"chatContentVisibility,omitempty"`
+	Language              *string           `json:"language,omitempty"`
+	Shortcuts             map[string]string `json:"shortcuts,omitempty"`
 }
 
 type Launch struct {
@@ -169,7 +170,7 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
-	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
+	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}
 	if f.Update.AutoCheck != nil {

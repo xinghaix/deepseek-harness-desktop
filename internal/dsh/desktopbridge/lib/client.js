@@ -112,6 +112,65 @@ window.__ModuleLoader__.load({
 			window.dispatchEvent(new CustomEvent(SHOW_COPY_SESSION_ID_EVENT, { detail: enabled }));
 		}
 
+		const CHAT_CONTENT_VISIBILITY_GLOBAL = "__DSH_DESKTOP_CHAT_CONTENT_VISIBILITY__";
+		const CHAT_CONTENT_VISIBILITY_EVENT = "dsh-desktop-chat-content-visibility";
+		const CHAT_CONTENT_VISIBILITY_ATTR = "data-dsh-desktop-chat-cv";
+		const CHAT_CONTENT_VISIBILITY_STYLE_ID = "deepseek-harness-desktop-chat-content-visibility";
+		if (typeof window !== "undefined" && typeof window[CHAT_CONTENT_VISIBILITY_GLOBAL] !== "boolean") {
+			window[CHAT_CONTENT_VISIBILITY_GLOBAL] = true;
+		}
+		function publishChatContentVisibility(value) {
+			if (typeof value?.chatContentVisibility !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.chatContentVisibility;
+			window[CHAT_CONTENT_VISIBILITY_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(CHAT_CONTENT_VISIBILITY_EVENT, { detail: enabled }));
+		}
+		function chatContentVisibilityCSS() {
+			return "html[" + CHAT_CONTENT_VISIBILITY_ATTR + "] [data-chat-flow-key]{content-visibility:auto;contain-intrinsic-size:auto 80px;}";
+		}
+		function setChatContentVisibilityAttr(enabled) {
+			const root = typeof document === "undefined" ? null : document.documentElement;
+			if (!root || typeof root.setAttribute !== "function") return;
+			if (enabled) root.setAttribute(CHAT_CONTENT_VISIBILITY_ATTR, "");
+			else if (typeof root.removeAttribute === "function") root.removeAttribute(CHAT_CONTENT_VISIBILITY_ATTR);
+		}
+		function installChatContentVisibility() {
+			if (typeof document === "undefined") return () => {};
+			let style = typeof document.querySelector === "function"
+				? document.querySelector('style[data-plugin-css="' + CHAT_CONTENT_VISIBILITY_STYLE_ID + '"]')
+				: null;
+			if (!style && typeof document.createElement === "function") {
+				style = document.createElement("style");
+				style.dataset.plugin = STYLE_ID;
+				style.dataset.pluginCss = CHAT_CONTENT_VISIBILITY_STYLE_ID;
+				if (document.head && typeof document.head.appendChild === "function") document.head.appendChild(style);
+			}
+			const writeCSS = () => {
+				if (!style) return;
+				const css = chatContentVisibilityCSS();
+				if (style.textContent !== css) style.textContent = css;
+			};
+			const applyEnabled = (enabled) => {
+				setChatContentVisibilityAttr(enabled !== false);
+				writeCSS();
+			};
+			applyEnabled(typeof window === "undefined" ? true : window[CHAT_CONTENT_VISIBILITY_GLOBAL] !== false);
+			const onSettingChange = (event) => applyEnabled(event.detail !== false);
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				window.addEventListener(CHAT_CONTENT_VISIBILITY_EVENT, onSettingChange);
+			}
+			return () => {
+				if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+					window.removeEventListener(CHAT_CONTENT_VISIBILITY_EVENT, onSettingChange);
+				}
+				setChatContentVisibilityAttr(false);
+				if (style && style.parentNode && typeof style.parentNode.removeChild === "function") {
+					style.parentNode.removeChild(style);
+				}
+			};
+		}
+
 		function installStyle() {
 			if (typeof document === "undefined") return;
 			let style = document.querySelector(`style[data-plugin-css="${STYLE_ID}"]`);
@@ -1033,6 +1092,7 @@ window.__ModuleLoader__.load({
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
 					publishShowCopySessionId(nextPrefs);
+					publishChatContentVisibility(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
 					if (syncDraft) {
@@ -1080,13 +1140,13 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
 				if (looksLikeUpdate) setUpdate(value);
 				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
 				publishShowCopySessionId(value);
+				publishChatContentVisibility(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
 					if (key) {
@@ -1099,7 +1159,6 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -1716,6 +1775,30 @@ window.__ModuleLoader__.load({
 									})
 								})
 							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "Chat 滚动渲染优化" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: "对视口外的对话节点使用 content-visibility，减轻长会话滚动绘制。关闭后立即恢复默认。加载更早历史时滚动位置可能轻微跳动。" })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.chatContentVisibility !== false,
+										checked: prefs?.chatContentVisibility !== false,
+										disabled: !connected || pending || !prefs || enhancementDisabled,
+										onChange: (event) => void invoke("setChatContentVisibility", { enabled: event.target.checked })
+									})
+								})
+							]
 						})
 						]
 					}),
@@ -1909,14 +1992,17 @@ window.__ModuleLoader__.load({
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (!result?.ok) return;
 				publishShowCopySessionId(result.value);
+				publishChatContentVisibility(result.value);
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
 			const stopCopySessionIdMenu = installCopySessionIdMenu();
+			const stopChatContentVisibility = installChatContentVisibility();
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
 					stopCopySessionIdMenu();
+					stopChatContentVisibility();
 				});
 			}
 			// First-class settings nav entry (same slot as Models / Plugins / Market).

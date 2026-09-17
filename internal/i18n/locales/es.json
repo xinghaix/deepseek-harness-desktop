@@ -79,6 +79,8 @@
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
   "field.show_copy_session_id": "Mostrar el menú «Copiar ID de sesión»",
   "field.show_copy_session_id_hint": "Muestra «Copiar ID de sesión» en el menú de acciones de la sesión para depuración, scripts e informes de problemas.",
+  "field.chat_content_visibility": "Renderizado al desplazarse en el chat",
+  "field.chat_content_visibility_hint": "Omite pintar nodos del transcript fuera de la vista con CSS content-visibility. Ayuda en sesiones largas. Al desactivar se restaura el dibujo predeterminado de inmediato. Cargar historial anterior puede saltar un poco.",
   "field.language": "Idioma de la interfaz",
   "field.language_hint": "Seguir el idioma del sistema o elegir uno fijo. Se guarda en desktop-state.json.",
   "lang.system": "Sistema",

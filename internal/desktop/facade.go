@@ -221,6 +221,12 @@ func (f *WailsFacade) SetShowCopySessionId(ctx context.Context, enabled bool) (D
 	}
 	return f.service.SetShowCopySessionId(enabled)
 }
+func (f *WailsFacade) SetChatContentVisibility(ctx context.Context, enabled bool) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetChatContentVisibility"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetChatContentVisibility(enabled)
+}
 func (f *WailsFacade) LocaleBundle(ctx context.Context) LocaleBundle {
 	if f.management(ctx, "LocaleBundle") != nil {
 		return LocaleBundle{}

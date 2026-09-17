@@ -193,3 +193,31 @@ func TestShowCopySessionIdDefaultsOnAndPersists(t *testing.T) {
 		t.Fatal("disabled showCopySessionId was not reloaded")
 	}
 }
+
+func TestChatContentVisibilityDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.chatContentVisibility.Load() {
+		t.Fatal("chatContentVisibility must default to on")
+	}
+	p.chatContentVisibility.Store(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.ChatContentVisibility == nil || *file.Prefs.ChatContentVisibility {
+		t.Fatalf("chatContentVisibility persisted = %v, want false", file.Prefs.ChatContentVisibility)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.chatContentVisibility.Load() {
+		t.Fatal("disabled chatContentVisibility was not reloaded")
+	}
+}

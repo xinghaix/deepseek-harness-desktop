@@ -79,6 +79,8 @@
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
   "field.show_copy_session_id": "Mostrar o menu «Copiar ID da sessão»",
   "field.show_copy_session_id_hint": "Mostrar «Copiar ID da sessão» no menu de ações da sessão para depuração, scripts e relatórios de problemas.",
+  "field.chat_content_visibility": "Renderização ao rolar o chat",
+  "field.chat_content_visibility_hint": "Pula a pintura de nós fora da tela com CSS content-visibility. Ajuda sessões longas. Desligar restaura o desenho padrão imediatamente. Carregar histórico anterior pode saltar um pouco.",
   "field.language": "Idioma da interface",
   "field.language_hint": "Seguir o idioma do sistema ou escolher um idioma fixo. Guardado em desktop-state.json.",
   "lang.system": "Sistema",

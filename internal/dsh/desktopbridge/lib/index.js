@@ -34,6 +34,7 @@ const routes = Object.freeze({
 	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
 	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
 	setShowCopySessionId: Object.freeze({ method: "POST", path: "/v1/set-show-copy-session-id" }),
+	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
 	setShortcuts: Object.freeze({ method: "POST", path: "/v1/set-shortcuts" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),

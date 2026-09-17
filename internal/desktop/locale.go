@@ -12,16 +12,17 @@ import (
 
 // DesktopPrefs is the JSON shape exposed to the config UI.
 type DesktopPrefs struct {
-	ConfirmQuitWhenBusy bool              `json:"confirmQuitWhenBusy"`
-	TrayEnabled         bool              `json:"trayEnabled"`
-	CloseToTray         bool              `json:"closeToTray"`
-	TraySessionLimit    int               `json:"traySessionLimit"`
-	ShowCopySessionId   bool              `json:"showCopySessionId"`
-	Language            string            `json:"language"`
-	ResolvedLocale      string            `json:"resolvedLocale"`
-	SystemLocale        string            `json:"systemLocale"`
-	Source              string            `json:"source"`
-	Shortcuts           map[string]string `json:"shortcuts"`
+	ConfirmQuitWhenBusy   bool              `json:"confirmQuitWhenBusy"`
+	TrayEnabled           bool              `json:"trayEnabled"`
+	CloseToTray           bool              `json:"closeToTray"`
+	TraySessionLimit      int               `json:"traySessionLimit"`
+	ShowCopySessionId     bool              `json:"showCopySessionId"`
+	ChatContentVisibility bool              `json:"chatContentVisibility"`
+	Language              string            `json:"language"`
+	ResolvedLocale        string            `json:"resolvedLocale"`
+	SystemLocale          string            `json:"systemLocale"`
+	Source                string            `json:"source"`
+	Shortcuts             map[string]string `json:"shortcuts"`
 }
 
 // SupportedLocale is one entry in LocaleBundle.Supported.
@@ -45,16 +46,17 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 	resolved, source := i18n.ResolveWithSource(pref, system)
 	trayOn := d.prefs.trayEnabled.Load()
 	return DesktopPrefs{
-		ConfirmQuitWhenBusy: d.prefs.confirmQuitWhenBusy.Load(),
-		TrayEnabled:         trayOn,
-		CloseToTray:         trayOn && d.prefs.closeToTray.Load(),
-		TraySessionLimit:    int(d.prefs.traySessionLimit.Load()),
-		ShowCopySessionId:   d.prefs.showCopySessionId.Load(),
-		Language:            pref,
-		ResolvedLocale:      resolved,
-		SystemLocale:        i18n.Normalize(system),
-		Source:              source,
-		Shortcuts:           d.prefs.effectiveShortcuts(),
+		ConfirmQuitWhenBusy:   d.prefs.confirmQuitWhenBusy.Load(),
+		TrayEnabled:           trayOn,
+		CloseToTray:           trayOn && d.prefs.closeToTray.Load(),
+		TraySessionLimit:      int(d.prefs.traySessionLimit.Load()),
+		ShowCopySessionId:     d.prefs.showCopySessionId.Load(),
+		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
+		Language:              pref,
+		ResolvedLocale:        resolved,
+		SystemLocale:          i18n.Normalize(system),
+		Source:                source,
+		Shortcuts:             d.prefs.effectiveShortcuts(),
 	}
 }
 
@@ -112,6 +114,14 @@ func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
 
 func (d *Service) SetShowCopySessionId(enabled bool) (DesktopPrefs, error) {
 	d.prefs.showCopySessionId.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetChatContentVisibility(enabled bool) (DesktopPrefs, error) {
+	d.prefs.chatContentVisibility.Store(enabled)
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}

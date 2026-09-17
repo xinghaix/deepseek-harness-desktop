@@ -79,6 +79,8 @@
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
   "field.show_copy_session_id": "‘세션 ID 복사’ 메뉴 표시",
   "field.show_copy_session_id_hint": "디버깅, 스크립트 호출 및 문제 보고를 위해 세션 작업 메뉴에 ‘세션 ID 복사’를 표시합니다.",
+  "field.chat_content_visibility": "채팅 스크롤 렌더링",
+  "field.chat_content_visibility_hint": "뷰포트 밖 대화 노드를 CSS content-visibility로 그리지 않아 긴 세션 스크롤을 가볍게 합니다. 끄면 바로 기본 그리기로 돌아갑니다. 이전 기록을 불러올 때 위치가 살짝 뛸 수 있습니다.",
   "field.language": "인터페이스 언어",
   "field.language_hint": "시스템 언어를 따르거나 고정 언어를 선택합니다. desktop-state.json에 저장됩니다.",
   "lang.system": "시스템",
