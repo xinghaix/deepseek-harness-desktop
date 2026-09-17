@@ -15,17 +15,19 @@ const (
 )
 
 type Snapshot struct {
-	State          string  `json:"state"`
-	CurrentVersion string  `json:"currentVersion"`
-	LatestVersion  string  `json:"latestVersion"`
-	Notes          string  `json:"notes"`
-	ReleaseURL     string  `json:"releaseURL"`
-	AssetName      string  `json:"assetName"`
-	BytesTotal     int64   `json:"bytesTotal"`
-	BytesDone      int64   `json:"bytesDone"`
-	Progress       float64 `json:"progress"`
-	Error          string  `json:"error"`
-	AutoCheck      bool    `json:"autoCheck"`
+	State            string  `json:"state"`
+	CurrentVersion   string  `json:"currentVersion"`
+	LatestVersion    string  `json:"latestVersion"`
+	Notes            string  `json:"notes"`
+	ReleaseURL       string  `json:"releaseURL"`
+	AssetName        string  `json:"assetName"`
+	BytesTotal       int64   `json:"bytesTotal"`
+	BytesDone        int64   `json:"bytesDone"`
+	Progress         float64 `json:"progress"`
+	Error            string  `json:"error"`
+	AutoCheck        bool    `json:"autoCheck"`
+	ManifestVerified bool    `json:"manifestVerified"`
+	LegacyChecksum   bool    `json:"legacyChecksum"`
 }
 
 func NormalizeVersion(v string) string {

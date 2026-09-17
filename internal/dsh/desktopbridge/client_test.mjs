@@ -57,6 +57,12 @@ vm.runInNewContext(
   { filename: "desktop-bridge-client.js" },
 );
 assert.ok(registration, "client registration missing");
+assert.match(source, /CAPABILITIES_SCHEMA/, "capability schema marker missing");
+assert.match(source, /ensureDesktopHandshake/, "initial capability handshake missing");
+assert.match(source, /http-fallback/, "HTTP fallback mode missing");
+assert.match(source, /能力不兼容，已回退 HTTP 并关闭增强功能/, "incompatible handshake prompt missing");
+assert.match(source, /enhancementDisabled/, "enhancement gate missing");
+assert.match(source, /__DSH_DESKTOP_TRANSPORT__/, "negotiated transport state missing");
 assert.match(source, /installCopySessionIdMenu/, "copy-session menu installer missing");
 assert.match(source, /sessionIdFromReactFiber/, "session-id fiber adapter missing");
 assert.match(source, /archive\.parentElement\.before\(wrapper\)/, "copy item must be a sibling menu wrapper");

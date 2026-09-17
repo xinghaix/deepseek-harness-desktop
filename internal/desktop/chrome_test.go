@@ -41,6 +41,9 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if !strings.Contains(script, "main.DSH.ToggleChatZoom") {
 		t.Fatal("非 macOS 最大化按钮仍应走 Go ToggleChatZoom")
 	}
+	if !strings.Contains(script, "window.open") || !strings.Contains(script, "127.0.0.1") || !strings.Contains(script, "preventDefault") {
+		t.Fatal("非 macOS Chat 必须注入 loopback 导航防护")
+	}
 }
 
 func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing.T) {
@@ -86,6 +89,9 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	}
 	if !strings.Contains(script, "MutationObserver") {
 		t.Fatal("macOS sidebar 折叠观察仍应保留 MutationObserver")
+	}
+	if !strings.Contains(script, "window.open") || !strings.Contains(script, "preventDefault") {
+		t.Fatal("macOS Chat 必须注入 loopback 导航防护")
 	}
 }
 

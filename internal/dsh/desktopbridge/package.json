@@ -10,6 +10,24 @@
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
+  "capabilities": {
+    "schema": "deepseek-harness-desktop/capabilities",
+    "protocol": "1",
+    "bridgeProtocol": "1",
+    "webviewBootProtocol": "1",
+    "desktopBridgePatchVersion": "0.1.0",
+    "webviewBootPatchVersion": "0.1.0",
+    "transport": {
+      "selected": "loopback-http",
+      "candidates": ["loopback-http"]
+    },
+    "rendererEntryPoint": "dsh-app://chat/",
+    "features": ["authenticated-bridge", "capability-handshake", "loopback-http", "renderer-logical-entrypoint", "webview-boot"]
+  },
+  "routes": {
+    "capabilities": { "method": "GET", "path": "/v1/capabilities" },
+    "handshake": { "method": "POST", "path": "/v1/handshake" }
+  },
   "dsh": {
     "client": {
       "platform": "web",

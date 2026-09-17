@@ -1,5 +1,12 @@
 {
   "name": "desktop-webview-boot",
+  "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "capabilities": {
+    "schema": "deepseek-harness-desktop/capabilities",
+    "protocol": "1",
+    "webviewBootProtocol": "1",
+    "webviewBootPatchVersion": "0.1.0"
+  }
 }

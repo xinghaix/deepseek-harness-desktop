@@ -51,6 +51,28 @@ func TestCheckNoReleases(t *testing.T) {
 	}
 }
 
+func TestCheckRejectsUnsignedReleaseByDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/xinghaix/deepseek-harness-desktop/releases/latest" {
+			_, _ = fmt.Fprintf(w, `{"tag_name":"v9.9.9","html_url":"https://github.com/xinghaix/deepseek-harness-desktop/releases/tag/v9.9.9","assets":[{"name":"%s","browser_download_url":"https://github.com/xinghaix/deepseek-harness-desktop/releases/download/v9.9.9/file.bin","size":4},{"name":"SHA256SUMS","browser_download_url":"https://github.com/xinghaix/deepseek-harness-desktop/releases/download/v9.9.9/SHA256SUMS","size":80}]}`, AssetName("darwin", "arm64"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	u := New()
+	u.client = srv.Client()
+	u.apiBase = srv.URL
+	u.current = "0.1.0"
+	u.goos, u.goarch = "darwin", "arm64"
+	if _, err := u.Check(context.Background()); err == nil {
+		t.Fatal("accepted a release without a signed platform manifest")
+	}
+	if snap := u.Snapshot(); snap.State != StateFailed || snap.LegacyChecksum {
+		t.Fatalf("unsigned release snapshot: %+v", snap)
+	}
+}
+
 func TestCheckAndDownload(t *testing.T) {
 	payload := []byte("desktop-update-bytes")
 	sum := hex.EncodeToString(sha256Sum(payload))
@@ -75,6 +97,7 @@ func TestCheckAndDownload(t *testing.T) {
 	u.apiBase = srv.URL
 	u.current = "0.1.0"
 	u.goos, u.goarch = "darwin", "arm64"
+	u.allowLegacy = true // Explicit historical SHA256SUMS fixture.
 	u.allowURL = func(string) error { return nil }
 	t.Setenv("HOME", t.TempDir())
 	os.Setenv("XDG_CACHE_HOME", t.TempDir())

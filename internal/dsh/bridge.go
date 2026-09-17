@@ -28,19 +28,26 @@ const (
 	maxBridgeBodyBytes           = 1 << 20
 )
 
-// BridgeHost is implemented by the desktop Service so Chat settings can drive
-// native capabilities without pulling Wails into this package.
-type BridgeHost interface {
+// The bridge is split into capability interfaces so each route can depend on
+// the smallest native surface. BridgeHost is the composition used by the
+// desktop adapter; it is not a license to expose the whole Service to Chat.
+type WindowHost interface {
 	OpenManagement() error
 	OpenChat() error
 	PresentRecoverySettings() error
 	ReloadChat(o Options) error
+}
+
+type PathHost interface {
 	ChooseExecutable() (string, error)
 	ChooseHome() (string, error)
 	ChooseWorkspace() (string, error)
 	OpenHome(o Options) error
 	OpenWorkspace(o Options) error
 	OpenSettings(o Options) error
+}
+
+type PrefsHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
 	SetConfirmQuitWhenBusy(enabled bool) (BridgePrefs, error)
@@ -49,16 +56,30 @@ type BridgeHost interface {
 	SetTraySessionLimit(n int) (BridgePrefs, error)
 	SetShowCopySessionId(enabled bool) (BridgePrefs, error)
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
+}
+
+type SessionHost interface {
 	ReportChatBusy(busy bool)
 	ReportSessions(sessions []BridgeSession)
 	// ClaimOpenSession drains a tray-queued session id for Chat to open.
 	ClaimOpenSession() string
+}
+
+type UpdateHost interface {
 	BridgeUpdateStatus() BridgeUpdate
 	CheckUpdate() (BridgeUpdate, error)
 	InstallUpdate() error
 	OpenReleasePage() error
 	SetAutoCheckUpdate(enabled bool) (BridgeUpdate, error)
 	AppVersion() string
+}
+
+type BridgeHost interface {
+	WindowHost
+	PathHost
+	PrefsHost
+	SessionHost
+	UpdateHost
 }
 
 // BridgePrefs is the JSON shape returned on /v1/prefs.
@@ -290,6 +311,23 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case "/v1/capabilities":
+		if r.Method != http.MethodGet {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, b.owner.Capabilities())
+	case "/v1/handshake":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var request HandshakeRequest
+		if err := decodeBridgeJSON(r, &request); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, b.owner.Handshake(request))
 	case "/v1/status":
 		if r.Method != http.MethodGet {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_status_get_only"))

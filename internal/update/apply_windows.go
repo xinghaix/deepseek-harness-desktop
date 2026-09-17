@@ -21,7 +21,15 @@ func applyAndRelaunch(staged, _ string) error {
 	if err := replaceFile(exe, staged); err != nil {
 		return err
 	}
+	if _, err := UpdateTransactionPhase(TransactionReplaced); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
 	cmd := exec.Command("cmd", "/C", fmt.Sprintf("ping 127.0.0.1 -n 2 >nul & start \"\" %q", exe))
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x00000200}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
+	return nil
 }

@@ -10,7 +10,7 @@
     <key>CFBundleExecutable</key>
     <string>deepseek-harness-desktop</string>
     <key>CFBundleIdentifier</key>
-    <string>ai.deepseek.harness.desktop</string>
+    <string>com.deepseek.harness.desktop</string>
     <key>CFBundleVersion</key>
     <string>dev</string>
     <key>CFBundleShortVersionString</key>

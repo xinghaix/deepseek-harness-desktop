@@ -11,9 +11,11 @@ import (
 
 	"deepseek-harness-desktop/internal/desktop"
 	"deepseek-harness-desktop/internal/dsh"
+	"deepseek-harness-desktop/internal/runtimeperf"
 	"deepseek-harness-desktop/internal/update"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed assets/web
@@ -28,6 +30,8 @@ func main() {
 	if dsh.RunSupervisorIfRequested() {
 		return
 	}
+	runtimeperf.Tune()
+	runtimeperf.MaybeStartPprof()
 	update.CleanupLeftovers()
 	web, err := fs.Sub(assets, "assets/web")
 	if err != nil {
@@ -51,7 +55,7 @@ func main() {
 			UniqueID: "com.deepseek.harness.desktop",
 			ExitCode: 0,
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
-				if err := manager.OpenManagement(); err != nil {
+				if err := service.OpenManagement(); err != nil {
 					log.Printf("已有桌面端实例，唤回配置窗口失败: %v", err)
 				}
 			},
@@ -66,8 +70,10 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false, // close-to-tray: Hide must not quit the app
 		},
+		Windows: desktop.ApplicationWindowsOptions(),
+		Linux:   desktop.ApplicationLinuxOptions(),
 		OnShutdown: func() {
-			if err := manager.Close(); err != nil {
+			if err := service.Close(); err != nil {
 				log.Printf("关闭 DSH 进程失败: %v", err)
 			}
 		},
@@ -75,10 +81,19 @@ func main() {
 
 	// 桌面动作放进各平台宿主菜单（macOS 应用菜单 / Windows·Linux「文件」），
 	// 不再单独挂「设置」。Edit role 仍负责把焦点 WebView 接到系统剪贴板快捷键。
-	app.Menu.SetApplicationMenu(desktop.ApplicationMenu(app, manager))
+	app.Menu.SetApplicationMenu(desktop.ApplicationMenu(app, service))
 
-	app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
+	management := app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 	service.StartTrayIfEnabled()
+	if management != nil {
+		management.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+			if err := update.MarkHealthy(); err != nil {
+				log.Printf("更新健康标记失败: %v", err)
+				return
+			}
+			update.CleanupLeftovers()
+		})
+	}
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

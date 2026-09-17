@@ -9,6 +9,84 @@ window.__ModuleLoader__.load({
 		const { jsx, jsxs, Fragment } = jsxRuntime;
 		const STYLE_ID = "deepseek-harness-desktop-bridge";
 		const CHANNEL = "/desktop-bridge";
+		const CAPABILITIES_SCHEMA = "deepseek-harness-desktop/capabilities";
+		const CAPABILITIES_PROTOCOL = "1";
+		const BRIDGE_PROTOCOL = "1";
+		const WEBVIEW_BOOT_PROTOCOL = "1";
+		const HTTP_TRANSPORT = "loopback-http";
+		const TRANSPORT_STATE_GLOBAL = "__DSH_DESKTOP_TRANSPORT__";
+		const handshakeByConnection = new WeakMap();
+
+		function publishTransportState(state) {
+			if (typeof window === "undefined") return;
+			window[TRANSPORT_STATE_GLOBAL] = Object.freeze({
+				mode: state?.mode || "http-fallback",
+				compatible: state?.compatible === true,
+				capabilities: state?.capabilities
+			});
+		}
+
+		function callDesktopRPCRaw(connection, endpoint, payload, signal) {
+			try {
+				return Promise.resolve(connection.rpc.call(CHANNEL, endpoint, payload || {}, signal));
+			} catch (error) {
+				return Promise.reject(error);
+			}
+		}
+
+		function desktopHandshake(connection) {
+			const request = {
+				schema: CAPABILITIES_SCHEMA,
+				protocol: CAPABILITIES_PROTOCOL,
+				bridgeProtocol: BRIDGE_PROTOCOL,
+				webviewBootProtocol: WEBVIEW_BOOT_PROTOCOL,
+				transport: { selected: HTTP_TRANSPORT, candidates: [HTTP_TRANSPORT] },
+				features: ["authenticated-bridge", "capability-handshake", "loopback-http", "webview-boot"]
+			};
+			// Capabilities is a probe, not a source of credentials. A missing or old
+			// route must degrade to the existing HTTP bridge rather than block Chat.
+			return callDesktopRPCRaw(connection, "capabilities", {}, undefined)
+				.catch(() => undefined)
+				.then(() => callDesktopRPCRaw(connection, "handshake", request, undefined))
+				.then((result) => {
+					const value = result?.ok ? (result.value || {}) : {};
+					const selected = value?.transport?.selected;
+					const state = {
+						mode: selected === HTTP_TRANSPORT ? HTTP_TRANSPORT : "http-fallback",
+						compatible: result?.ok === true && value?.compatible !== false,
+						capabilities: value?.capabilities || value
+					};
+					publishTransportState(state);
+					return state;
+				})
+				.catch(() => {
+					const state = { mode: "http-fallback", compatible: false, capabilities: undefined };
+					publishTransportState(state);
+					return state;
+				});
+		}
+
+		function ensureDesktopHandshake(connection) {
+			if (!connection || (typeof connection !== "object" && typeof connection !== "function")) {
+				const state = { mode: "http-fallback", compatible: false };
+				publishTransportState(state);
+				return Promise.resolve(state);
+			}
+			let pending = handshakeByConnection.get(connection);
+			if (!pending) {
+				pending = desktopHandshake(connection);
+				handshakeByConnection.set(connection, pending);
+			}
+			return pending;
+		}
+
+		function callDesktopRPC(connection, endpoint, payload, signal) {
+			// Negotiation is advisory and must never delay or block the existing
+			// authenticated HTTP bridge. Unknown/old peers therefore keep working.
+			void ensureDesktopHandshake(connection);
+			return callDesktopRPCRaw(connection, endpoint, payload, signal);
+		}
+
 		const stateLabels = Object.freeze({
 			stopped: "未启动",
 			starting: "启动中",
@@ -922,6 +1000,7 @@ window.__ModuleLoader__.load({
 			const [draft, setDraft] = react.useState({ executable: "", home: "", workspace: "" });
 			const [pathsOpen, setPathsOpen] = react.useState(false);
 			const [recordingShortcutId, setRecordingShortcutId] = react.useState(null);
+			const [transport, setTransport] = react.useState(typeof window !== "undefined" ? window[TRANSPORT_STATE_GLOBAL] : undefined);
 			const backoffRef = react.useRef(1000);
 			const timerRef = react.useRef(null);
 			const linkRef = react.useRef(link);
@@ -930,7 +1009,7 @@ window.__ModuleLoader__.load({
 			linkRef.current = link;
 
 			const call = react.useCallback(async (endpoint, payload, signal) => {
-				const result = await connection.rpc.call(CHANNEL, endpoint, payload || {}, signal);
+				const result = await callDesktopRPC(connection, endpoint, payload, signal);
 				if (!result.ok) {
 					const err = new Error(result.error?.message || "桌面桥接调用失败");
 					err.code = result.error?.code;
@@ -943,6 +1022,8 @@ window.__ModuleLoader__.load({
 				const syncDraft = opts.syncDraft === true || (!draftSeededRef.current && !draftDirtyRef.current);
 				const clearMessage = opts.clearMessage === true;
 				try {
+					await ensureDesktopHandshake(connection);
+					setTransport(typeof window !== "undefined" ? window[TRANSPORT_STATE_GLOBAL] : undefined);
 					const [nextStatus, nextPrefs, nextUpdate, versionPayload] = await Promise.all([
 						call("status", {}, signal),
 						call("prefs", {}, signal),
@@ -1046,6 +1127,12 @@ window.__ModuleLoader__.load({
 			// pending alone must not paint the page as process-busy (that was the flash).
 			const busy = state === "starting" || state === "stopping" || link === "reconnecting";
 			const connected = link === "connected";
+			const enhancementDisabled = Boolean(transport && transport.compatible === false && transport.capabilities);
+			const transportLabel = !transport
+				? "正在协商桌面能力…"
+				: enhancementDisabled
+					? "能力不兼容，已回退 HTTP 并关闭增强功能"
+					: (transport.mode === "http-fallback" ? "HTTP 兼容回退" : "loopback HTTP");
 			const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
 			const DEFAULT_SHORTCUTS = {
 				openSettings: "CmdOrCtrl+,",
@@ -1205,6 +1292,18 @@ window.__ModuleLoader__.load({
 						className: "dshDesktopBridgeCard",
 						children: [
 						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "状态" }),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: "能力握手" }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: transportLabel })
+									]
+								})
+							]
+						}),
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
@@ -1612,7 +1711,7 @@ window.__ModuleLoader__.load({
 										role: "switch",
 										"aria-checked": prefs?.showCopySessionId !== false,
 										checked: prefs?.showCopySessionId !== false,
-										disabled: !connected || pending || !prefs,
+										disabled: !connected || pending || !prefs || enhancementDisabled,
 										onChange: (event) => void invoke("setShowCopySessionId", { enabled: event.target.checked })
 									})
 								})
@@ -1780,7 +1879,8 @@ window.__ModuleLoader__.load({
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
 		function apply(ctx) {
 			installStyle();
-			void ctx.connection.rpc.call(CHANNEL, "prefs", {}).then((result) => {
+			void ensureDesktopHandshake(ctx.connection);
+			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (result?.ok) publishShowCopySessionId(result.value);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
@@ -1809,14 +1909,14 @@ window.__ModuleLoader__.load({
 			const pushBusy = (busy) => {
 				if (lastBusy === busy) return;
 				lastBusy = busy;
-				void ctx.connection.rpc.call(CHANNEL, "reportChatBusy", { busy }).catch(() => {});
+				void callDesktopRPC(ctx.connection, "reportChatBusy", { busy }).catch(() => {});
 			};
 			let lastSessionsKey = null;
 			const pushSessions = (payload) => {
 				const key = JSON.stringify(payload);
 				if (lastSessionsKey === key) return;
 				lastSessionsKey = key;
-				void ctx.connection.rpc.call(CHANNEL, "reportSessions", payload).catch(() => {});
+				void callDesktopRPC(ctx.connection, "reportSessions", payload).catch(() => {});
 			};
 			const archivedSessionIds = () => {
 				try {
@@ -1918,7 +2018,7 @@ window.__ModuleLoader__.load({
 				queueOpenSession(id);
 				return true;
 			};
-			const claimOpenSession = () => ctx.connection.rpc.call(CHANNEL, "claimOpenSession", {})
+			const claimOpenSession = () => callDesktopRPC(ctx.connection, "claimOpenSession", {})
 				.then(handleClaimedOpenSession)
 				.catch(() => false);
 			const onOpenSession = (event) => {

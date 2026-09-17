@@ -368,9 +368,39 @@ const desktopChromeJS = `
 })();
 `
 
+const desktopNavigationGuardJS = `
+(() => {
+  if (document.querySelector("body > .app-shell")) return;
+  const allowed = (value) => {
+    try {
+      const url = new URL(value, location.href);
+      return url.protocol === "http:" && url.hostname === "127.0.0.1" && url.port === location.port;
+    } catch (err) {
+      return false;
+    }
+  };
+  const originalOpen = window.open;
+  window.open = function(url) {
+    if (url && !allowed(url)) return null;
+    if (typeof originalOpen === "function") return originalOpen.apply(this, arguments);
+    return null;
+  };
+  document.addEventListener("click", (event) => {
+    const link = event.target && event.target.closest && event.target.closest("a[href]");
+    if (!link) return;
+    const href = link.getAttribute("href");
+    if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) return;
+    if (!allowed(href)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+})();
+`
+
 func desktopChromeScript(nativeMac bool) string {
 	if nativeMac {
-		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS))
+		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + desktopNavigationGuardJS
 	}
 	return fmt.Sprintf(
 		desktopChromeJS,
@@ -380,5 +410,5 @@ func desktopChromeScript(nativeMac bool) string {
 		strconv.Quote(i18n.TActive("chrome.minimize")),
 		strconv.Quote(i18n.TActive("chrome.maximize")),
 		strconv.Quote(i18n.TActive("chrome.close")),
-	)
+	) + desktopNavigationGuardJS
 }

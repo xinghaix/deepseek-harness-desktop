@@ -164,4 +164,13 @@ func TestManagementUIContract(t *testing.T) {
 	if strings.Contains(html, `id="save-config"`) {
 		t.Fatal("UI must not add a duplicate save button")
 	}
+	if !strings.Contains(html, "dsh:status") || !strings.Contains(html, "subscribeStatusEvents") {
+		t.Fatal("management UI must subscribe to notify-pull status events")
+	}
+	if !strings.Contains(html, "visibilitychange") || !strings.Contains(html, "document.hidden") {
+		t.Fatal("management UI must pause Status/Update polling when hidden")
+	}
+	if strings.Contains(html, "? 100 : 900") {
+		t.Fatal("management UI must not poll Status every 100/900ms")
+	}
 }

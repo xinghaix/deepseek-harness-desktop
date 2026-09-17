@@ -102,7 +102,6 @@ func waitForOwnedProcessTree(owner *ownedProcess, pid int, timeout time.Duration
 	return !ownedProcessTreeAlive(owner, pid)
 }
 
-
 // reclaimOrphanedProcessGroup kills leftovers that still share a crashed
 // desktop session's process group after the recorded parent PID is gone.
 func reclaimOrphanedProcessGroup(pgid int) error {

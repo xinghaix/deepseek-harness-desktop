@@ -84,11 +84,20 @@ func (d *Manager) waitRunningThenOpenChat(timeout time.Duration) {
 			d.mu.Unlock()
 			return
 		}
-		state, url := d.state, d.url
+		state, transport, legacyURL := d.state, d.transport, d.url
+		var ready bool
+		if transport != nil {
+			_, ready = transport.Endpoint()
+		}
+		// Keep lifecycle tests and older in-process callers compatible while all
+		// production readiness is sourced from the adapter endpoint.
+		if !ready {
+			ready = strings.TrimSpace(legacyURL) != ""
+		}
 		d.mu.Unlock()
 		switch state {
 		case "running":
-			if url != "" {
+			if ready {
 				d.callOpenChat()
 				return
 			}

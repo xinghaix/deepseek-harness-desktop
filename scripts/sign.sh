@@ -35,6 +35,10 @@ case $target in
 	*.app)
 		target=${target%/}
 		if [ "$host" != Darwin ]; then
+			if [ "${DSH_REQUIRE_PRODUCTION_SIGNING:-0}" = "1" ]; then
+				echo "sign: production macOS signing requires a Darwin runner" >&2
+				exit 1
+			fi
 			echo "sign: skip macOS codesign on $host"
 			exit 0
 		fi
@@ -46,6 +50,10 @@ case $target in
 		elif command -v pwsh >/dev/null 2>&1; then
 			pwsh -ExecutionPolicy Bypass -File "$root/scripts/sign-windows.ps1" "$target"
 		else
+			if [ "${DSH_REQUIRE_PRODUCTION_SIGNING:-0}" = "1" ]; then
+				echo "sign: production Authenticode requires PowerShell/signing tooling" >&2
+				exit 1
+			fi
 			echo "sign: skip Authenticode (PowerShell not available on $host)"
 		fi
 		write_checksum "$target"

@@ -26,9 +26,27 @@ jobs:
           fi
           echo "tag $GITHUB_REF_NAME points at $GITHUB_SHA on main"
 
+  verify:
+    name: Contract tests
+    needs: verify-main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run Go race tests
+        run: go test -race ./...
+      - name: Run Node bridge and WebView contracts
+        run: |
+          node internal/dsh/desktopbridge/client_test.mjs
+          node internal/dsh/desktopbridge/copy_session_menu_test.mjs
+          node internal/dsh/webviewboot/hook_test.mjs
+
   build:
     name: ${{ matrix.name }}
-    needs: verify-main
+    needs: [verify-main, verify]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -82,6 +100,8 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
+          DSH_UPDATE_MANIFEST_PUBLIC_KEY: ${{ vars.DSH_UPDATE_MANIFEST_PUBLIC_KEY }}
+          DSH_REQUIRE_SIGNED_UPDATES: "1"
         run: |
           set -euo pipefail
           ver="${GITHUB_REF_NAME#v}"
@@ -143,10 +163,51 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - uses: actions/download-artifact@v4
         with:
           path: release
           merge-multiple: true
+
+      - name: Signed per-target manifests
+        shell: bash
+        env:
+          DSH_UPDATE_MANIFEST_PRIVATE_KEY: ${{ secrets.DSH_UPDATE_MANIFEST_PRIVATE_KEY }}
+          DSH_UPDATE_MANIFEST_SIGNER: ${{ vars.DSH_UPDATE_MANIFEST_SIGNER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DSH_UPDATE_MANIFEST_PRIVATE_KEY:-}" ]; then
+            echo "DSH_UPDATE_MANIFEST_PRIVATE_KEY is required to publish a signed update manifest" >&2
+            exit 1
+          fi
+          key_file="$RUNNER_TEMP/dsh-update-ed25519.key"
+          printf '%s' "$DSH_UPDATE_MANIFEST_PRIVATE_KEY" > "$key_file"
+          version="${GITHUB_REF_NAME#v}"
+          for artifact in release/deepseek-harness-desktop-*; do
+            name="$(basename "$artifact")"
+            case "$name" in
+              deepseek-harness-desktop-darwin-arm64.zip) goos=darwin; goarch=arm64 ;;
+              deepseek-harness-desktop-darwin-amd64.zip) goos=darwin; goarch=amd64 ;;
+              deepseek-harness-desktop-linux-arm64) goos=linux; goarch=arm64 ;;
+              deepseek-harness-desktop-linux-amd64) goos=linux; goarch=amd64 ;;
+              deepseek-harness-desktop-windows-arm64.exe) goos=windows; goarch=arm64 ;;
+              deepseek-harness-desktop-windows-amd64.exe) goos=windows; goarch=amd64 ;;
+              *) continue ;;
+            esac
+            go run ./tools/update-manifest \
+              -artifact "$artifact" \
+              -out "release/manifest-${goos}-${goarch}.json" \
+              -version "$version" -goos "$goos" -goarch "$goarch" \
+              -key-file "$key_file" \
+              -signer "${DSH_UPDATE_MANIFEST_SIGNER:-release-ed25519-v1}"
+          done
+          rm -f "$key_file"
 
       - name: List artifacts
         run: ls -la release

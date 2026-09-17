@@ -26,8 +26,8 @@ func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 		MinHeight:          620,
 		URL:                url,
 		UseApplicationMenu: true,
-		Windows:            application.WindowsWindow{Theme: application.SystemDefault},
 		DevToolsEnabled:    false,
+		Permissions:        deniedWebviewPermissions(),
 	}
 	return applyDesktopWindowChrome(options)
 }
@@ -53,8 +53,8 @@ func ConfigModalWindowOptions(url string, locale string) application.WebviewWind
 		MaximiseButtonState:   application.ButtonHidden,
 		FullscreenButtonState: application.ButtonHidden,
 		UseApplicationMenu:    true,
-		Windows:               application.WindowsWindow{Theme: application.SystemDefault},
 		DevToolsEnabled:       false,
+		Permissions:           deniedWebviewPermissions(),
 		JS:                    desktopModalChromeJS,
 	}
 	if runtime.GOOS == "darwin" {
@@ -63,7 +63,7 @@ func ConfigModalWindowOptions(url string, locale string) application.WebviewWind
 		options.Mac.InvisibleTitleBarHeight = 0
 		options.Mac.CornerRadius = 12
 	}
-	return options
+	return applyPlatformWindowRuntime(options)
 }
 
 func ChatWindowOptions(url string) application.WebviewWindowOptions {
@@ -76,8 +76,8 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 		MinHeight:          640,
 		URL:                url,
 		UseApplicationMenu: true,
-		Windows:            application.WindowsWindow{Theme: application.SystemDefault},
 		DevToolsEnabled:    false,
+		Permissions:        deniedWebviewPermissions(),
 	}
 	// applyDesktopWindowChrome already sets MacTitleBarHiddenInsetUnified, traffic
 	// lights, and InvisibleTitleBarHeight = desktopNativeTopInset (Wails macOS
@@ -93,9 +93,27 @@ const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.g
 const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 const showDiscardConfigJS = "var el=document.getElementById('discard-config');if(el)el.hidden=false;"
 
+func deniedWebviewPermissions() map[application.PermissionType]application.Permission {
+	return map[application.PermissionType]application.Permission{
+		application.PermissionMicrophone:    application.PermissionDeny,
+		application.PermissionCamera:        application.PermissionDeny,
+		application.PermissionGeolocation:   application.PermissionDeny,
+		application.PermissionNotifications: application.PermissionDeny,
+		application.PermissionClipboardRead: application.PermissionDeny,
+	}
+}
+
 func applyDesktopWindowChrome(options application.WebviewWindowOptions) application.WebviewWindowOptions {
+	options = applyPlatformWindowRuntime(options)
+	options.DevToolsEnabled = false
+	options.OpenInspectorOnStartup = false
+	options.EnableFileDrop = false
+	options.Permissions = deniedWebviewPermissions()
 	if runtime.GOOS == "darwin" {
+		options.Mac.WebviewPreferences.JavaScriptCanOpenWindowsAutomatically.Set(false)
 		options.Frameless = false
+		options.OpenInspectorOnStartup = false
+		options.EnableFileDrop = false
 		options.Mac.TitleBar = application.MacTitleBarHiddenInsetUnified
 		options.Mac.TitleBar.ToolbarStyle = application.MacToolbarStyleUnifiedCompact
 		options.Mac.InvisibleTitleBarHeight = desktopNativeTopInset

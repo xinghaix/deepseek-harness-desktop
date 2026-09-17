@@ -6,6 +6,7 @@ require (
 	github.com/jackmordaunt/icns/v2 v2.2.7
 	github.com/wailsapp/wails/v3 v3.0.0-beta.22
 	golang.org/x/image v0.46.0
+	golang.org/x/mod v0.37.0
 	golang.org/x/sys v0.48.0
 )
 

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -52,6 +51,8 @@ type Service struct {
 	sessions           []dsh.BridgeSession
 	trayErrorAcks      map[string]struct{} // local ack after tray click
 	pendingOpen        pendingOpenSession
+	statusEmitMu       sync.Mutex
+	statusEmitTimer    *time.Timer
 }
 
 func New(icon []byte) *Service {
@@ -60,6 +61,7 @@ func New(icon []byte) *Service {
 	s.prefs.load()
 	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
 	s.SetBridgeHost(bridgeHostAdapter{service: s})
+	s.SetStatusListener(s.emitStatusChanged)
 	go s.updater.RunPeriodic(ctx)
 	return s
 }
@@ -151,9 +153,13 @@ func (d *Service) ReloadChat(o dsh.Options) error {
 }
 
 func (d *Service) OpenDSH() error {
-	chatURL, err := d.BrowserURL()
+	entry, err := d.ChatEntryPoint()
 	if err != nil {
 		return err
+	}
+	chatURL := entry.LoadURL
+	if err := validateChatURL(chatURL, entry.FirstLoad); err != nil {
+		return fmt.Errorf("拒绝加载不受信任的 Chat URL: %w", err)
 	}
 	app, err := desktopApp()
 	if err != nil {
@@ -416,19 +422,6 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	case "linux":
 		window.RegisterHook(events.Linux.WindowDeleteEvent, onClosing)
 	}
-}
-
-func sameHTTPOrigin(a, b string) bool {
-	oa, ob := httpOrigin(a), httpOrigin(b)
-	return oa != "" && oa == ob
-}
-
-func httpOrigin(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return ""
-	}
-	return u.Scheme + "://" + u.Host
 }
 
 func (d *Service) OpenHome(o dsh.Options) error {

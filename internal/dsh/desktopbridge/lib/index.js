@@ -15,6 +15,8 @@ const tokenHeader = "X-DSH-Desktop-Bridge-Token";
 const routes = Object.freeze({
 	status: Object.freeze({ method: "GET", path: "/v1/status" }),
 	ping: Object.freeze({ method: "GET", path: "/v1/ping" }),
+	capabilities: Object.freeze({ method: "GET", path: "/v1/capabilities" }),
+	handshake: Object.freeze({ method: "POST", path: "/v1/handshake" }),
 	start: Object.freeze({ method: "POST", path: "/v1/start" }),
 	restart: Object.freeze({ method: "POST", path: "/v1/restart" }),
 	reloadChat: Object.freeze({ method: "POST", path: "/v1/reload-chat" }),

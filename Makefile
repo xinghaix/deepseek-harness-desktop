@@ -41,6 +41,7 @@ test:
 	@if command -v node >/dev/null 2>&1; then \
 		node internal/dsh/desktopbridge/client_test.mjs; \
 		node internal/dsh/desktopbridge/copy_session_menu_test.mjs; \
+		node internal/dsh/webviewboot/hook_test.mjs; \
 	else \
 		echo "skip desktop bridge replay test (node not found)"; \
 	fi

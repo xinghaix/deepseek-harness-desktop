@@ -2,6 +2,9 @@
 /dist/
 /bin/
 
+# Local Go build cache (never commit)
+.gocache/
+
 # OS / IDE
 .DS_Store
 .idea/

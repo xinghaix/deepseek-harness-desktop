@@ -15,8 +15,25 @@ goarch=${GOARCH:-$(go env GOARCH)}
 dist=${DIST:-dist}
 app=deepseek-harness-desktop
 bundle_name="Deepseek Harness Desktop"
-ldflags="-X deepseek-harness-desktop/internal/version.Version=$version"
+ldflags="-s -w -X deepseek-harness-desktop/internal/version.Version=$version"
 tags=${BUILD_TAGS:-wails}
+
+# Pin the publisher key in every production binary; never rely on runtime env.
+update_key=${DSH_UPDATE_MANIFEST_PUBLIC_KEY:-}
+if [ "${DSH_REQUIRE_SIGNED_UPDATES:-0}" = 1 ] && [ -z "$update_key" ]; then
+	echo "DSH_UPDATE_MANIFEST_PUBLIC_KEY is required for production updates" >&2
+	exit 1
+fi
+if [ -n "$update_key" ]; then
+	case "$update_key" in
+		*[!0-9a-fA-F]*) echo "update public key must be 64 hex characters" >&2; exit 1 ;;
+	esac
+	if [ "${#update_key}" -ne 64 ]; then
+		echo "update public key must be 64 hex characters" >&2
+		exit 1
+	fi
+	ldflags="$ldflags -X deepseek-harness-desktop/internal/update.ManifestPublicKey=hex:$update_key"
+fi
 
 mkdir -p "$dist"
 echo "building $app $version ($goos/$goarch)"

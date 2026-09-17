@@ -41,10 +41,7 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) OpenReleasePage() error {
-	url := s.updater.Snapshot().ReleaseURL
-	if url == "" {
-		url = "https://github.com/" + update.DefaultRepo + "/releases"
-	}
+	url := s.updater.ReleasePageURL()
 	app, err := desktopApp()
 	if err != nil {
 		return err

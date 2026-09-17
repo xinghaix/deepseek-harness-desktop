@@ -398,9 +398,12 @@ func TestDSH(t *testing.T) {
 		if err := d.Start(o); err != nil {
 			t.Fatal(err)
 		}
-		await(t, 8*time.Second, func() bool { return d.Status().State == "running" })
+		await(t, 8*time.Second, func() bool { return d.Status().State == "failed" })
 		if hits.Load() != 0 {
 			t.Fatal("followed a foreign redirect")
+		}
+		if d.Status().State != "failed" {
+			t.Fatalf("untrusted loopback-port redirect became ready: %+v", d.Status())
 		}
 		if err := d.Stop(); err != nil {
 			t.Fatal(err)

@@ -182,9 +182,9 @@ func pathEntries(value string) []string {
 }
 
 var (
-	shellPathOnce  sync.Once
-	shellPathCache []string
-	searchDirsOnce sync.Once
+	shellPathOnce   sync.Once
+	shellPathCache  []string
+	searchDirsOnce  sync.Once
 	searchDirsCache []string
 )
 

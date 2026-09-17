@@ -31,11 +31,22 @@ func applyAndRelaunch(staged, _ string) error {
 	if err != nil {
 		return err
 	}
+	if err := verifyPlatformBundle(app); err != nil {
+		return err
+	}
 	if bundle, err := bundleFromExecutable(exe); err == nil {
 		if err := replaceDir(bundle, app); err != nil {
 			return err
 		}
-		return relaunchOpen(preferDisplayBundle(bundle))
+		if _, err := UpdateTransactionPhase(TransactionReplaced); err != nil {
+			_ = restoreDir(bundle)
+			return err
+		}
+		if err := relaunchOpen(preferDisplayBundle(bundle)); err != nil {
+			_ = restoreDir(bundle)
+			return err
+		}
+		return nil
 	}
 	inner := filepath.Join(app, "Contents", "MacOS", filepath.Base(exe))
 	if _, err := os.Stat(inner); err != nil {
@@ -44,7 +55,15 @@ func applyAndRelaunch(staged, _ string) error {
 	if err := replaceFile(exe, inner); err != nil {
 		return err
 	}
-	return relaunchWait(exe)
+	if _, err := UpdateTransactionPhase(TransactionReplaced); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
+	if err := relaunchWait(exe); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
+	return nil
 }
 
 const macOSBundleName = "Deepseek Harness Desktop.app"
@@ -63,7 +82,11 @@ func preferDisplayBundle(bundle string) string {
 
 func replaceDir(dest, src string) error {
 	old := dest + ".old"
-	_ = os.RemoveAll(old)
+	if _, err := os.Stat(old); err == nil {
+		return fmt.Errorf("update: backup already exists: %s", old)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	if err := os.Rename(dest, old); err != nil {
 		return err
 	}
@@ -72,6 +95,10 @@ func replaceDir(dest, src string) error {
 		return err
 	}
 	return nil
+}
+
+func restoreDir(dest string) error {
+	return restorePath(dest, dest+".old", true)
 }
 
 func unzipApp(zipPath, dest string) (string, error) {

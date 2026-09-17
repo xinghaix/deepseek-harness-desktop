@@ -159,6 +159,7 @@ func NormalizeAccelerator(raw string) (string, error) {
 //   - key absent → use default
 //   - "" → cleared (no accelerator)
 //   - non-empty → that accelerator string
+//
 // Values equal to the default are omitted so absent continues to mean default.
 // Invalid non-empty accelerators are dropped (lenient load path).
 func NormalizeShortcutOverrides(raw map[string]string) map[string]string {

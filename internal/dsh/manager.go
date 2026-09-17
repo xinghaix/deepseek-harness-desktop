@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,20 +37,26 @@ const (
 // DSH 只管理自己接管的进程树，并通过全局锁和进程标记保证同一用户下
 // 同时只有一个桌面端拥有的 DSH；Unix 使用进程组，Windows 使用 Job Object。
 type Manager struct {
-	mu                   sync.Mutex
-	lifecycleMu          sync.Mutex
-	cmd                  *exec.Cmd
-	done                 chan struct{}
-	cancel               context.CancelFunc
-	state                string
-	options              Options
-	launchOptions        Options
-	output               *cliOutput
-	url, lastError       string
+	mu            sync.Mutex
+	lifecycleMu   sync.Mutex
+	cmd           *exec.Cmd
+	done          chan struct{}
+	cancel        context.CancelFunc
+	state         string
+	options       Options
+	launchOptions Options
+	output        *cliOutput
+	// url is retained as a private readiness mirror for legacy lifecycle helpers;
+	// endpoint authority lives in transport.
+	url                  string
+	lastError            string
 	browserTokenUsed     bool
 	chatWindowURL        string
 	managementWindowURL  string
 	host                 BridgeHost
+	transport            HostTransport
+	chatTransport        ChatTransport
+	dshVersion           string
 	owner                *ownedProcess
 	processLock          *ownedProcessLock
 	bridge               *desktopBridge
@@ -61,6 +65,7 @@ type Manager struct {
 	autoRelaunch         bool
 	autoRelaunchAttempts int
 	autoRelaunchGen      uint64
+	statusListener       func()
 }
 
 type Options struct {
@@ -496,7 +501,13 @@ func joinPathDirectories(dirs []string) string {
 
 func New() *Manager {
 	warmCLISearchCache()
-	d := &Manager{state: "stopped"}
+	transport := NewLoopbackHTTPAdapter()
+	d := &Manager{
+		state:         "stopped",
+		transport:     transport,
+		chatTransport: transport,
+		dshVersion:    UnknownVersion,
+	}
 	if _, options, ok, err := loadPersistedLaunchOptions(); err == nil && ok {
 		d.options, d.launchOptions = options, options
 	} else if defaults, err := defaultOptions(); err == nil {
@@ -511,6 +522,35 @@ func (d *Manager) SetBridgeHost(host BridgeHost) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.host = host
+}
+
+// SetStatusListener registers a notify-pull hook for lifecycle changes.
+// The callback must not assume it holds d.mu; it is invoked asynchronously.
+func (d *Manager) SetStatusListener(fn func()) {
+	d.mu.Lock()
+	d.statusListener = fn
+	d.mu.Unlock()
+}
+
+func (d *Manager) notifyStatusLocked() {
+	fn := d.statusListener
+	if fn == nil {
+		return
+	}
+	go fn()
+}
+
+// Capabilities returns the current non-secret transport compatibility manifest.
+// The endpoint's token and port are intentionally excluded from this shape.
+func (d *Manager) Capabilities() Capabilities {
+	d.mu.Lock()
+	dshVersion, transport := d.dshVersion, d.transport
+	d.mu.Unlock()
+	return capabilitiesFor(dshVersion, transport)
+}
+
+func (d *Manager) Handshake(request HandshakeRequest) HandshakeResponse {
+	return NegotiateCapabilities(d.Capabilities(), request)
 }
 
 func (d *Manager) getBridgeHost() (BridgeHost, error) {
@@ -572,6 +612,10 @@ func (d *Manager) commitCLIOptions(o Options) {
 	d.options, d.launchOptions = o, o
 	if d.state == "failed" {
 		d.state, d.lastError, d.url = "stopped", "", ""
+		if d.transport != nil {
+			_ = d.transport.Cleanup()
+		}
+		d.notifyStatusLocked()
 	}
 }
 
@@ -673,6 +717,7 @@ func (d *Manager) start(o Options) error {
 	cmd.WaitDelay = time.Second // A grandchild holding stdout must not prevent reaping the CLI.
 	if err := cmd.Start(); err != nil {
 		d.state, d.lastError = "failed", err.Error()
+		d.notifyStatusLocked()
 		return err
 	}
 	// 先写全局标记，再写 DSH_HOME 下的诊断标记。若桌面端在这两步之间
@@ -703,7 +748,10 @@ func (d *Manager) start(o Options) error {
 		output.finish()
 		return err
 	}
-	d.options, d.launchOptions, d.output, d.url, d.lastError = o, o, output, "", ""
+	d.options, d.launchOptions, d.output, d.lastError = o, o, output, ""
+	if d.transport != nil {
+		_ = d.transport.Cleanup()
+	}
 	_ = savePersistedLaunchOptions(o, false)
 	d.browserTokenUsed = false
 	d.chatWindowURL = ""
@@ -722,6 +770,7 @@ func (d *Manager) start(o Options) error {
 		d.finishProcess(cmd, owner, processLock, done, cancel, err, cleanupErr)
 	}()
 	go d.awaitReady(ctx, cmd, output.urls, o.Port)
+	d.notifyStatusLocked()
 	return nil
 }
 
@@ -730,12 +779,15 @@ func (d *Manager) finishProcess(cmd *exec.Cmd, owner *ownedProcess, processLock 
 		d.mu.Lock()
 		if d.cmd == cmd {
 			d.state = "failed"
-			d.url = ""
+			if d.transport != nil {
+				_ = d.transport.Cleanup()
+			}
 			if cleanupErr != nil {
 				d.lastError = i18n.TActive("err.tree_exit_unconfirmed_prefix") + ": " + cleanupErr.Error()
 			} else {
 				d.lastError = i18n.TActive("err.tree_exit_unconfirmed")
 			}
+			d.notifyStatusLocked()
 		}
 		d.mu.Unlock()
 		go d.awaitOwnedProcessTree(cmd, owner, processLock, done, cancel, exitErr, cleanupErr)
@@ -783,6 +835,9 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	if d.lastError != "" {
 		d.state = "failed"
 	}
+	if d.transport != nil {
+		_ = d.transport.Cleanup()
+	}
 	d.cmd, d.url, d.chatWindowURL = nil, "", ""
 	d.owner, d.processLock = nil, nil
 	close(done)
@@ -791,20 +846,10 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	if shouldRelaunch {
 		go d.scheduleAutoRelaunch(gen)
 	}
+	d.notifyStatusLocked()
 }
 
 func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
-	client := &http.Client{
-		Timeout:       time.Second,
-		Transport:     &http.Transport{Proxy: nil, DisableKeepAlives: true},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	defer client.CloseIdleConnections()
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-	candidate := ""
-	candidateBase := ""
-	candidatePort := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -812,43 +857,38 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 				d.failStartup(cmd, i18n.TActive("err.startup_timeout"))
 			}
 			return
-		case announced := <-urls:
-			u, err := url.Parse(announced)
-			if err != nil || u == nil {
+		case announced, ok := <-urls:
+			if !ok {
+				return
+			}
+			d.mu.Lock()
+			transport := d.transport
+			d.mu.Unlock()
+			if transport == nil {
 				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
 				return
 			}
-			actualPort, portErr := strconv.Atoi(u.Port())
-			portMatches := requestedPort == 0 || actualPort == requestedPort
-			if u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || portErr != nil || actualPort < 1 || actualPort > 65535 || !portMatches || u.User != nil || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
-				return
-			}
-			candidate = announced
-			candidateBase = "http://" + u.Host
-			candidatePort = actualPort
-		case <-ticker.C:
-			if candidate == "" {
-				continue
-			}
-			// Do not GET the printed ?token= URL here: dsh web treats it as a
-			// one-time login. The WebView must be the process that redeems it.
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, candidateBase+"/", nil)
-			response, err := client.Do(req)
+			// The adapter owns URL validation, loopback redirect checks, and the
+			// bounded readiness probe. It never requests the one-time token URL.
+			endpoint, err := transport.Ready(ctx, announced, requestedPort)
 			if err != nil {
-				continue
-			}
-			location := response.Header.Get("Location")
-			_ = response.Body.Close()
-			if redirect, err := url.Parse(location); err == nil && redirect.Host != "" && !loopbackHost(redirect.Hostname()) {
-				d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				if errors.Is(err, context.DeadlineExceeded) {
+					d.failStartup(cmd, i18n.TActive("err.startup_timeout"))
+				} else {
+					d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
+				}
 				return
 			}
 			d.mu.Lock()
 			if d.cmd == cmd && d.state == "starting" {
-				d.options.Port = candidatePort
-				d.url, d.browserTokenUsed, d.state = candidate, false, "running"
+				d.options.Port = endpoint.Port
+				d.url = endpoint.URL
+				d.browserTokenUsed, d.state = false, "running"
 				_ = savePersistedLaunchOptions(d.launchOptions, true)
+				d.notifyStatusLocked()
 			}
 			d.mu.Unlock()
 			return
@@ -898,6 +938,7 @@ func (d *Manager) stop() error {
 		if err := terminateOwnedProcess(owner, cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			d.lastError = i18n.TActive("err.stop_signal_failed") + ": " + err.Error()
 		}
+		d.notifyStatusLocked()
 	}
 	d.mu.Unlock()
 	timer := time.NewTimer(7 * time.Second) // Upstream grants plugins five seconds to dispose.
@@ -939,16 +980,24 @@ func (d *Manager) Close() error {
 	stopErr := d.stop()
 	d.mu.Lock()
 	bridge := d.bridge
+	transport := d.transport
 	d.bridge = nil
 	d.mu.Unlock()
 	bridgeErr := closeBridge(bridge)
-	if stopErr != nil && bridgeErr != nil {
-		return errors.Join(stopErr, bridgeErr)
+	transportErr := error(nil)
+	if transport != nil {
+		transportErr = transport.Cleanup()
 	}
-	if stopErr != nil {
-		return stopErr
+	if stopErr != nil || bridgeErr != nil || transportErr != nil {
+		errs := make([]error, 0, 3)
+		for _, err := range []error{stopErr, bridgeErr, transportErr} {
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
 	}
-	return bridgeErr
+	return nil
 }
 
 // Restart 使用最近一次成功提交给桌面端的选项，供设置页的手动操作调用。
@@ -1012,22 +1061,52 @@ func (d *Manager) Status() Status {
 	if d.output != nil {
 		s.Logs = d.output.text()
 	}
-	if d.url != "" {
-		s.URL = "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(d.options.Port)) + "/"
+	if d.transport != nil {
+		if endpoint, ok := d.transport.Endpoint(); ok {
+			s.URL = strings.TrimRight(endpoint.BaseURL, "/") + "/"
+		}
 	}
 	return s
 }
 
 func (d *Manager) BrowserURL() (string, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.state != "running" {
+		d.mu.Unlock()
 		return "", i18n.ErrorfActive("err.dsh_not_ready")
 	}
-	if d.browserTokenUsed {
-		return "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(d.options.Port)) + "/", nil
+	transport, chatTransport, firstLoad := d.transport, d.chatTransport, !d.browserTokenUsed
+	d.mu.Unlock()
+	if transport == nil || chatTransport == nil {
+		return "", i18n.ErrorfActive("err.dsh_not_ready")
 	}
-	return d.url, nil
+	endpoint, ok := transport.Endpoint()
+	if !ok {
+		return "", i18n.ErrorfActive("err.dsh_not_ready")
+	}
+	return chatTransport.ChatURL(endpoint, firstLoad)
+}
+
+// ChatEntryPoint exposes the transport-independent logical renderer entry and
+// the concrete load URL selected by the current adapter. The logical dsh-app
+// URL is not handed to Wails as a native scheme until Wails provides a portable
+// request-interception hook; today LoadURL remains the authenticated loopback URL.
+func (d *Manager) ChatEntryPoint() (ChatEntryPoint, error) {
+	d.mu.Lock()
+	if d.state != "running" {
+		d.mu.Unlock()
+		return ChatEntryPoint{}, i18n.ErrorfActive("err.dsh_not_ready")
+	}
+	transport, chatTransport, firstLoad := d.transport, d.chatTransport, !d.browserTokenUsed
+	d.mu.Unlock()
+	if transport == nil || chatTransport == nil {
+		return ChatEntryPoint{}, i18n.ErrorfActive("err.dsh_not_ready")
+	}
+	endpoint, ok := transport.Endpoint()
+	if !ok {
+		return ChatEntryPoint{}, i18n.ErrorfActive("err.dsh_not_ready")
+	}
+	return chatTransport.ChatEntryPoint(endpoint, firstLoad)
 }
 
 func (d *Manager) MarkBrowserOpened() {

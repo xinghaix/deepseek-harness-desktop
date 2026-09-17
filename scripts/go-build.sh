@@ -13,4 +13,4 @@ if [ "${1:-}" = "--" ]; then
 fi
 ver=$(sh "$root/scripts/app-version.sh" "$ver")
 echo "stamping version $ver" >&2
-exec go build -ldflags "-X deepseek-harness-desktop/internal/version.Version=$ver" "$@"
+exec go build -ldflags "-s -w -X deepseek-harness-desktop/internal/version.Version=$ver" "$@"

@@ -114,12 +114,17 @@ function updateButtons() {
   $("open-workspace").disabled = busy;
   $("open-settings").disabled = busy;
 }
+function statusPollDelayMs() {
+  if (document.hidden) return 0;
+  if (state === "starting" || state === "stopping") return 250;
+  return 4000;
+}
 function renderStatus(status) {
   const previousState = state;
   const labels = stateLabels();
   const dash = t("msg.em_dash");
   state = status.state || "stopped";
-  setRefreshDelay(state === "starting" || state === "stopping" ? 100 : 900);
+  setRefreshDelay(statusPollDelayMs());
   if (state === "stopped" || state === "failed") autoOpenStarted = false;
   if (state === "failed") { markStartupConfigStale(); void loadGuides(); }
   if (state === "running" && previousState !== "running") saveOptions(true);
@@ -153,7 +158,10 @@ function renderStatus(status) {
   $("step-chat").dataset.active = state === "running" ? "true" : "false";
   $("step-chat").dataset.done = state === "running" ? "true" : "false";
 }
-async function refresh() { try { renderStatus(await api("Status")); } catch (error) { setMessage(errorText(error), true); } void refreshDesktopUpdate(); }
+async function refresh() {
+  if (document.hidden) return;
+  try { renderStatus(await api("Status")); } catch (error) { setMessage(errorText(error), true); }
+}
 function renderDesktopUpdate(u) {
   if (!u) return;
   const current = u.currentVersion || "";
@@ -185,8 +193,11 @@ function renderDesktopUpdate(u) {
     failed: u.error || t("update.failed"),
   };
   $("update-message").textContent = messages[u.state] || u.error || "";
+  lastUpdateState = u.state || "";
+  setUpdateRefreshDelay(updatePollDelayMs());
 }
 async function refreshDesktopUpdate() {
+  if (document.hidden) return;
   try { renderDesktopUpdate(await api("UpdateStatus")); } catch (_) {}
 }
 async function run(action, success) {
@@ -761,11 +772,58 @@ async function load() {
   markBaseline();
 }
 window.addEventListener("DOMContentLoaded", load, { once: true });
-let refreshDelayMs = 900;
-let refreshTimer = setInterval(() => { void refresh(); }, refreshDelayMs);
+const STATUS_EVENT = "dsh:status";
+let refreshDelayMs = 4000;
+let refreshTimer = null;
 function setRefreshDelay(ms) {
-  if (refreshDelayMs === ms) return;
+  if (refreshDelayMs === ms && (ms === 0 ? !refreshTimer : Boolean(refreshTimer))) return;
   refreshDelayMs = ms;
-  clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => { void refresh(); }, refreshDelayMs);
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  if (ms > 0) refreshTimer = setInterval(() => { void refresh(); }, ms);
+}
+let lastUpdateState = "";
+let updateRefreshDelayMs = 8000;
+let updateRefreshTimer = null;
+function updatePollDelayMs() {
+  if (document.hidden) return 0;
+  if (lastUpdateState === "downloading" || lastUpdateState === "applying" || lastUpdateState === "checking") return 400;
+  return 8000;
+}
+function setUpdateRefreshDelay(ms) {
+  if (updateRefreshDelayMs === ms && (ms === 0 ? !updateRefreshTimer : Boolean(updateRefreshTimer))) return;
+  updateRefreshDelayMs = ms;
+  if (updateRefreshTimer) {
+    clearInterval(updateRefreshTimer);
+    updateRefreshTimer = null;
+  }
+  if (ms > 0) updateRefreshTimer = setInterval(() => { void refreshDesktopUpdate(); }, ms);
+}
+function subscribeStatusEvents() {
+  const events = window.wails && window.wails.Events;
+  if (!events || typeof events.On !== "function" || subscribeStatusEvents.done) return Boolean(subscribeStatusEvents.done);
+  events.On(STATUS_EVENT, () => { void refresh(); });
+  subscribeStatusEvents.done = true;
+  return true;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    setRefreshDelay(0);
+    setUpdateRefreshDelay(0);
+    return;
+  }
+  setRefreshDelay(statusPollDelayMs());
+  setUpdateRefreshDelay(updatePollDelayMs());
+  void refresh();
+  void refreshDesktopUpdate();
+});
+setRefreshDelay(statusPollDelayMs());
+setUpdateRefreshDelay(updatePollDelayMs());
+if (!subscribeStatusEvents()) {
+  let tries = 0;
+  const timer = setInterval(() => {
+    if (subscribeStatusEvents() || ++tries > 40) clearInterval(timer);
+  }, 50);
 }

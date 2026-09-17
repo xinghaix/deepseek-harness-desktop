@@ -44,7 +44,7 @@
 
 | 层           | 路径                                      | 职责                                                                                                                                   |
 |--------------|-------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 入口         | `main.go`                                 | Wails 应用、资源嵌入、单实例、`main.DSH` 服务包装、宿主菜单                                                                            |
+| 入口         | `main.go`                                 | Wails 应用、资源嵌入、单实例、窄 `main.DSH`/`WailsFacade` 绑定、宿主菜单                                                                            |
 | 桌面 UI      | `internal/desktop`                        | 配置窗 / Chat 窗、标题栏与安全区、文件对话框、配置模态、菜单动作；依赖 Wails                                                           |
 | 国际化       | `internal/i18n`                           | 嵌入式 locales JSON、Resolve/Catalog/T/TActive；进程 Active 语言；桌面 prefs + LocaleBundle/SetLanguage                                  |
 | DSH 内核     | `internal/dsh`                            | CLI 发现、启动/停止、进程组或 Job Object、全局锁与 owned-process 标记、回环桥接；**不依赖 Wails**，便于单测                            |
@@ -120,6 +120,17 @@ Node 默认 16KiB header（HTTP 431）。
 
 进程级 Active 语言：`i18n.SetActive` / `Active` / `TActive`（及 `ErrorfActive`）。默认 `en`；桌面在 prefs 解析后与 `SetLanguage` 时调用 `SetActive`。`internal/dsh`、`internal/update`、`internal/desktop` 的用户可见错误/状态/桥接响应体/窗口控制条 title 经 `TActive` 取文案。稳定协议哨兵仍用语言无关字段（例如 CheckCLI 的 `alreadyRunning`）；日志凭据脱敏标记固定为 `?[credentials-redacted]`。assets 中展开/收起等 CSS 文案经 `data-i18n-expand`/`data-collapse` + catalog。
 
+## Transport、Renderer 权限与更新信任
+
+- **已实现（当前 HTTP seam）**：`internal/dsh/transport.go` 定义 `HostTransport` / `ChatTransport`，当前唯一 Adapter 是 `LoopbackHTTPAdapter`；它复用已安装 `dsh web`、原有 `DSH_HOME`、sessions、settings、credentials 和 workspace。
+- **入口边界**：Chat 首载只使用一次性 loopback token URL，后续使用无 token 的同源 URL；`Status`、capabilities 和 handshake 不返回 token。`dsh-app://chat/` 目前只是 transport-independent 的逻辑入口标识/能力字段，不是 Wails 已注册的原生 scheme；Wails v3.0.0-beta.22 没有跨 macOS/Windows/Linux 的公共 custom-scheme request handler，实际 `LoadURL` 仍是经过校验的 loopback HTTP。
+- **未来契约**：`internal/dsh/framed_stream.go` 只定义未来 Host/FD/pipe Adapter 可复用的有界 frame 与 backpressure 契约。当前外部 CLI 仍是 HTTP，没有被伪装成 pipe；真正 FD/stdio/pipe 需要 dsh 上游 Host transport 协议。
+- **握手是 advisory + 增强门控**：认证 bridge 已提供 `/v1/capabilities` 与 `/v1/handshake`。握手异步且不阻塞既有 RPC（这就是 HTTP fallback）；不兼容时设置页提示并关闭 DSH 增强开关。它不会把 Chat 切到真实 pipe transport。
+- **Facade 是已实现的收口，但不是 origin ACL**：`main.go` 只绑定 `internal/desktop.WailsFacade`。Facade 方法接收 Wails renderer context，并按 `main`/`config`/`dsh` 窗口名收口；这是名称 gate，不是 renderer origin 身份证明。Wails 仍没有原生 per-window binding ACL；Chat 仍只保留少量标题栏/模态动作，其余桌面控制走认证 bridge。
+- **WebView 基线/缺口**：窗口选项已关闭 DevTools、检查器和文件拖放，并拒绝麦克风、摄像头、地理位置、通知、剪贴板读取权限；`assets/web/index.html` 的 CSP 只保护嵌入式管理页。Chat chrome 额外注入 `window.open`/外链 loopback 防护，这不是 Wails native NavigationStarting。Wails 当前没有跨平台可取消的 NavigationStarting/NewWindowRequested/DownloadStarting hooks；三端 WebView E2E 未验收。
+- **更新 manifest**：canonical JSON + Ed25519 是默认信任根。普通 `New()` 拒绝无 manifest 的 release（`allowLegacy` 只给测试）。`scripts/build.sh` 用 `-ldflags` 注入 `DSH_UPDATE_MANIFEST_PUBLIC_KEY`；release workflow 在 build job 设置该变量并要求 `DSH_REQUIRE_SIGNED_UPDATES=1`。未注入公钥的开发构建仍可读取 `DSH_DESKTOP_UPDATE_PUBLIC_KEY` 作为 bootstrap。
+- **更新事务**：0600 的 `update-transaction.json` 记录 `applying → replaced → launched → healthy`。apply 失败用 quarantine restore，不先 `RemoveAll` 目标。管理窗 `WindowRuntimeReady` 之后才 `MarkHealthy` 并清理 `.old`。启动不会把 launched 事务自动 crash-rollback。平台签名校验仍由 `DSH_DESKTOP_REQUIRE_PLATFORM_SIGNATURE=1` opt-in。
+
 ## 版本与发版
 
 基线： **0.1.0**（git tag `v0.1.0`）。当前最新发布见 git tag / GitHub Releases。
@@ -141,10 +152,12 @@ Node 默认 16KiB header（HTTP 431）。
 1. 改动合入 **main**。
 2. 在 main 尖端打 annotated tag：`git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`。
 3. `.github/workflows/release.yml` 校验 tag 祖先在 `origin/main`，用 `scripts/build.sh` 打 darwin-arm64 / darwin-amd64 / linux-amd64 / linux-arm64 /
-   windows-amd64 / windows-arm64，上传制品并创建 GitHub Release（含 `SHA256SUMS`）。
+   windows-amd64 / windows-arm64，上传制品，并用 `tools/update-manifest` 为每个可更新 artifact 生成 `manifest-<goos>-<goarch>.json` 与 `SHA256SUMS`。
+   workflow 需要仓库 Secret `DSH_UPDATE_MANIFEST_PRIVATE_KEY`；没有该 secret 的 release 会失败，不发布未认证 manifest。
+   生产构建还需要 repository variable `DSH_UPDATE_MANIFEST_PUBLIC_KEY`（64 hex 字符）以 `-ldflags` 固定信任根；缺少该变量且 `DSH_REQUIRE_SIGNED_UPDATES=1` 时 release build 失败。
 4. **不必**为发版改 `internal/version.Version`；CI/脚本用 ldflags 写入。
 
-不在 main 上的 tag 会被 workflow 拒绝。自签名非 Developer ID / EV，未公证。
+发布身份：`com.deepseek.harness.desktop` 同时是 Wails 单实例 ID、macOS bundle ID 和 manifest app ID。自签名仍可用于本地开发；生产发布应配置 Developer ID/hardened runtime/notarization 或受信 Authenticode，并在更新器中开启平台验证。
 
 ## 开发命令
 
@@ -166,8 +179,8 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 | 路径 | 说明 |
 |------|------|
 | `main.go` | Wails 入口、资源嵌入、`main.DSH.*` 绑定 |
-| `internal/dsh` | 进程生命周期、CLI 发现、回环控制面（无 Wails 依赖） |
-| `internal/desktop` | 窗口、菜单、托盘、快捷键、文件对话框、prefs |
+| `internal/dsh` | 进程生命周期、CLI 发现、回环控制面、Host/Chat transport seam 与 capability handshake（无 Wails 依赖） |
+| `internal/desktop` | 窗口、菜单、托盘、快捷键、文件对话框、prefs、WailsFacade 与 WebView policy |
 | `internal/desktopstate` | `desktop-state.json` 冷配置 |
 | `internal/i18n` | 嵌入 locales、T / TActive |
 | `internal/update` | GitHub Release 检查与安装 |
@@ -185,7 +198,9 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 
 - 每次由本应用拉起的 `dsh web` 经 Cordis `--patch` 注入 `desktop-bridge`（与 `webview-boot` 同类），**不改用户 profile**。
 - Chat「设置 → 桌面设置」注册为 `settings.section`（一级导航）。
-- 控制面仅 `127.0.0.1`；白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面 / 日志 / 状态 JSON；无任意 shell。
+- 控制面仅 `127.0.0.1`；白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面、日志、`desktop-state.json` 或普通 status/capability 响应；它只存在于权限为 0600 的 `desktop-bridge-endpoint.json` 以供受控插件重连；无任意 shell。
+- BridgeHost 由 Window/Path/Prefs/Session/Update capability interfaces 组合；路由依赖最小接口，不把 Wails 或完整 Service 引入 `internal/dsh`。
+- 认证 bridge 首次提供 `/v1/capabilities` 与 `/v1/handshake`；不兼容或旧 patch 继续走 loopback HTTP fallback，不阻塞既有 RPC。
 - 监听异常退出时重建（新令牌）并写 endpoint 文件供插件重连。
 - 不必再 `dsh plugin --profile web add file:…`；若残留 profile 副本，内置 patch 会移除同 id。
 
@@ -210,11 +225,12 @@ make windows-build GOARCH=amd64 VERSION=0.1.4
 - 其它提交 → 最新发布号 + `-dev`
 - 尚无 tag → `0.0.0-dev`
 
-产物在 `dist/`。macOS 额外生成 DMG。构建按平台自签名（非 Developer ID / EV，未公证）：
+产物在 `dist/`。本地构建默认保持可运行的 ad-hoc/开发签名；生产签名由环境变量显式开启（`DSH_REQUIRE_PRODUCTION_SIGNING=1`、`DSH_DARWIN_SIGN_IDENTITY`、`DSH_WINDOWS_CERT_THUMBPRINT`、时间戳服务），并由发布基础设施完成 Developer ID/notarization 或受信 Authenticode：
 
-- macOS：ad-hoc `codesign` + DMG
-- Windows：当前用户自签 Authenticode
-- Linux：写出 `.sha256`
+- macOS：`scripts/sign-darwin.sh` 支持 ad-hoc 或 hardened runtime + Developer ID；可校验 Team ID/notarization
+- Windows：`scripts/sign-windows.ps1` 开发时可自签，生产时必须指定证书并校验 `Valid`
+- Linux：原始二进制以 Ed25519 manifest 为发布者信任根；发行版包签名不由本 updater 伪造
+- 所有目标：`manifest-<goos>-<goarch>.json` 的 Ed25519 签名 + 精确 size/SHA-256；`SHA256SUMS` 仅为无 manifest 的历史 release 兼容
 
 图标源：`assets/shared/app-icon.svg`；生成物已提交，**日常 `make build` 不重跑**。改源图后：`make icons`。
 

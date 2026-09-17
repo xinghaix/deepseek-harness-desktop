@@ -22,10 +22,18 @@ func applyAndRelaunch(staged, _ string) error {
 	if err := replaceFile(exe, staged); err != nil {
 		return err
 	}
+	if _, err := UpdateTransactionPhase(TransactionReplaced); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
 	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("while kill -0 %d 2>/dev/null; do sleep 0.2; done; exec %q", os.Getpid(), exe))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		_ = restoreFile(exe)
+		return err
+	}
+	return nil
 }

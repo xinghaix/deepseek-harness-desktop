@@ -1,6 +1,7 @@
 package dsh
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"os"
@@ -66,6 +67,28 @@ func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `"ok":true`) {
 		t.Fatalf("ping response: %d %s", response.StatusCode, body)
 	}
+	response, body = get("/v1/capabilities", bridge.token)
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `"schema":"deepseek-harness-desktop/capabilities"`) || strings.Contains(string(body), bridge.token) {
+		t.Fatalf("capabilities response: %d %s", response.StatusCode, body)
+	}
+	handshakeRequest, err := http.NewRequest(http.MethodPost, bridge.url+"/v1/handshake", bytes.NewReader([]byte(`{"schema":"deepseek-harness-desktop/capabilities","protocol":"1","transport":{"selected":"loopback-http"}}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handshakeRequest.Header.Set(desktopBridgeTokenHeader, bridge.token)
+	handshakeRequest.Header.Set("Content-Type", "application/json")
+	handshakeResponse, err := client.Do(handshakeRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handshakeBody, err := io.ReadAll(handshakeResponse.Body)
+	_ = handshakeResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handshakeResponse.StatusCode != http.StatusOK || !strings.Contains(string(handshakeBody), `"compatible":true`) || strings.Contains(string(handshakeBody), bridge.token) {
+		t.Fatalf("handshake response: %d %s", handshakeResponse.StatusCode, handshakeBody)
+	}
 	response, _ = get("/v1/status?extra=1", bridge.token)
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("query was accepted with status %d", response.StatusCode)
@@ -122,7 +145,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := string(clientBytes)
-	for _, fragment := range []string{"settings.section", "桌面设置", "DSH增强设置", "showCopySessionId", "setShowCopySessionId", "快捷键", "setShortcuts"} {
+	for _, fragment := range []string{"settings.section", "桌面设置", "DSH增强设置", "showCopySessionId", "setShowCopySessionId", "快捷键", "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client overlay missing %q", fragment)
 		}
