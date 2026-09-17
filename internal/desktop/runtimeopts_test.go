@@ -59,7 +59,36 @@ func TestProductionBuildStripsSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "-s -w -X deepseek-harness-desktop/internal/version.Version=") {
+	src := string(data)
+	if !strings.Contains(src, "-s -w -X deepseek-harness-desktop/internal/version.Version=") {
 		t.Fatal("scripts/build.sh must pass -s -w in production ldflags")
+	}
+	if !strings.Contains(src, "BUILD_TAGS:-wails,production") {
+		t.Fatal("scripts/build.sh must default to Wails production tags")
+	}
+	makefile, err := os.ReadFile(filepath.Join("..", "..", "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(makefile), "wails$(comma)production") {
+		t.Fatal("Makefile must default BUILD_TAGS to wails,production")
+	}
+}
+
+func TestTuneNativeWebViewNil(t *testing.T) {
+	TuneNativeWebView(nil)
+}
+
+func TestDarwinUnlocksWebKitDisplayRefresh(t *testing.T) {
+	data, err := os.ReadFile("webkit_fps_darwin.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(data)
+	if !strings.Contains(src, "PreferPageRenderingUpdatesNear60FPSEnabled") {
+		t.Fatal("macOS must disable WebKit PreferPageRenderingUpdatesNear60FPSEnabled")
+	}
+	if !strings.Contains(src, "_setEnabled:forFeature:") {
+		t.Fatal("macOS 120Hz path must use WKPreferences _setEnabled:forFeature:")
 	}
 }

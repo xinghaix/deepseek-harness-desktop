@@ -225,7 +225,7 @@ make windows-build GOARCH=amd64 VERSION=0.1.4
 - 其它提交 → 最新发布号 + `-dev`
 - 尚无 tag → `0.0.0-dev`
 
-产物在 `dist/`。本地构建默认保持可运行的 ad-hoc/开发签名；生产签名由环境变量显式开启（`DSH_REQUIRE_PRODUCTION_SIGNING=1`、`DSH_DARWIN_SIGN_IDENTITY`、`DSH_WINDOWS_CERT_THUMBPRINT`、时间戳服务），并由发布基础设施完成 Developer ID/notarization 或受信 Authenticode：
+产物在 `dist/`。`make build` / `scripts/build.sh` 默认 `-tags wails,production`（与正式包同一套 Wails production 逻辑：WKWebView 不可 inspect）。单测仍用 `-tags wails`。macOS 在窗口就绪后关闭 WebKit `PreferPageRenderingUpdatesNear60FPSEnabled`，ProMotion 上可达显示器原生刷新率（私有 preference，与 Wails 自用的 inspector 私有 API 同类；非 App Store）。本地构建默认保持可运行的 ad-hoc/开发签名；生产签名由环境变量显式开启（`DSH_REQUIRE_PRODUCTION_SIGNING=1`、`DSH_DARWIN_SIGN_IDENTITY`、`DSH_WINDOWS_CERT_THUMBPRINT`、时间戳服务），并由发布基础设施完成 Developer ID/notarization 或受信 Authenticode：
 
 - macOS：`scripts/sign-darwin.sh` 支持 ad-hoc 或 hardened runtime + Developer ID；可校验 Team ID/notarization
 - Windows：`scripts/sign-windows.ps1` 开发时可自签，生产时必须指定证书并校验 `Valid`

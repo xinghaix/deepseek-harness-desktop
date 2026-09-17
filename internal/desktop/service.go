@@ -312,7 +312,11 @@ func (d *Service) dismissConfigModal(app *application.App, chat application.Wind
 }
 
 func (d *Service) hookConfigWindow(window application.Window) {
-	if d.configHooked || window == nil {
+	if window == nil {
+		return
+	}
+	TuneNativeWebView(window)
+	if d.configHooked {
 		return
 	}
 	d.configHooked = true
@@ -383,6 +387,7 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	if window == nil {
 		return
 	}
+	TuneNativeWebView(window)
 	wid := window.ID()
 	if d.chatHookedID == wid {
 		return

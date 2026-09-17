@@ -10,7 +10,7 @@
 
 1. **壳层已经没有数量级空间。** 用户可感知的卡顿几乎都在 Chat SPA（JavaScriptCore + 历史 DOM），不在 Wails 绑定。刚落地的 notify-pull、GOGC、`-s -w` 针对配置页 IPC 和体积，对 Chat 滚动/切会话几乎无感。
 2. **macOS 上 Wails 暴露的 WebView 旋钮很少，真正影响帧率的开关没有公开 API。** 社区把 ProMotion 120 Hz 锁 60 FPS 追到 WebKit 的 PreferPageRenderingUpdatesNear60FPSEnabled（默认 true）。维护者明确：WKPreferences / WKWebViewConfiguration / Info.plist / defaults write 都碰不到它。
-3. **不要为了「极致」去用私有 API 或 fork Wails。** 解锁 120 FPS 对 Chat 文本应用收益可疑、耗电确定；suppressesIncrementalRendering 被 Wails 写死为 true，改它必须 fork。
+3. **不要 fork Wails。** 120 Hz 已用与 Wails inspector 同类的私有 preference 打开；suppressesIncrementalRendering 仍被 Wails 写死为 true，改它必须 fork。
 4. **还能做、且不改功能的，只剩测量与上游跟进：** Instruments / Safari Web Inspector 确认瓶颈在 JSC 还是壳；评估跟 Wails nightly；维持 combo 热路径。不要再往壳里塞 Raw Message / Protobuf。
 
 ## 1. 这个应用在 macOS 上实际跑什么
@@ -34,7 +34,7 @@
 - 维护者 [leaanthony 的核对](https://github.com/wailsapp/wails/issues/6056#issuecomment-5474139757)：WebKit trunk UnifiedWebPreferences.yaml 里 PreferPageRenderingUpdatesNear60FPSEnabled 在 macOS **默认 true**，无 SDK/OS 门闸；visionOS 才是 false。实现是 AnimationFrameRate.cpp 把 120 折成 60。
 - **没有公开 API。** WKPreferences 公开属性都不涉及帧率；无 identifier 的 WKPreferences 也读不到 NSUserDefaults。CADisableMinimumFrameDurationOnPhone 是 iOS。
 - 后续补丁走私有 _WKFeature / WKPreferences._features。beta.22 的 MacWebviewPreferences **没有**对应字段。
-- **对本仓库：** Chat 不是 rAF 游戏循环。60 FPS 足够滚动和输入。打开 120 Hz 会抬 GPU/能耗。**不建议做。**
+- **对本仓库：** 已实现：窗口就绪后通过 `WKPreferences._setEnabled:forFeature:` 关掉该 preference（见 `internal/desktop/webkit_fps_darwin.go`）。60 Hz 屏是空操作；ProMotion 上 WebKit 会跟显示器原生刷新率。没有公开 API，和 Wails 自己用的 inspector 私有 API 同类。本应用不上 Mac App Store。
 
 ### 2.2 suppressesIncrementalRendering = true（Wails 写死）
 
@@ -75,7 +75,7 @@ darwin 路径每次 [[WKWebViewConfiguration alloc] init]，没有共享 WKProce
 | 想法 | 为何不做 |
 | --- | --- |
 | Raw Message / Protobuf | Chat 不走绑定；配置页已事件化 |
-| 解锁 ProMotion 120 Hz（私有 API） | 无公开 API；耗电；Chat 不是 rAF 负载 |
+| 解锁 ProMotion 120 Hz | 已落地（私有 WKPreferences feature） |
 | 关掉 suppressesIncrementalRendering | 需 fork Wails；可能闪白 |
 | Liquid Glass + shouldRasterize | 大 DOM 滚动更差；改窗口外观 |
 | 共享 WKProcessPool / DataStore | 可能破坏 Chat cookie 隔离 |

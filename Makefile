@@ -13,8 +13,9 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 VERSION ?=
 EXTRA_TAGS ?=
-BUILD_TAGS ?= $(if $(EXTRA_TAGS),wails$(comma)$(EXTRA_TAGS),wails)
 comma := ,
+# Local and CI packages use Wails production (inspectable WebView off).
+BUILD_TAGS ?= $(if $(EXTRA_TAGS),wails$(comma)production$(comma)$(EXTRA_TAGS),wails$(comma)production)
 
 export DIST APP BUNDLE_NAME GOOS GOARCH BUILD_TAGS
 ifneq ($(strip $(VERSION)),)

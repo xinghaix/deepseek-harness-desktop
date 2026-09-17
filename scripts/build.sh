@@ -16,7 +16,7 @@ dist=${DIST:-dist}
 app=deepseek-harness-desktop
 bundle_name="Deepseek Harness Desktop"
 ldflags="-s -w -X deepseek-harness-desktop/internal/version.Version=$version"
-tags=${BUILD_TAGS:-wails}
+tags=${BUILD_TAGS:-wails,production}
 
 # Pin the publisher key in every production binary; never rely on runtime env.
 update_key=${DSH_UPDATE_MANIFEST_PUBLIC_KEY:-}
