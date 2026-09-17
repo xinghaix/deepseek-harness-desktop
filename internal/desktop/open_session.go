@@ -43,5 +43,7 @@ func openChatSessionJS(id string) string {
 	if err != nil {
 		return ""
 	}
-	return `(function(){try{var id=` + string(payload) + `;window.__DSH_DESKTOP_OPEN_SESSION_PENDING__=id;window.dispatchEvent(new CustomEvent("` + openChatSessionEvent + `",{detail:id}));}catch(_){}})();`
+	// Prefer the in-page function (same evaluateJavaScript turn as dsh-context's
+	// click handler). CustomEvent remains the fallback before apply() installs it.
+	return `(function(){try{var id=` + string(payload) + `;window.__DSH_DESKTOP_OPEN_SESSION_PENDING__=id;var open=window.__DSH_DESKTOP_OPEN_SESSION__;if(typeof open==="function")open(id);else window.dispatchEvent(new CustomEvent("` + openChatSessionEvent + `",{detail:id}));}catch(_){}})();`
 }

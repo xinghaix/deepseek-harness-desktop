@@ -341,8 +341,7 @@ func (d *Service) revealChatFromTray() {
 		return
 	}
 	if chat, ok := app.Window.GetByName(chatWindowName); ok {
-		chat.Show()
-		chat.Focus()
+		revealExistingChatWindow(chat)
 		return
 	}
 	if err := d.OpenDSH(); err != nil {
@@ -358,9 +357,20 @@ func (d *Service) revealHiddenChat() {
 		return
 	}
 	if chat, ok := app.Window.GetByName(chatWindowName); ok {
-		chat.Show()
-		chat.Focus()
+		revealExistingChatWindow(chat)
 	}
+}
+
+// revealExistingChatWindow focuses Chat. Show is skipped when the window is
+// already visible so a tray jump does not force a compositor remount.
+func revealExistingChatWindow(chat application.Window) {
+	if chat == nil {
+		return
+	}
+	if !chat.IsVisible() {
+		chat.Show()
+	}
+	chat.Focus()
 }
 
 func (d *Service) hideToTray(app *application.App, chat application.Window) {

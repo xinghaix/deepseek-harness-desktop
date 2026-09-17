@@ -86,6 +86,7 @@ const client = registration.factory((name) => {
 const flushMicrotasks = async () => {
   for (let i = 0; i < 4; i += 1) await Promise.resolve();
 };
+const nextClaimTimer = () => timers.findIndex((timer) => !timer.cancelled && timer.delay >= 500);
 
 let snapshot = {
   byId: { "session-queued": { id: "session-queued", running: false } },
@@ -97,6 +98,8 @@ let workspaceListener = () => {};
 const workspaceSnapshot = { archivedSessionIds: [] };
 const reportedSessions = [];
 const opened = [];
+const warmed = [];
+const selectedPanels = [];
 let claimResult = "";
 let claimCalls = 0;
 const ctx = {
@@ -107,6 +110,7 @@ const ctx = {
   get(name) {
     if (name === "uiWorkspace") return this.uiWorkspace;
     if (name === "workspaces") return this.workspaces;
+    if (name === "layout") return this.layout;
     return undefined;
   },
   remote: null,
@@ -118,6 +122,9 @@ const ctx = {
           return Promise.resolve({ ok: true, value: { sessionId: claimResult } });
         }
         if (method === "reportSessions") reportedSessions.push(payload);
+        if (method === "prefs") {
+          return Promise.resolve({ ok: true, value: { trayEnabled: true, traySessionLimit: 5 } });
+        }
         return Promise.resolve({ ok: true, value: {} });
       },
     },
@@ -130,10 +137,25 @@ const ctx = {
         return () => {};
       },
     },
+    binding(id) {
+      return {
+        session: {
+          open() {
+            warmed.push(id);
+            return Promise.resolve();
+          },
+        },
+      };
+    },
     open(id) {
       if (!snapshot.byId[id]) throw new Error(`unknown session ${id}`);
       snapshot.current = id;
       opened.push(id);
+    },
+  },
+  layout: {
+    selectPanel(panelId) {
+      selectedPanels.push(panelId);
     },
   },
   uiWorkspace: {
@@ -242,12 +264,12 @@ snapshot = {
   ids: ["session-late", "session-poll"],
   current: "session-late",
 };
-const timerIndex = timers.findIndex((timer) => !timer.cancelled);
+const timerIndex = nextClaimTimer();
 assert.notEqual(timerIndex, -1, "claim retry timer missing");
 const timer = timers.splice(timerIndex, 1)[0];
 await timer.fn();
 await flushMicrotasks();
-assert.ok(claimCalls >= 3, "client must retry claiming pending tray sessions");
+assert.ok(claimCalls >= 2, "client must retry claiming pending tray sessions");
 assert.deepEqual(
   opened,
   ["session-late", "session-workspace", "session-poll"],
@@ -291,7 +313,7 @@ holdCurrent = false;
 
 const backoffDelays = [];
 for (let i = 0; i < 7; i += 1) {
-  const nextIndex = timers.findIndex((entry) => !entry.cancelled);
+  const nextIndex = nextClaimTimer();
   assert.notEqual(nextIndex, -1, "claim poll timer missing during backoff");
   const next = timers.splice(nextIndex, 1)[0];
   backoffDelays.push(next.delay);
@@ -303,4 +325,69 @@ assert.deepEqual(
   [500, 1000, 2000, 4000, 8000, 10000, 10000],
   "idle claim polling must back off and cap its interval",
 );
-console.log("ok - tray click survives early lists, missed events, duplicates, and idle backoff");
+
+assert.equal(typeof window.__DSH_DESKTOP_OPEN_SESSION__, "function", "ExecJS fast path missing");
+assert.match(source, /prefetchSessionHistory/, "history prefetch missing");
+assert.match(source, /OPEN_SESSION_WARM_MS/, "idle history warm missing");
+assert.match(source, /OPEN_SESSION_WARM_LIMIT/, "recency warm cap missing");
+assert.match(source, /trayRecentSessionsEnabled/, "warm must require tray recent sessions");
+
+const openedBeforeCurrent = opened.length;
+snapshot = {
+  byId: {
+    "session-now": { id: "session-now", running: false, updatedAt: 9 },
+    "session-other": { id: "session-other", running: false, updatedAt: 8 },
+  },
+  ids: ["session-now", "session-other"],
+  current: "session-now",
+};
+selectedPanels.length = 0;
+handler({ detail: "session-now" });
+assert.equal(opened.length, openedBeforeCurrent, "already-current session must not re-run openSession");
+assert.deepEqual(selectedPanels, [null], "already-current session must still leave Settings");
+
+const claimsBeforeEvent = claimCalls;
+handler({ detail: "session-now" });
+await flushMicrotasks();
+assert.equal(claimCalls, claimsBeforeEvent, "delivered event must not claim in the click turn");
+
+const openedBeforeFn = opened.length;
+window.__DSH_DESKTOP_OPEN_SESSION__("session-other");
+assert.deepEqual(opened.slice(openedBeforeFn), ["session-other"], "window open function must navigate");
+
+listListener();
+const warmIndex = timers.findIndex((timer) => !timer.cancelled && timer.delay === 400);
+assert.notEqual(warmIndex, -1, "tray history warm timer missing");
+await timers.splice(warmIndex, 1)[0].fn();
+assert.ok(warmed.includes("session-now"), "idle warm must open history of other tray sessions");
+
+const drainWarmChunks = async () => {
+  for (;;) {
+    const i = timers.findIndex((timer) => !timer.cancelled && timer.delay === 0);
+    if (i === -1) break;
+    await timers.splice(i, 1)[0].fn();
+  }
+};
+const byId = {};
+for (let i = 0; i < 52; i += 1) {
+  const id = `warm-${String(i).padStart(2, "0")}`;
+  byId[id] = { id, running: i === 0, updatedAt: i };
+}
+byId["warm-blank"] = { id: "warm-blank", blank: true, updatedAt: 999 };
+byId["warm-current"] = { id: "warm-current", running: false, updatedAt: 1000 };
+snapshot = { byId, ids: Object.keys(byId), current: "warm-current" };
+listListener();
+const capWarmIndex = timers.findIndex((timer) => !timer.cancelled && timer.delay === 400);
+assert.notEqual(capWarmIndex, -1, "recency warm timer missing");
+await timers.splice(capWarmIndex, 1)[0].fn();
+await drainWarmChunks();
+const newlyWarmed = [...new Set(warmed.filter((id) => id.startsWith("warm-")))];
+assert.equal(newlyWarmed.length, 5, "must warm traySessionLimit (default 5) most recent sessions");
+assert.ok(newlyWarmed.includes("warm-51"), "newest session must be warmed");
+assert.ok(newlyWarmed.includes("warm-47"), "5th-newest session must be warmed");
+assert.ok(!newlyWarmed.includes("warm-46"), "6th-newest session must stay outside the default cap");
+assert.ok(!newlyWarmed.includes("warm-00"), "oldest session must stay outside the cap even if running");
+assert.ok(!newlyWarmed.includes("warm-current"), "current session must not be warmed");
+assert.ok(!newlyWarmed.includes("warm-blank"), "blank session must not be warmed");
+
+console.log("ok - tray click survives early lists, missed events, duplicates, idle backoff, and fast-path navigation");

@@ -1874,14 +1874,42 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
-		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces"];
+		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
+		const OPEN_SESSION_FAST_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION__";
+		const OPEN_SESSION_WARM_MS = 400;
+		const OPEN_SESSION_WARM_LIMIT = 5;
+		const OPEN_SESSION_WARM_CHUNK = 5;
+		const OPEN_SESSION_WARM_LIMIT_MAX = 20;
 		function apply(ctx) {
 			installStyle();
 			void ensureDesktopHandshake(ctx.connection);
+			let trayEnabled = false;
+			let warmLimit = OPEN_SESSION_WARM_LIMIT;
+			let lastListState = null;
+			const trayRecentSessionsEnabled = () => trayEnabled && warmLimit > 0;
+			const applyWarmPrefs = (prefs) => {
+				let changed = false;
+				const enabled = prefs?.trayEnabled === true;
+				if (enabled !== trayEnabled) {
+					trayEnabled = enabled;
+					changed = true;
+				}
+				const n = Number(prefs?.traySessionLimit);
+				if (Number.isFinite(n)) {
+					const next = Math.max(0, Math.min(OPEN_SESSION_WARM_LIMIT_MAX, Math.floor(n)));
+					if (next !== warmLimit) {
+						warmLimit = next;
+						changed = true;
+					}
+				}
+				return changed;
+			};
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
-				if (result?.ok) publishShowCopySessionId(result.value);
+				if (!result?.ok) return;
+				publishShowCopySessionId(result.value);
+				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
 			const stopCopySessionIdMenu = installCopySessionIdMenu();
@@ -1935,6 +1963,89 @@ window.__ModuleLoader__.load({
 			let pendingOpenSessionId = "";
 			let lastOpenedSessionId = "";
 			let lastOpenedSessionAt = 0;
+			let warmTimer = null;
+			const layoutOf = () => (typeof ctx.get === "function" ? ctx.get("layout") : ctx.layout);
+			const dismissChrome = () => {
+				try {
+					const layout = layoutOf();
+					if (layout && typeof layout.selectPanel === "function") layout.selectPanel(null);
+				} catch (_) { /* layout may still be settling */ }
+				try {
+					if (typeof KeyboardEvent === "function") {
+						window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+					}
+				} catch (_) { /* overlay dismiss is best-effort */ }
+			};
+			const prefetchSessionHistory = (id) => {
+				try {
+					const session = ctx.sessions && typeof ctx.sessions.binding === "function"
+						? ctx.sessions.binding(id)?.session
+						: null;
+					if (session && typeof session.open === "function") void session.open();
+				} catch (_) { /* warming is best-effort; navigation still proceeds */ }
+			};
+			const markOpened = (id) => {
+				if (pendingOpenSessionId === id) pendingOpenSessionId = "";
+				lastOpenedSessionId = id;
+				lastOpenedSessionAt = Date.now();
+			};
+			const cancelWarm = () => {
+				if (warmTimer !== null && typeof clearTimeout === "function") clearTimeout(warmTimer);
+				warmTimer = null;
+			};
+			const recentWarmIds = (sessions, limit, current) => {
+				if (!limit || !Array.isArray(sessions) || sessions.length === 0) return [];
+				const seen = new Set();
+				const rows = [];
+				for (const s of sessions) {
+					if (!s || s.blank || s.archived || s.origin === "subagent") continue;
+					const sid = String(s.id || "").trim();
+					if (!sid || sid === current || seen.has(sid)) continue;
+					seen.add(sid);
+					rows.push(s);
+				}
+				rows.sort((a, b) => {
+					const ua = typeof a.updatedAt === "number" ? a.updatedAt : 0;
+					const ub = typeof b.updatedAt === "number" ? b.updatedAt : 0;
+					if (ua !== ub) return ub - ua;
+					return String(a.id).localeCompare(String(b.id));
+				});
+				return rows.slice(0, limit).map((s) => s.id);
+			};
+			const warmRecentHistories = (listState) => {
+				if (pendingOpenSessionId) return;
+				const ids = recentWarmIds(
+					sessionsFromSnapshot(listState, archivedSessionIds()).sessions,
+					warmLimit,
+					listState && listState.current
+				);
+				const pump = () => {
+					if (pendingOpenSessionId) return;
+					const chunk = ids.splice(0, OPEN_SESSION_WARM_CHUNK);
+					if (!chunk.length) return;
+					for (const id of chunk) prefetchSessionHistory(id);
+					if (!ids.length) return;
+					if (typeof setTimeout !== "function") {
+						pump();
+						return;
+					}
+					warmTimer = setTimeout(() => {
+						warmTimer = null;
+						pump();
+					}, 0);
+				};
+				pump();
+			};
+			const scheduleWarm = (listState) => {
+				lastListState = listState;
+				if (typeof setTimeout !== "function") return;
+				cancelWarm();
+				if (!trayRecentSessionsEnabled()) return;
+				warmTimer = setTimeout(() => {
+					warmTimer = null;
+					warmRecentHistories(listState);
+				}, OPEN_SESSION_WARM_MS);
+			};
 			const flushPendingOpenSession = () => {
 				const id = pendingOpenSessionId;
 				if (!id) return;
@@ -1943,12 +2054,17 @@ window.__ModuleLoader__.load({
 					: null;
 				if (!snap?.byId || !snap.byId[id]) return;
 				try {
+					// Already on this session: skip select/history (idempotent but not free)
+					// and only dismiss Settings / Escape-closable overlays.
+					if (snap.current === id) {
+						dismissChrome();
+						markOpened(id);
+						return;
+					}
 					const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
 					if (!uiWorkspace || typeof uiWorkspace.openSession !== "function") return;
 					uiWorkspace.openSession(id);
-					if (pendingOpenSessionId === id) pendingOpenSessionId = "";
-					lastOpenedSessionId = id;
-					lastOpenedSessionAt = Date.now();
+					markOpened(id);
 				} catch (_) { /* list/service may still be settling; retry on next snapshot */ }
 			};
 			const queueOpenSession = (sessionId, fromEvent = false) => {
@@ -1961,6 +2077,7 @@ window.__ModuleLoader__.load({
 					} catch (_) { /* allow the event to retry */ }
 					if (current === id) return;
 				}
+				cancelWarm();
 				pendingOpenSessionId = id;
 				flushPendingOpenSession();
 			};
@@ -1983,6 +2100,7 @@ window.__ModuleLoader__.load({
 					pushBusy(anySessionRunning(snap));
 					pushSessions(sessionsFromSnapshot(snap, archivedSessionIds()));
 					flushPendingOpenSession();
+					scheduleWarm(snap);
 				} catch (_) { /* keep last */ }
 			};
 			if (ctx.remote && typeof ctx.remote.$on === "function") {
@@ -2025,12 +2143,19 @@ window.__ModuleLoader__.load({
 				const id = event && event.detail;
 				consumeQueuedOpenSession(id);
 				queueOpenSession(id, true);
-				void claimOpenSession();
 			};
 			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
 				window.addEventListener(OPEN_SESSION_EVENT, onOpenSession);
+				window[OPEN_SESSION_FAST_GLOBAL] = (sessionId) => {
+					consumeQueuedOpenSession(sessionId);
+					queueOpenSession(sessionId, true);
+				};
 				if (typeof ctx.effect === "function") {
-					ctx.effect(() => () => window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession));
+					ctx.effect(() => () => {
+						window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession);
+						if (window[OPEN_SESSION_FAST_GLOBAL]) window[OPEN_SESSION_FAST_GLOBAL] = undefined;
+						cancelWarm();
+					});
 				}
 				drainQueuedOpenSession();
 			}

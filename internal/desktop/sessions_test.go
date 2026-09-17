@@ -58,6 +58,9 @@ func TestOpenChatSessionJSEncodesID(t *testing.T) {
 	if !strings.Contains(got, `window.__DSH_DESKTOP_OPEN_SESSION_PENDING__=id`) {
 		t.Fatalf("missing pending marker: %s", got)
 	}
+	if !strings.Contains(got, `window.__DSH_DESKTOP_OPEN_SESSION__`) {
+		t.Fatalf("missing same-turn open function: %s", got)
+	}
 	if openChatSessionJS("  ") != "" || openChatSessionJS("") != "" {
 		t.Fatal("empty id must not emit JS")
 	}
