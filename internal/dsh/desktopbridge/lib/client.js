@@ -3091,6 +3091,12 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 								})
 							]
 						}),
+						// One grouped block: the master toggle decides whether the other two mean anything
+						// at all, so the three tray settings read as one thing instead of three unrelated
+						// rows. Only the outer row keeps a divider (below the whole group).
+						jsxs("div", {
+							className: "dshDesktopBridgeRow dshDesktopBridgeRowStacked",
+							children: [
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
@@ -3168,6 +3174,8 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 									})
 								})
 							]
+						}),
+						]
 						}),
 						]
 					}),

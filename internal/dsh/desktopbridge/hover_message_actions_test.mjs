@@ -1070,9 +1070,11 @@ const tabTree = tabElement.type(tabElement.props);
 const classNames = collectClassNames(tabTree);
 const tabText = collectText(tabTree).join("\n");
 
-// The toggle and the line budget belong to one grouped setting, not two unrelated rows.
-assert.equal(classNames.filter((c) => c === "dshDesktopBridgeRow dshDesktopBridgeRowStacked").length, 1, "the floating-prompt settings form one grouped row");
-// Two lines, each an ordinary row so they inherit the panel typography.
+// Two grouped settings, each drawn as ONE stacked row:
+//   - the floating-prompt block (toggle + line budget), and
+//   - the tray block (master toggle + session count + close-to-tray), whose three rows are one
+//     thing because the master switch decides whether the other two mean anything at all. With a
+//     divider between them they read as three unrelated settings.
 function findElement(node, predicate) {
   if (!node || typeof node !== "object") return null;
   if (Array.isArray(node)) {
@@ -1085,12 +1087,36 @@ function findElement(node, predicate) {
   if (predicate(node)) return node;
   return node.props ? findElement(node.props.children, predicate) : null;
 }
-const stacked = findElement(tabTree, (node) => String(node.props && node.props.className || "").includes("dshDesktopBridgeRowStacked"));
-assert.ok(stacked, "the floating-prompt setting block is present");
-const stackedLines = (Array.isArray(stacked.props.children) ? stacked.props.children : [stacked.props.children])
+function collectElements(node, predicate, out = []) {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) {
+    for (const child of node) collectElements(child, predicate, out);
+    return out;
+  }
+  if (predicate(node)) out.push(node);
+  if (node.props) collectElements(node.props.children, predicate, out);
+  return out;
+}
+const isStacked = (node) => String(node.props && node.props.className || "").includes("dshDesktopBridgeRowStacked");
+const stackedGroups = collectElements(tabTree, isStacked);
+assert.equal(stackedGroups.length, 2, "the panel groups exactly two settings");
+// Each group is identified by its own content, not by its position, so reordering the cards
+// cannot silently make one group's assertions run against the other.
+const groupText = (group) => collectText(group.props.children).join("\n");
+const groupLines = (group) => (Array.isArray(group.props.children) ? group.props.children : [group.props.children])
   .filter((child) => child && child.props && String(child.props.className || "").includes("dshDesktopBridgeRow"))
   .filter((child) => !String(child.props.className).includes("RowStacked"));
-assert.equal(stackedLines.length, 2, "the grouped setting renders exactly two lines");
+const overlayGroup = stackedGroups.find((group) => /悬浮我方提示词/.test(groupText(group)));
+const trayGroup = stackedGroups.find((group) => /field\.tray_enabled/.test(groupText(group)));
+assert.ok(overlayGroup, "the floating-prompt setting block is present");
+assert.ok(trayGroup, "the tray setting block is present");
+assert.equal(groupLines(overlayGroup).length, 2, "the grouped floating-prompt setting renders exactly two lines");
+assert.equal(groupLines(trayGroup).length, 3, "the grouped tray setting renders exactly three lines");
+// ...and they are the three tray rows, in the order the panel shows them.
+assert.equal(
+  groupLines(trayGroup).map((line) => (/field\.[a-z_]+/.exec(collectText(line.props.children).join("\n")) || [""])[0]).join(","),
+  "field.tray_enabled,field.tray_session_limit,field.close_to_tray",
+  "the tray group holds the three tray rows in order");
 assert.ok(classNames.some((c) => c.includes("dshDesktopBridgeNumber")), "the line-budget line renders its number input");
 // The value must appear ONCE. A separate "5 行" readout beside the input printed the same
 // number twice, because the input's value already reflects the clamped pref.
