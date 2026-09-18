@@ -28,13 +28,17 @@ const routes = Object.freeze({
 	openWorkspace: Object.freeze({ method: "POST", path: "/v1/open-workspace" }),
 	openSettingsYaml: Object.freeze({ method: "POST", path: "/v1/open-settings-yaml" }),
 	prefs: Object.freeze({ method: "GET", path: "/v1/prefs" }),
+	// Localized UI catalog for the Chat-side desktop settings panel.
+	localeBundle: Object.freeze({ method: "GET", path: "/v1/locale-bundle" }),
 	setLanguage: Object.freeze({ method: "POST", path: "/v1/set-language" }),
 	setConfirmQuitWhenBusy: Object.freeze({ method: "POST", path: "/v1/set-confirm-quit" }),
 	setTrayEnabled: Object.freeze({ method: "POST", path: "/v1/set-tray-enabled" }),
 	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
 	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
 	setShowCopySessionId: Object.freeze({ method: "POST", path: "/v1/set-show-copy-session-id" }),
+	setHoverMessageActions: Object.freeze({ method: "POST", path: "/v1/set-hover-message-actions" }),
 	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
+	setPromptOverlayMaxLines: Object.freeze({ method: "POST", path: "/v1/set-prompt-overlay-max-lines" }),
 	setShortcuts: Object.freeze({ method: "POST", path: "/v1/set-shortcuts" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),
@@ -172,7 +176,8 @@ async function invoke(config, endpoint, payload, signal) {
 	if (route === undefined) {
 		return {
 			ok: false,
-			error: { code: "desktop-bridge/not-allowed", message: "桌面桥接不支持此操作", details: {} }
+			// Fallback text stays language-neutral; the client localizes by code.
+			error: { code: "desktop-bridge/not-allowed", message: "Desktop bridge does not support this action", details: {} }
 		};
 	}
 	const resolved = await resolveConfig(config);
@@ -181,7 +186,7 @@ async function invoke(config, endpoint, payload, signal) {
 			ok: false,
 			error: {
 				code: "desktop-bridge/desktop-not-running",
-				message: "桌面端控制面不可用；请从 Deepseek Harness Desktop 启动 DSH",
+				message: "Desktop control plane unavailable; start DSH from Deepseek Harness Desktop",
 				details: {}
 			}
 		};
@@ -201,7 +206,7 @@ async function invoke(config, endpoint, payload, signal) {
 		}
 		const response = await fetch(resolved.base + route.path, init);
 		if (!response.ok) {
-			let message = `桌面端拒绝了操作（HTTP ${response.status}）`;
+			let message = `Desktop rejected the action (HTTP ${response.status})`;
 			try {
 				const body = await response.json();
 				if (typeof body?.error === "string" && body.error.trim()) message = body.error;
@@ -220,8 +225,9 @@ async function invoke(config, endpoint, payload, signal) {
 		return {
 			ok: false,
 			error: {
-				code: aborted ? "desktop-bridge/unavailable" : "desktop-bridge/unavailable",
-				message: aborted ? "桌面桥接请求已取消" : "桌面端控制面暂时不可达",
+				// Distinct codes so the client can localize each case; the message is a fallback.
+				code: aborted ? "desktop-bridge/aborted" : "desktop-bridge/unavailable",
+				message: aborted ? "Desktop bridge request was cancelled" : "Desktop control plane is temporarily unreachable",
 				details: {}
 			},
 			config: resolved

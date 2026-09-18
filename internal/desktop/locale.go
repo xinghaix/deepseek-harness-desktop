@@ -17,7 +17,9 @@ type DesktopPrefs struct {
 	CloseToTray           bool              `json:"closeToTray"`
 	TraySessionLimit      int               `json:"traySessionLimit"`
 	ShowCopySessionId     bool              `json:"showCopySessionId"`
+	HoverMessageActions   bool              `json:"hoverMessageActions"`
 	ChatContentVisibility bool              `json:"chatContentVisibility"`
+	PromptOverlayMaxLines int               `json:"promptOverlayMaxLines"`
 	Language              string            `json:"language"`
 	ResolvedLocale        string            `json:"resolvedLocale"`
 	SystemLocale          string            `json:"systemLocale"`
@@ -51,7 +53,9 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		CloseToTray:           trayOn && d.prefs.closeToTray.Load(),
 		TraySessionLimit:      int(d.prefs.traySessionLimit.Load()),
 		ShowCopySessionId:     d.prefs.showCopySessionId.Load(),
+		HoverMessageActions:   d.prefs.hoverMessageActions.Load(),
 		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
+		PromptOverlayMaxLines: int(d.prefs.promptOverlayMaxLines.Load()),
 		Language:              pref,
 		ResolvedLocale:        resolved,
 		SystemLocale:          i18n.Normalize(system),
@@ -120,8 +124,27 @@ func (d *Service) SetShowCopySessionId(enabled bool) (DesktopPrefs, error) {
 	return d.DesktopPrefs(), nil
 }
 
+func (d *Service) SetHoverMessageActions(enabled bool) (DesktopPrefs, error) {
+	d.prefs.hoverMessageActions.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
 func (d *Service) SetChatContentVisibility(enabled bool) (DesktopPrefs, error) {
 	d.prefs.chatContentVisibility.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+// SetPromptOverlayMaxLines stores how many prompt lines the floating card shows.
+// The value is clamped to the supported range instead of rejected so a stale UI or a
+// hand-edited state file can never leave the card unusable.
+func (d *Service) SetPromptOverlayMaxLines(n int) (DesktopPrefs, error) {
+	d.prefs.promptOverlayMaxLines.Store(int32(clampPromptOverlayMaxLines(n)))
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}

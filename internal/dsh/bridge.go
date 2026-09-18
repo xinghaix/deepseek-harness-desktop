@@ -55,7 +55,9 @@ type PrefsHost interface {
 	SetCloseToTray(enabled bool) (BridgePrefs, error)
 	SetTraySessionLimit(n int) (BridgePrefs, error)
 	SetShowCopySessionId(enabled bool) (BridgePrefs, error)
+	SetHoverMessageActions(enabled bool) (BridgePrefs, error)
 	SetChatContentVisibility(enabled bool) (BridgePrefs, error)
+	SetPromptOverlayMaxLines(n int) (BridgePrefs, error)
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
 }
 
@@ -75,12 +77,19 @@ type UpdateHost interface {
 	AppVersion() string
 }
 
+// LocaleHost exposes the embedded UI catalog so the Chat webview can localize the
+// desktop bridge settings panel with the same translations as the config page.
+type LocaleHost interface {
+	BridgeLocaleBundle() BridgeLocaleBundle
+}
+
 type BridgeHost interface {
 	WindowHost
 	PathHost
 	PrefsHost
 	SessionHost
 	UpdateHost
+	LocaleHost
 }
 
 // BridgePrefs is the JSON shape returned on /v1/prefs.
@@ -90,7 +99,9 @@ type BridgePrefs struct {
 	CloseToTray           bool                 `json:"closeToTray"`
 	TraySessionLimit      int                  `json:"traySessionLimit"`
 	ShowCopySessionId     bool                 `json:"showCopySessionId"`
+	HoverMessageActions   bool                 `json:"hoverMessageActions"`
 	ChatContentVisibility bool                 `json:"chatContentVisibility"`
+	PromptOverlayMaxLines int                  `json:"promptOverlayMaxLines"`
 	Language              string               `json:"language"`
 	ResolvedLocale        string               `json:"resolvedLocale"`
 	SystemLocale          string               `json:"systemLocale"`
@@ -103,6 +114,16 @@ type BridgePrefs struct {
 type BridgeLocaleOption struct {
 	Code       string `json:"code"`
 	NativeName string `json:"nativeName"`
+}
+
+// BridgeLocaleBundle is the JSON shape returned on /v1/locale-bundle: the resolved
+// catalog plus metadata, so the Chat-side settings panel reuses one translation set.
+type BridgeLocaleBundle struct {
+	Locale    string               `json:"locale"`
+	Catalog   map[string]string    `json:"catalog"`
+	Supported []BridgeLocaleOption `json:"supported"`
+	Source    string               `json:"source"`
+	Language  string               `json:"language"`
 }
 
 // BridgeSession is one Chat session summary for the desktop tray list.
@@ -418,6 +439,17 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, host.BridgePrefs())
+	case "/v1/locale-bundle":
+		if r.Method != http.MethodGet {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, host.BridgeLocaleBundle())
 	case "/v1/set-language":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
@@ -556,6 +588,29 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-hover-message-actions":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var hoverBody struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &hoverBody); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetHoverMessageActions(hoverBody.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
 	case "/v1/set-chat-content-visibility":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
@@ -574,6 +629,30 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetChatContentVisibility(cvBody.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-prompt-overlay-max-lines":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var linesBody struct {
+			Lines int `json:"lines"`
+		}
+		if err := decodeBridgeJSON(r, &linesBody); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		// The host clamps to the supported range, so an out-of-range value is not an error.
+		prefs, err := host.SetPromptOverlayMaxLines(linesBody.Lines)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return

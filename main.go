@@ -11,6 +11,7 @@ import (
 
 	"deepseek-harness-desktop/internal/desktop"
 	"deepseek-harness-desktop/internal/dsh"
+	"deepseek-harness-desktop/internal/i18n"
 	"deepseek-harness-desktop/internal/runtimeperf"
 	"deepseek-harness-desktop/internal/update"
 
@@ -50,7 +51,7 @@ func main() {
 	manager := &DSH{WailsFacade: desktop.NewWailsFacade(service)}
 	app := application.New(application.Options{
 		Name:        "Deepseek Harness Desktop",
-		Description: "管理本机已安装的 DSH CLI，并在桌面 WebView 中运行 DSH Chat",
+		Description: i18n.TActive("app.description"),
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "com.deepseek.harness.desktop",
 			ExitCode: 0,

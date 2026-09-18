@@ -159,7 +159,7 @@ func (d *Service) OpenDSH() error {
 	}
 	chatURL := entry.LoadURL
 	if err := validateChatURL(chatURL, entry.FirstLoad); err != nil {
-		return fmt.Errorf("拒绝加载不受信任的 Chat URL: %w", err)
+		return fmt.Errorf("%s", i18n.TActive("err.untrusted_chat_url", err.Error()))
 	}
 	app, err := desktopApp()
 	if err != nil {

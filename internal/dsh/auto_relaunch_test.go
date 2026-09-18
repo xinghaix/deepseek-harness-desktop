@@ -66,8 +66,15 @@ func (h *recordingBridgeHost) SetTraySessionLimit(int) (BridgePrefs, error) {
 func (h *recordingBridgeHost) SetShowCopySessionId(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) SetHoverMessageActions(bool) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
 func (h *recordingBridgeHost) SetChatContentVisibility(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
+}
+func (h *recordingBridgeHost) SetPromptOverlayMaxLines(n int) (BridgePrefs, error) {
+	// Echo the value so route tests can observe the write.
+	return BridgePrefs{PromptOverlayMaxLines: n}, nil
 }
 func (h *recordingBridgeHost) SetShortcuts(map[string]string) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
@@ -84,6 +91,9 @@ func (h *recordingBridgeHost) SetAutoCheckUpdate(bool) (BridgeUpdate, error) {
 	return BridgeUpdate{}, nil
 }
 func (h *recordingBridgeHost) AppVersion() string { return "test" }
+func (h *recordingBridgeHost) BridgeLocaleBundle() BridgeLocaleBundle {
+	return BridgeLocaleBundle{Locale: "en", Catalog: map[string]string{"bridge.card_status": "Status"}}
+}
 
 func TestAutoRelaunchOnUnexpectedExit(t *testing.T) {
 	executable, err := os.Executable()

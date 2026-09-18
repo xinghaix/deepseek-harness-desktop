@@ -68,7 +68,9 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		CloseToTray:           prefs.CloseToTray,
 		TraySessionLimit:      prefs.TraySessionLimit,
 		ShowCopySessionId:     prefs.ShowCopySessionId,
+		HoverMessageActions:   prefs.HoverMessageActions,
 		ChatContentVisibility: prefs.ChatContentVisibility,
+		PromptOverlayMaxLines: prefs.PromptOverlayMaxLines,
 		Language:              prefs.Language,
 		ResolvedLocale:        prefs.ResolvedLocale,
 		SystemLocale:          prefs.SystemLocale,
@@ -120,8 +122,22 @@ func (a bridgeHostAdapter) SetShowCopySessionId(enabled bool) (dsh.BridgePrefs, 
 	return a.BridgePrefs(), nil
 }
 
+func (a bridgeHostAdapter) SetHoverMessageActions(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetHoverMessageActions(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
 func (a bridgeHostAdapter) SetChatContentVisibility(enabled bool) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetChatContentVisibility(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetPromptOverlayMaxLines(n int) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetPromptOverlayMaxLines(n); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil
@@ -182,6 +198,23 @@ func (a bridgeHostAdapter) SetAutoCheckUpdate(enabled bool) (dsh.BridgeUpdate, e
 
 func (a bridgeHostAdapter) AppVersion() string {
 	return a.service.AppVersion()
+}
+
+// BridgeLocaleBundle hands the Chat-side settings panel the same embedded catalog
+// the config window uses, so both surfaces share one translation set.
+func (a bridgeHostAdapter) BridgeLocaleBundle() dsh.BridgeLocaleBundle {
+	bundle := a.service.LocaleBundle()
+	supported := make([]dsh.BridgeLocaleOption, 0, len(bundle.Supported))
+	for _, item := range bundle.Supported {
+		supported = append(supported, dsh.BridgeLocaleOption{Code: item.Code, NativeName: item.NativeName})
+	}
+	return dsh.BridgeLocaleBundle{
+		Locale:    bundle.Locale,
+		Catalog:   bundle.Catalog,
+		Supported: supported,
+		Source:    bundle.Source,
+		Language:  bundle.Language,
+	}
 }
 
 func (a bridgeHostAdapter) ReportChatBusy(busy bool) {

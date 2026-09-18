@@ -194,6 +194,34 @@ func TestShowCopySessionIdDefaultsOnAndPersists(t *testing.T) {
 	}
 }
 
+func TestHoverMessageActionsDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.hoverMessageActions.Load() {
+		t.Fatal("hoverMessageActions must default to on")
+	}
+	p.hoverMessageActions.Store(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.HoverMessageActions == nil || *file.Prefs.HoverMessageActions {
+		t.Fatalf("hoverMessageActions persisted = %v, want false", file.Prefs.HoverMessageActions)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.hoverMessageActions.Load() {
+		t.Fatal("disabled hoverMessageActions was not reloaded")
+	}
+}
+
 func TestChatContentVisibilityDefaultsOnAndPersists(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)

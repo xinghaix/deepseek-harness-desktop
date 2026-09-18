@@ -70,7 +70,8 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"DSH_DESKTOP_BRIDGE_URL", "DSH_DESKTOP_BRIDGE_TOKEN", "DSH_DESKTOP_BRIDGE_ENDPOINT_FILE",
 		`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", `kind: "prefix"`,
 		"/desktop-bridge", "/v1/status", "/v1/restart", "/v1/reload-chat", "/v1/open-management", "/v1/report-chat-busy",
-		"/v1/prefs", "/v1/check-update", "/v1/set-show-copy-session-id", "/v1/set-chat-content-visibility",
+		"/v1/prefs", "/v1/locale-bundle", "/v1/check-update", "/v1/set-show-copy-session-id", "/v1/set-hover-message-actions", "/v1/set-chat-content-visibility",
+		"/v1/set-prompt-overlay-max-lines",
 		"configFromEndpointFile", "desktop-bridge/unavailable",
 		"blank: Boolean(raw.blank)",
 		"origin: typeof raw.origin === \"string\" ? raw.origin : \"\"",
@@ -92,9 +93,9 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	}
 	client := string(clientBytes)
 	for _, fragment := range []string{
-		"window.__ModuleLoader__.load", "settings.section", "桌面设置",
-		"connection.rpc.call", "启动并打开 Chat", "重启并打开 Chat", "reloadChat",
-		"reconnecting", "desktop-not-running", "重新连接",
+		"window.__ModuleLoader__.load", "settings.section", `t("tray.open_settings")`,
+		"connection.rpc.call", `t("btn.start_open_chat")`, `t("bridge.restart_open_chat")`, "reloadChat",
+		"reconnecting", "desktop-not-running", `t("bridge.reconnect")`,
 		"Do NOT use a sticky globalThis guard",
 		"reportChatBusy",
 		"anySessionRunning",
@@ -102,11 +103,40 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"role: \"switch\"",
 		"showCopySessionId",
 		"setShowCopySessionId",
+		"hoverMessageActions",
+		"setHoverMessageActions",
+		"installHoverMessageActions",
+		`t("bridge.enhanced_hover_title")`,
+		"data-dsh-desktop-prompt-overlay",
+		"data-dsh-desktop-prompt-overlay-media",
+		"data-dsh-desktop-prompt-overlay-files",
+		"data-dsh-desktop-prompt-overlay-text",
+		"data-dsh-desktop-prompt-overlay-item",
+		"data-dsh-desktop-prompt-overlay-more",
+		"data-dsh-desktop-prompt-overlay-toolbar",
+		"data-dsh-desktop-prompt-overlay-time",
+		"data-dsh-desktop-prompt-overlay-action",
+		"data-dsh-desktop-prompt-overlay-action-done",
+		"markPromptActionDone",
+		"LOCALE_BUNDLE_GLOBAL",
+		"EARLY_FALLBACK_EN",
+		"setLocaleBundle",
+		"loadLocaleBundle",
+		"localeBundle",
+		"bridge.overlay_label",
+		"buildPromptPreview",
+		"collectPromptPreviewParts",
+		"hasPreviewMediaDescendant",
+		"PROMPT_OVERLAY_MAX_WIDTH_PX",
+		"createPromptToolbar",
+		"collectNativeOperationControls",
 		"chatContentVisibility",
 		"setChatContentVisibility",
+		"setPromptOverlayMaxLines",
+		"promptOverlayMaxLines",
 		"installChatContentVisibility",
 		"content-visibility:auto",
-		"DSH增强设置",
+		`t("bridge.card_enhancements")`,
 		"dsh-desktop-show-copy-session-id",
 		"installCopySessionIdMenu",
 		"sessionIdFromReactFiber",
@@ -157,7 +187,7 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if strings.Contains(client, "全部恢复默认") {
 		t.Fatal("client shortcuts must not expose restore-all; reset is per-row")
 	}
-	if !strings.Contains(client, `children: "恢复默认"`) || !strings.Contains(client, `children: "清除"`) {
+	if !strings.Contains(client, `t("shortcut.reset")`) || !strings.Contains(client, `t("shortcut.clear")`) {
 		t.Fatal("client shortcut rows must expose per-row clear and restore default")
 	}
 	if !strings.Contains(client, `addEventListener("pointerdown"`) {

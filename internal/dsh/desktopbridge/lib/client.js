@@ -87,18 +87,26 @@ window.__ModuleLoader__.load({
 			return callDesktopRPCRaw(connection, endpoint, payload, signal);
 		}
 
-		const stateLabels = Object.freeze({
-			stopped: "未启动",
-			starting: "启动中",
-			running: "运行中",
-			stopping: "停止中",
-			failed: "启动失败"
+		// Process/link state text resolves through the shared catalog; an unknown value
+		// renders itself so a newer desktop state can never show an empty chip.
+		const STATE_LABEL_KEYS = Object.freeze({
+			stopped: "state.stopped",
+			starting: "state.starting",
+			running: "state.running",
+			stopping: "state.stopping",
+			failed: "state.failed"
 		});
-		const linkLabels = Object.freeze({
-			connected: "已连接桌面端",
-			reconnecting: "正在重连桌面端…",
-			"desktop-not-running": "桌面端未运行"
+		const LINK_LABEL_KEYS = Object.freeze({
+			connected: "bridge.status_connected",
+			reconnecting: "bridge.status_reconnecting",
+			"desktop-not-running": "bridge.status_desktop_down"
 		});
+		function stateLabel(state) {
+			return STATE_LABEL_KEYS[state] ? t(STATE_LABEL_KEYS[state]) : state;
+		}
+		function linkLabel(link) {
+			return LINK_LABEL_KEYS[link] ? t(LINK_LABEL_KEYS[link]) : link;
+		}
 		const SHOW_COPY_SESSION_ID_GLOBAL = "__DSH_DESKTOP_SHOW_COPY_SESSION_ID__";
 		const SHOW_COPY_SESSION_ID_EVENT = "dsh-desktop-show-copy-session-id";
 		if (typeof window !== "undefined" && typeof window[SHOW_COPY_SESSION_ID_GLOBAL] !== "boolean") {
@@ -111,7 +119,1390 @@ window.__ModuleLoader__.load({
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(SHOW_COPY_SESSION_ID_EVENT, { detail: enabled }));
 		}
+		const HOVER_MESSAGE_ACTIONS_GLOBAL = "__DSH_DESKTOP_HOVER_MESSAGE_ACTIONS__";
+		const HOVER_MESSAGE_ACTIONS_EVENT = "dsh-desktop-hover-message-actions";
+		const HOVER_MESSAGE_ACTIONS_ATTR = "data-dsh-desktop-hover-message-actions";
+		const HOVER_MESSAGE_ACTIONS_STYLE_ID = "deepseek-harness-desktop-hover-message-actions";
+		if (typeof window !== "undefined" && typeof window[HOVER_MESSAGE_ACTIONS_GLOBAL] !== "boolean") {
+			window[HOVER_MESSAGE_ACTIONS_GLOBAL] = true;
+		}
+		function publishHoverMessageActions(value) {
+			if (typeof value?.hoverMessageActions !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.hoverMessageActions;
+			window[HOVER_MESSAGE_ACTIONS_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(HOVER_MESSAGE_ACTIONS_EVENT, { detail: enabled }));
+		}
+		const PROMPT_OVERLAY_ATTR = "data-dsh-desktop-prompt-overlay";
+		const PROMPT_OVERLAY_CONTENT_ATTR = "data-dsh-desktop-prompt-overlay-content";
+		const PROMPT_OVERLAY_MEDIA_ATTR = "data-dsh-desktop-prompt-overlay-media";
+		const PROMPT_OVERLAY_FILES_ATTR = "data-dsh-desktop-prompt-overlay-files";
+		const PROMPT_OVERLAY_TEXT_ATTR = "data-dsh-desktop-prompt-overlay-text";
+		// The scrolling box, INSIDE the card. Kept separate from the card so the card's padding
+		// stays on screen while the text scrolls (see the CSS comment below).
+		const PROMPT_OVERLAY_BODY_ATTR = "data-dsh-desktop-prompt-overlay-body";
+		// Set while the body can still scroll down, which fades the body's last visible line so a
+		// clipped line reads as "more below" rather than as a hard cut.
+		const PROMPT_OVERLAY_MORE_BELOW_ATTR = "data-dsh-desktop-prompt-overlay-more-below";
+		// Height of the fading band at the bottom of the body, about one prompt line (.86rem at
+		// 1.45 line-height is ~20px). It is EXTRA space reserved on top of the configured line
+		// budget — see PROMPT_OVERLAY_CHROME_PX — so the fade is always a peek at the line below
+		// and never eats into the lines the user asked to read.
+		const PROMPT_OVERLAY_FADE_PX = 20;
+		// Prefixed so it cannot collide with a keyframes name owned by the Chat app or a plugin.
+		const PROMPT_OVERLAY_STRIP_IN = "dsh-desktop-prompt-overlay-strip-in";
+		const PROMPT_OVERLAY_ITEM_ATTR = "data-dsh-desktop-prompt-overlay-item";
+		const PROMPT_OVERLAY_MORE_ATTR = "data-dsh-desktop-prompt-overlay-more";
+		const PROMPT_OVERLAY_TOOLBAR_ATTR = "data-dsh-desktop-prompt-overlay-toolbar";
+		const PROMPT_OVERLAY_TIME_ATTR = "data-dsh-desktop-prompt-overlay-time";
+		const PROMPT_OVERLAY_ACTION_ATTR = "data-dsh-desktop-prompt-overlay-action";
+		const PROMPT_OVERLAY_ACTION_DONE_ATTR = "data-dsh-desktop-prompt-overlay-action-done";
+		// Marks the inline SVG inside an action button, so the stylesheet can size it and a test
+		// can read which official glyph is on screen.
+		const PROMPT_OVERLAY_GLYPH_ATTR = "data-dsh-desktop-prompt-overlay-glyph";
+		// Carries the hovered action's label for the strip-level tooltip, which renders in the
+		// empty lane beside the strip (outside the card) instead of over its text.
+		const PROMPT_OVERLAY_HINT_ATTR = "data-dsh-desktop-prompt-overlay-hint";
+		// The bridge settings panel and the floating prompt both render inside the Chat
+		// webview, which cannot reach Wails bindings. The desktop control plane serves the
+		// same embedded catalog the config window uses (GET /v1/locale-bundle), so every
+		// surface shares one translation set (see AGENTS.md § 国际化).
+		const LOCALE_BUNDLE_GLOBAL = "__DSH_DESKTOP_LOCALE_BUNDLE__";
+		// English fallback for the few strings that can render before the bundle arrives:
+		// the floating prompt overlay mounts on scroll, ahead of any async fetch.
+		const EARLY_FALLBACK_EN = Object.freeze({
+			"bridge.overlay_label": "Floating prompt",
+			"bridge.overlay_toolbar": "Prompt actions",
+			"bridge.overlay_hidden": "(prompt content unavailable)",
+			"bridge.overlay_action": "Action",
+			"bridge.overlay_attachment": "Attachment",
+			"bridge.overlay_copied": "Copied",
+			"bridge.overlay_more": "{0} more",
+			"bridge.overlay_max_lines": "Max prompt lines",
+			// The settings nav resolves its label once, possibly before the catalog arrives.
+			"tray.open_settings": "Desktop settings"
+		});
+		let localeCatalog = Object.create(null);
+		let localeCode = "";
+		let localeConnection = null;
+		function t(key, ...vars) {
+			let text = localeCatalog[key];
+			if (text == null || text === "") text = EARLY_FALLBACK_EN[key];
+			// Never render a raw key: falling back to the key would look broken in the UI.
+			if (text == null || text === "") return key;
+			text = String(text);
+			for (let index = 0; index < vars.length; index += 1) {
+				text = text.split("{" + index + "}").join(vars[index] == null ? "" : String(vars[index]));
+			}
+			return text;
+		}
+		// The host reports stable, language-neutral error codes. Map them to catalog keys so
+		// a bridge error follows the UI language instead of the host's English fallback text.
+		// Unknown codes keep the host message (a newer host may know more than this client).
+		const DESKTOP_ERROR_KEYS = Object.freeze({
+			"desktop-bridge/not-allowed": "bridge.err_not_allowed",
+			"desktop-bridge/desktop-not-running": "bridge.err_desktop_not_running",
+			"desktop-bridge/unavailable": "bridge.err_unreachable",
+			"desktop-bridge/aborted": "bridge.err_cancelled"
+		});
+		function desktopErrorMessage(error) {
+			const key = error && typeof error.code === "string" ? DESKTOP_ERROR_KEYS[error.code] : "";
+			if (key) return t(key);
+			return (error && typeof error.message === "string" && error.message.trim()) || t("bridge.err_call");
+		}
+		function currentLocale() {
+			return localeCode;
+		}
+		// Some labels resolve once and are then cached by their owner (the settings nav is the
+		// important one), so a catalog arriving later would leave them stale. Those owners
+		// subscribe here and re-register when the language really changes.
+		const localeChangeHandlers = new Set();
+		function onLocaleChange(handler) {
+			localeChangeHandlers.add(handler);
+		}
+		function setLocaleBundle(bundle) {
+			if (!bundle || typeof bundle !== "object") return false;
+			const catalog = bundle.catalog;
+			if (!catalog || typeof catalog !== "object") return false;
+			const next = typeof bundle.locale === "string" ? bundle.locale : "";
+			const changed = next !== localeCode;
+			localeCatalog = catalog;
+			localeCode = next;
+			if (typeof window !== "undefined") window[LOCALE_BUNDLE_GLOBAL] = { locale: localeCode, catalog };
+			if (!changed) return true;
+			for (const handler of [...localeChangeHandlers]) {
+				try { handler(localeCode); } catch (_) { /* one bad listener must not break i18n */ }
+			}
+			return true;
+		}
+		function loadLocaleBundle() {
+			if (!localeConnection) return Promise.resolve(false);
+			// Non-fatal: a failed fetch keeps the English fallback for the handful of
+			// strings that can render before the next successful load.
+			return callDesktopRPC(localeConnection, "localeBundle", {}, undefined)
+				.then((result) => (result?.ok ? setLocaleBundle(result.value) : false))
+				.catch(() => false);
+		}
+		function publishPromptOverlayLanguage(value) {
+			const next = typeof value?.resolvedLocale === "string" ? value.resolvedLocale : "";
+			if (!next || next === localeCode) return;
+			void loadLocaleBundle();
+		}
+		// Line budget for the floating card, published from desktop prefs. Read through a
+		// function (never captured in a constant) so a settings change re-resolves on repaint.
+		const PROMPT_OVERLAY_MAX_LINES_GLOBAL = "__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__";
+		function promptOverlayMaxLines() {
+			const raw = typeof window !== "undefined" ? Number(window[PROMPT_OVERLAY_MAX_LINES_GLOBAL]) : NaN;
+			if (!Number.isFinite(raw)) return PROMPT_OVERLAY_DEFAULT_LINES;
+			return Math.max(PROMPT_OVERLAY_MIN_LINES, Math.min(PROMPT_OVERLAY_MAX_LINES, Math.round(raw)));
+		}
+		// Same clamp as the card, used by the settings control so the shown value always
+		// matches what the card will actually do.
+		function promptOverlayMaxLinesFromPrefs(prefs) {
+			const raw = Number(prefs?.promptOverlayMaxLines);
+			if (!Number.isFinite(raw)) return PROMPT_OVERLAY_DEFAULT_LINES;
+			return Math.max(PROMPT_OVERLAY_MIN_LINES, Math.min(PROMPT_OVERLAY_MAX_LINES, Math.round(raw)));
+		}
+		function publishPromptOverlayMaxLines(value) {
+			const raw = Number(value?.promptOverlayMaxLines);
+			if (!Number.isFinite(raw) || typeof window === "undefined") return;
+			const next = Math.max(PROMPT_OVERLAY_MIN_LINES, Math.min(PROMPT_OVERLAY_MAX_LINES, Math.round(raw)));
+			if (window[PROMPT_OVERLAY_MAX_LINES_GLOBAL] === next) return;
+			window[PROMPT_OVERLAY_MAX_LINES_GLOBAL] = next;
+			// Nothing else repaints on a settings change, so the card would keep the old height
+			// until the next scroll. Ask for a rebuild now.
+			if (typeof promptOverlayRefresh === "function") promptOverlayRefresh();
+		}
+		const PROMPT_OVERLAY_TOP_PROTECTION_PX = 56;
+		// Only a fallback: when nothing is measurable the card still needs a sane width. The
+		// live width follows the message column so it keeps matching the bubble when the DSH
+		// web pane is expanded.
+		const PROMPT_OVERLAY_MAX_WIDTH_PX = 760;
+		// The card matches the official Chat composer's horizontal extent, so it lines up with the
+		// input box the user reads it beside. The message column is only a fallback for the rare
+		// case where no composer is mounted. An earlier "mirror the column plus a symmetric
+		// slack" rule was wrong: DSH's column is not centred in its pane, so the extra width had
+		// to come out of the left gutter and spilled past the column's left edge.
+		const PROMPT_OVERLAY_EPSILON = 1;
+		// Prompt-line budget for the card. Mirrors the desktop pref bounds; clamped here too so
+		// a stale value can never produce an unusable card.
+		const PROMPT_OVERLAY_MIN_LINES = 2;
+		const PROMPT_OVERLAY_MAX_LINES = 21;
+		const PROMPT_OVERLAY_DEFAULT_LINES = 5;
+		// .86rem font at 1.45 line-height expressed in rem, so CSS does the font math itself.
+		const PROMPT_OVERLAY_LINE_HEIGHT_REM = 1.247;
+		const PROMPT_OVERLAY_ACTION_DONE_MS = 1400;
+		// Symmetric body padding, so a text-only card and an attachments+text card share the
+		// same top and bottom inset instead of the old 10px/14px asymmetry.
+		const PROMPT_OVERLAY_CONTENT_PAD = 12;
+		// The action strip is placed ON the last line of the card instead of owning a row below
+		// it. A row below the text was what made a single-line prompt look "offset down", and for
+		// an attachment-only card it drifted a whole row lower still. Its own box is the control
+		// plus the strip's vertical padding — the number the centring math positions against.
+		const PROMPT_OVERLAY_ACTION_SIZE = 22;
+		// Vertical breathing room inside the pill. The strip is a compact overlay control, not a
+		// second toolbar: at 26px tall with 16px glyphs it crowded the line it hangs on.
+		const PROMPT_OVERLAY_STRIP_PAD = 1;
+		const PROMPT_OVERLAY_STRIP_PAD_RIGHT = 3;
+		const PROMPT_OVERLAY_STRIP_PAD_LEFT = 7;
+		const PROMPT_OVERLAY_STRIP_GAP = 2;
+		const PROMPT_OVERLAY_STRIP_H = PROMPT_OVERLAY_ACTION_SIZE + PROMPT_OVERLAY_STRIP_PAD * 2;
+		// Everything the card spends on chrome rather than content: body padding and the fading
+		// peek band. The strip is NOT chrome any more — it floats over the last line, so reserving
+		// its row only pushed the text up and left a blank band under it. Reserving the band here
+		// is still the point: it must be ADDITIONAL to the configured line budget, otherwise the
+		// fade silently shortens it and a "2 lines" card shows fewer than two readable lines.
+		const PROMPT_OVERLAY_CHROME_PX = PROMPT_OVERLAY_CONTENT_PAD * 2 + PROMPT_OVERLAY_FADE_PX;
+		// Official Chat glyphs, copied verbatim from the installed DSH bundle
+		// (IconCopyOutline16 / IconCheckOutline16) so the overlay's controls are the same drawing
+		// as Chat's own rather than a lookalike. One filled path each — not the two hand-drawn
+		// strokes used before, which were also MIRRORED (front sheet bottom-right, official
+		// bottom-left), which is why they read as "ugly" next to the real thing.
+		const PROMPT_OVERLAY_ICON_COPY = "M6.14929 4.02032C7.11197 4.02032 7.87983 4.02016 8.49597 4.07598C9.12128 4.13269 9.65792 4.25188 10.1415 4.53106C10.7202 4.8653 11.2008 5.3459 11.535 5.92462C11.8142 6.40818 11.9334 6.94481 11.9901 7.57012C12.0459 8.18625 12.0458 8.95419 12.0458 9.9168C12.0458 10.8795 12.0459 11.6473 11.9901 12.2635C11.9334 12.8888 11.8142 13.4254 11.535 13.909C11.2008 14.4877 10.7202 14.9683 10.1415 15.3025C9.65792 15.5817 9.12128 15.7009 8.49597 15.7576C7.87984 15.8134 7.11196 15.8133 6.14929 15.8133C5.18667 15.8133 4.41874 15.8134 3.80261 15.7576C3.1773 15.7009 2.64067 15.5817 2.1571 15.3025C1.5784 14.9683 1.09778 14.4877 0.76355 13.909C0.484366 13.4254 0.365184 12.8888 0.308472 12.2635C0.252649 11.6473 0.252808 10.8795 0.252808 9.9168C0.252808 8.95418 0.252664 8.18625 0.308472 7.57012C0.365184 6.94481 0.484366 6.40818 0.76355 5.92462C1.09777 5.34589 1.57839 4.86529 2.1571 4.53106C2.64067 4.25188 3.1773 4.13269 3.80261 4.07598C4.41874 4.02017 5.18666 4.02032 6.14929 4.02032ZM6.14929 5.37774C5.16181 5.37774 4.46634 5.37761 3.92566 5.42657C3.39434 5.47472 3.07859 5.56574 2.83582 5.70587C2.4632 5.92106 2.15354 6.2307 1.93835 6.60333C1.79823 6.8461 1.70721 7.16185 1.65906 7.69317C1.6101 8.23385 1.61023 8.92933 1.61023 9.9168C1.61023 10.9043 1.61009 11.5998 1.65906 12.1404C1.70721 12.6717 1.79823 12.9875 1.93835 13.2303C2.15356 13.6029 2.46321 13.9126 2.83582 14.1277C3.07859 14.2679 3.39434 14.3589 3.92566 14.407C4.46634 14.456 5.16182 14.4559 6.14929 14.4559C7.13682 14.4559 7.83224 14.456 8.37292 14.407C8.90425 14.3589 9.21999 14.2679 9.46277 14.1277C9.83535 13.9126 10.145 13.6029 10.3602 13.2303C10.5004 12.9875 10.5914 12.6717 10.6395 12.1404C10.6885 11.5998 10.6884 10.9043 10.6884 9.9168C10.6884 8.92934 10.6885 8.23384 10.6395 7.69317C10.5914 7.16185 10.5004 6.8461 10.3602 6.60333C10.1451 6.23071 9.83536 5.92107 9.46277 5.70587C9.21999 5.56574 8.90424 5.47472 8.37292 5.42657C7.83224 5.3776 7.13682 5.37774 6.14929 5.37774ZM9.80164 0.367975C10.7638 0.367975 11.5314 0.36788 12.1473 0.423639C12.7726 0.480307 13.3093 0.598759 13.7928 0.877741C14.3717 1.21192 14.8521 1.69355 15.1864 2.27227C15.4655 2.75574 15.5857 3.29164 15.6425 3.9168C15.6983 4.53301 15.6971 5.3016 15.6971 6.26446V7.82989C15.6971 8.29264 15.6989 8.58993 15.6649 8.84844C15.4668 10.3525 14.401 11.5738 12.9833 11.9988V10.5467C13.6973 10.1903 14.2105 9.49662 14.3192 8.67169C14.3387 8.52347 14.3407 8.3358 14.3407 7.82989V6.26446C14.3407 5.27706 14.3398 4.58149 14.2909 4.04083C14.2428 3.50968 14.1526 3.19372 14.0126 2.95098C13.7974 2.57849 13.4876 2.26869 13.1151 2.05352C12.8724 1.91347 12.5564 1.82237 12.0253 1.77423C11.4847 1.72528 10.7888 1.7254 9.80164 1.7254H7.71472C6.7562 1.72558 5.92665 2.27697 5.52332 3.07891H4.07019C4.54221 1.51132 5.9932 0.368186 7.71472 0.367975H9.80164Z";
+		const PROMPT_OVERLAY_ICON_CHECK = "M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z";
+		// Scaled with the 22px control: a 16px glyph inside it looked pinned edge to edge.
+		const PROMPT_OVERLAY_ICON_PX = 13;
+		// The timestamp is metadata beside a 22px control; at .72rem it stretched the pill wider
+		// than the glyph sharing its row.
+		const PROMPT_OVERLAY_TIME_REM = ".68rem";
+		// Last-resort line height (px) when the browser reports no usable value: .86rem at 1.45.
+		const PROMPT_OVERLAY_LINE_FALLBACK = PROMPT_OVERLAY_LINE_HEIGHT_REM * 16;
+		// Thumbnail grid metrics; the overflow chip occupies exactly one cell so a 2-row cap
+		// stays exact.
+		const PROMPT_OVERLAY_THUMB_W = 64;
+		const PROMPT_OVERLAY_THUMB_H = 48;
+		const PROMPT_OVERLAY_THUMB_GAP = 6;
+		const PROMPT_OVERLAY_MEDIA_ROWS = 2;
+		// Rough width of one file chip, used only to budget rows; the row itself clips.
+		const PROMPT_OVERLAY_CHIP_AVG_W = 120;
+		const PROMPT_OVERLAY_CHIP_ROW_H = 30;
+		// Vertical padding the body adds around the attachment block.
+		const PROMPT_OVERLAY_BLOCK_PAD = 2;
+		function hoverMessageActionsCSS() {
+			const root = "html[" + HOVER_MESSAGE_ACTIONS_ATTR + "]";
+			const overlayPath = "[" + PROMPT_OVERLAY_ATTR + "]";
+			const contentPath = overlayPath + " [" + PROMPT_OVERLAY_CONTENT_ATTR + "]";
+			const mediaPath = contentPath + " [" + PROMPT_OVERLAY_MEDIA_ATTR + "]";
+			const morePath = mediaPath + " [" + PROMPT_OVERLAY_MORE_ATTR + "]";
+			const filesPath = contentPath + " [" + PROMPT_OVERLAY_FILES_ATTR + "]";
+			const bodyPath = contentPath + " [" + PROMPT_OVERLAY_BODY_ATTR + "]";
+			const textPath = contentPath + " [" + PROMPT_OVERLAY_TEXT_ATTR + "]";
+			// The toolbar is a child of the overlay, NOT of the scrolling body, so it anchors
+			// against the card and never scrolls away with the text.
+			const toolbarPath = overlayPath + " [" + PROMPT_OVERLAY_TOOLBAR_ATTR + "]";
+			const timePath = toolbarPath + " [" + PROMPT_OVERLAY_TIME_ATTR + "]";
+			const actionPath = toolbarPath + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]";
+			const overlay = root + " " + overlayPath;
+			const content = root + " " + contentPath;
+			const body = root + " " + bodyPath;
+			const media = root + " " + mediaPath;
+			const more = root + " " + morePath;
+			const files = root + " " + filesPath;
+			const text = root + " " + textPath;
+			const toolbar = root + " " + toolbarPath;
+			const time = root + " " + timePath;
+			const action = root + " " + actionPath;
+			// Descendant paths re-anchored on the overlay element, for `:hover`-prefixed selectors.
+			const toolbarSuffix = " [" + PROMPT_OVERLAY_TOOLBAR_ATTR + "]";
+			// The bottom fade ramp: opaque until the band starts, then linear to fully transparent at
+			// the very bottom edge. Ending it AT the edge (not above it) is what keeps the band a
+			// fading peek instead of a strip of invisible content followed by dead space.
+			const fadeMask = "linear-gradient(to bottom, #000 calc(100% - " + PROMPT_OVERLAY_FADE_PX + "px), transparent)";
+			return [
+								overlay + " { position: fixed !important; z-index: var(--dsw-z-index-popover, 30) !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; pointer-events: auto !important; opacity: 1 !important; outline: none !important; max-height: min(var(--dsh-desktop-prompt-overlay-avail, 100vh), calc(var(--dsh-desktop-prompt-overlay-lines, " + PROMPT_OVERLAY_DEFAULT_LINES + ") * " + PROMPT_OVERLAY_LINE_HEIGHT_REM + "rem + var(--dsh-desktop-prompt-overlay-extra, 0px) + " + PROMPT_OVERLAY_CHROME_PX + "px)) !important; }",
+				content + " { content-visibility: visible !important; display: flex !important; flex-direction: column !important; font-size: .86rem !important; gap: 8px !important; position: relative !important; box-sizing: border-box !important; width: 100% !important; max-width: 100% !important; max-height: min(var(--dsh-desktop-prompt-overlay-avail, 100vh), calc(var(--dsh-desktop-prompt-overlay-lines, " + PROMPT_OVERLAY_DEFAULT_LINES + ") * " + PROMPT_OVERLAY_LINE_HEIGHT_REM + "rem + var(--dsh-desktop-prompt-overlay-extra, 0px) + " + PROMPT_OVERLAY_FADE_PX + "px)) !important; flex: 1 1 auto !important; min-height: 0 !important; margin: 0 !important; overflow: hidden !important; pointer-events: auto !important; padding: " + PROMPT_OVERLAY_CONTENT_PAD + "px !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; border-top: 0 !important; border-radius: 0 0 16px 16px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-canvas, Canvas)) 88%, transparent) !important; -webkit-backdrop-filter: blur(16px) saturate(1.12) !important; backdrop-filter: blur(16px) saturate(1.12) !important; box-shadow: 0 12px 30px -16px rgb(0 0 0 / 42%), 0 3px 12px -7px rgb(0 0 0 / 20%) !important; }",
+				// The card itself must NOT scroll. Scrolling is delegated to this inner body, which the
+				// card's padding insets on every side. A scroll container's own padding-bottom scrolls
+				// out of view, so a card that scrolled itself clipped its last line flush against the
+				// bottom border while keeping its top padding — the asymmetric look this fixes.
+				body + " { display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-width: thin !important; scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 32%, transparent) transparent !important; }",
+				// Text fades out at the very bottom so the next line looks like it continues below. A mask
+				// on the scroller is used instead of a painted gradient: the text fades to transparent
+				// and the card's own (translucent, blurred) surface shows through, so there is no need
+				// to colour-match the card background. The ramp finishes above the bottom edge, so the
+				// clipped line is gone rather than half-visible.
+				body + "[" + PROMPT_OVERLAY_MORE_BELOW_ATTR + "] { -webkit-mask-image: " + fadeMask + " !important; mask-image: " + fadeMask + " !important; }",
+				body + "::-webkit-scrollbar { width: 8px !important; height: 8px !important; }",
+				body + "::-webkit-scrollbar-track { background: transparent !important; }",
+				body + "::-webkit-scrollbar-thumb { border: 2px solid transparent !important; border-radius: 999px !important; background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 30%, transparent) !important; background-clip: padding-box !important; }",
+				body + "::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 48%, transparent) !important; background-clip: padding-box !important; }",
+				// Keep the body inset exactly symmetric: whatever block comes first or last must not
+				// add its own margin on top of the padding, or a text-only card and an
+				// attachments+text card would not line up.
+				body + " > :first-child { margin-top: 0 !important; }",
+				body + " > :last-child { margin-bottom: 0 !important; }",
+				// The action strip hangs on the LAST LINE of the card (JS centres it there) and only
+				// appears on hover/focus, on an opaque pill so it never fights the text behind it.
+				// It is absolutely positioned: as a flow row BELOW the text it read as offset down
+				// for a single-line prompt, and for an attachment-only card it drifted a whole row
+				// lower still, because a "last line" of pure attachments is a tall row, not a line.
+				toolbar + " { position: absolute !important; z-index: 3 !important; right: " + PROMPT_OVERLAY_CONTENT_PAD + "px !important; box-sizing: content-box !important; max-width: calc(100% - 24px) !important; display: none !important; align-items: center !important; justify-content: flex-end !important; gap: " + PROMPT_OVERLAY_STRIP_GAP + "px !important; min-height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; padding: " + PROMPT_OVERLAY_STRIP_PAD + "px " + PROMPT_OVERLAY_STRIP_PAD_RIGHT + "px " + PROMPT_OVERLAY_STRIP_PAD + "px " + PROMPT_OVERLAY_STRIP_PAD_LEFT + "px !important; border-radius: 999px !important; background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-canvas, Canvas)) !important; box-shadow: 0 0 0 .5px color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 92%, transparent), 0 3px 12px -6px rgb(0 0 0 / 32%) !important; }",
+				// Hidden by default and expanded on hover/focus. It must be REMOVED from layout while
+				// hidden: an opacity-only hide still reserved its row inside the card, which showed up
+				// as a permanent blank band under the text.
+				overlay + ":hover" + toolbarSuffix + ", " + overlay + ":focus" + toolbarSuffix + ", " + overlay + ":focus-within" + toolbarSuffix + ", " + toolbar + ":focus-within { display: flex !important; animation: " + PROMPT_OVERLAY_STRIP_IN + " .12s ease !important; }",
+				// Softens the strip's appearance: revealing it also grows the card, and a hard pop
+				// reads as a glitch where a short fade reads as the control sliding in.
+				"@keyframes " + PROMPT_OVERLAY_STRIP_IN + " { from { opacity: 0; } to { opacity: 1; } }",
+				time + " { margin-right: 3px !important; color: var(--dsw-alias-text-tertiary, inherit) !important; font-size: " + PROMPT_OVERLAY_TIME_REM + " !important; line-height: 1 !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }",
+				// Buttons follow the official Chat control shape: a hairline circle with a dark label tooltip.
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "] { position: relative !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; width: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important; background: transparent !important; color: var(--dsw-alias-text-secondary, inherit) !important; cursor: pointer !important; font-size: .84rem !important; line-height: 1 !important; transition: background .12s ease, color .12s ease, transform .12s ease !important; }",
+				// ...and BARE while idle: a permanently drawn hairline circle put two nested
+				// outlines inside the pill. The official control only paints a disc while it is
+				// hovered or pressed, which is exactly the reference the user compared against.
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]:hover { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 14%, transparent) !important; color: var(--dsw-alias-text-primary, inherit) !important; }",
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]:active { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 22%, transparent) !important; transform: scale(.94) !important; }",
+				// Keyboard reach must stay visible even with the disc gone. Blue, so focus can never
+				// be mistaken for the green "copied" state.
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]:focus-visible { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 14%, transparent) !important; color: var(--dsw-alias-text-primary, inherit) !important; outline: 2px solid color-mix(in srgb, var(--dsw-alias-text-link, #3b74e0) 72%, transparent) !important; outline-offset: 1px !important; }",
+				// Confirmed copy: the glyph turns green and NOTHING else changes (the quiet option the
+				// user picked). The disc stays suppressed even while hovered, or the state would read
+				// as a green check inside a grey circle instead of "only the ✓".
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "][" + PROMPT_OVERLAY_ACTION_DONE_ATTR + "] { color: var(--dsw-alias-text-success, #1f9d55) !important; }",
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "][" + PROMPT_OVERLAY_ACTION_DONE_ATTR + "]:hover, " + toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "][" + PROMPT_OVERLAY_ACTION_DONE_ATTR + "]:focus-visible { background: transparent !important; }",
+				// The glyph is the official 16px Chat drawing, in currentColor so the button's own
+				// colour rules still drive it.
+				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "] [" + PROMPT_OVERLAY_GLYPH_ATTR + "] { display: block !important; width: " + PROMPT_OVERLAY_ICON_PX + "px !important; height: " + PROMPT_OVERLAY_ICON_PX + "px !important; pointer-events: none !important; }",
+				// One tooltip for the whole strip, shown beside it.
+				// either over the card's text or over the composer clamp, because the strip sits
+				// between them; the strip is right-aligned, so the lane to its left is empty and
+				// outside the card. JS copies the hovered button's label into the hint attribute,
+				// which also keeps the confirmation text in the active locale.
+				toolbar + "[" + PROMPT_OVERLAY_HINT_ATTR + "]:not([" + PROMPT_OVERLAY_HINT_ATTR + "=''])::after { content: attr(" + PROMPT_OVERLAY_HINT_ATTR + ") !important; position: absolute !important; right: calc(100% + 8px) !important; top: 50% !important; transform: translateY(-50%) !important; padding: 3px 8px !important; border-radius: 6px !important; background: rgba(24, 24, 27, .94) !important; color: #fff !important; font-size: .72rem !important; line-height: 1.35 !important; white-space: nowrap !important; pointer-events: none !important; }",
+// Attachments flow from the top-left and wrap; JS caps them at 2 rows with a +N cell.
+media + " { display: flex !important; flex-wrap: wrap !important; align-items: flex-start !important; align-content: flex-start !important; justify-content: flex-start !important; gap: 6px !important; min-height: 0 !important; overflow: hidden !important; height: auto !important; }",
+				more + " { display: inline-flex !important; flex: 0 0 auto !important; align-items: center !important; justify-content: center !important; width: 64px !important; min-width: 64px !important; height: 48px !important; padding: 0 !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 88%, transparent) !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 82%, transparent) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .78rem !important; font-variant-numeric: tabular-nums !important; }",
+				media + " img, " + media + " video, " + media + " canvas { display: block !important; flex: 0 0 auto !important; width: 64px !important; height: 48px !important; max-width: 64px !important; max-height: 48px !important; object-fit: cover !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 88%, transparent) !important; }",
+				// Thumbnails open the official viewer, so they read as clickable.
+				media + " [role='button'] { cursor: pointer !important; transition: filter .12s ease, transform .12s ease !important; }",
+				media + " [role='button']:hover { filter: brightness(1.06) !important; }",
+				media + " [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 70%, transparent) !important; outline-offset: 2px !important; }",
+				files + " { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; min-height: 0 !important; }",
+				files + " [" + PROMPT_OVERLAY_ITEM_ATTR + "] { display: inline-flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; max-width: 100% !important; padding: 5px 8px !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 72%, transparent) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .78rem !important; line-height: 1.25 !important; }",
+				files + " [" + PROMPT_OVERLAY_ITEM_ATTR + "]::before { content: \"▧\"; opacity: .72; font-size: .9rem; }",
+				text + " { display: block !important; min-width: 0 !important; font-size: .86rem !important; white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; line-height: 1.45 !important; color: var(--dsw-alias-text-primary, inherit) !important; }",
+				overlay + ":focus-visible { outline: 2px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 70%, transparent) !important; outline-offset: 2px !important; }",
+			].join("\n");
+		}
+		const COMPOSER_COMPACT_ATTR = "data-dsh-desktop-composer-compact";
+		function clearComposerCompactMarks(scope) {
+			const root = scope || (typeof document !== "undefined" ? document : null);
+			if (!root || typeof root.querySelectorAll !== "function") return;
+			for (const el of root.querySelectorAll("[" + COMPOSER_COMPACT_ATTR + "]")) {
+				if (typeof el.removeAttribute === "function") el.removeAttribute(COMPOSER_COMPACT_ATTR);
+			}
+		}
+		function markComposerCompact() {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
+			clearComposerCompactMarks(document);
+			const scroll = conversationScrollRoot();
+			const candidates = [];
+			const areas = document.querySelectorAll("textarea, [contenteditable='true']");
+			for (const area of areas) {
+				if (!area) continue;
+				let host = area.parentElement;
+				for (let depth = 0; host && depth < 6; depth += 1, host = host.parentElement) {
+					if (!host || host === document.body || host === document.documentElement) break;
+					if (scroll && (host === scroll || (typeof scroll.contains === "function" && scroll.contains(host)))) continue;
+					const rect = typeof host.getBoundingClientRect === "function" ? host.getBoundingClientRect() : null;
+					if (!rect) continue;
+					const vh = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 800;
+					const height = Number(rect.height) || Math.max(0, Number(rect.bottom) - Number(rect.top)) || 0;
+					const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
+					if (Number(rect.bottom) >= vh - 48 && height > 40 && height < vh * 0.55) {
+						candidates.push({ host, score: width * (1 / Math.max(1, vh - Number(rect.top) || 0)) });
+						break;
+					}
+				}
+			}
+			candidates.sort((a, b) => b.score - a.score);
+			const pick = candidates[0] && candidates[0].host;
+			if (pick && typeof pick.setAttribute === "function") pick.setAttribute(COMPOSER_COMPACT_ATTR, "");
+		}
+		function setHoverMessageActionsAttr(enabled) {
+			const root = typeof document === "undefined" ? null : document.documentElement;
+			if (!root || typeof root.setAttribute !== "function") return;
+			if (enabled) root.setAttribute(HOVER_MESSAGE_ACTIONS_ATTR, "");
+			else if (typeof root.removeAttribute === "function") root.removeAttribute(HOVER_MESSAGE_ACTIONS_ATTR);
+		}
+		function overflowYScrolls(el) {
+			if (!el || typeof getComputedStyle !== "function") return false;
+			try {
+				const y = String(getComputedStyle(el).overflowY || "");
+				return y === "auto" || y === "scroll" || y === "overlay";
+			} catch {
+				return false;
+			}
+		}
+		function isPromptOverlayNode(node) {
+			if (!node) return false;
+			if (typeof node.closest === "function") return Boolean(node.closest("[" + PROMPT_OVERLAY_ATTR + "]"));
+			let cur = node;
+			while (cur) {
+				if (typeof cur.hasAttribute === "function" && cur.hasAttribute(PROMPT_OVERLAY_ATTR)) return true;
+				cur = cur.parentElement;
+			}
+			return false;
+		}
+		function promptHasRenderableArea(node) {
+			if (!node || typeof node.getBoundingClientRect !== "function") return false;
+			try {
+				const computed = typeof getComputedStyle === "function" ? getComputedStyle(node) : null;
+				if (computed && (computed.display === "none" || computed.visibility === "hidden")) return false;
+			} catch {}
+			const rect = node.getBoundingClientRect();
+			const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left));
+			const height = Number(rect.height) || Math.max(0, Number(rect.bottom) - Number(rect.top));
+			return width > 0 && height > 0;
+		}
+		function promptNodes() {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return [];
+			const nodes = document.querySelectorAll("[data-chat-flow-kind=user], [data-chat-flow-kind=steering]");
+			const out = [];
+			for (const node of nodes) {
+				if (!node || isPromptOverlayNode(node)) continue;
+				if (typeof node.hasAttribute === "function" && (node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true")) continue;
+				if (!promptHasRenderableArea(node)) continue;
+				out.push(node);
+			}
+			return out;
+		}
+		function conversationScrollRoot() {
+			if (typeof document === "undefined") return null;
+			const probe = promptNodes()[0] || (typeof document.querySelector === "function"
+				? document.querySelector("[data-chat-flow-key], [data-chat-flow-kind]")
+				: null);
+			let el = probe && probe.parentElement;
+			while (el && el !== document.documentElement) {
+				if (overflowYScrolls(el)) return el;
+				el = el.parentElement;
+			}
+			const page = typeof document.querySelector === "function"
+				? document.querySelector("[data-conversation-scroll]")
+				: null;
+			if (page && overflowYScrolls(page)) return page;
+			return document.scrollingElement || document.documentElement;
+		}
+		function promptScrolledPast(node, top) {
+			if (!node || typeof node.getBoundingClientRect !== "function") return false;
+			const rect = node.getBoundingClientRect();
+			return Number(rect.bottom) <= Number(top) + PROMPT_OVERLAY_EPSILON;
+		}
+		function pickStickyPrompt(root) {
+			if (!root || typeof root.getBoundingClientRect !== "function") return null;
+			const rootRect = root.getBoundingClientRect();
+			const top = Number(rootRect.top) || 0;
+			const bottom = Number(rootRect.bottom) > top
+				? Number(rootRect.bottom)
+				: top + (Number(root.clientHeight) || (typeof window !== "undefined" && Number(window.innerHeight) > top ? Number(window.innerHeight) - top : 0));
+			const prompts = promptNodes();
+			let candidate = null;
+			let passedVisibleBoundary = false;
+			const visible = [];
+			for (const node of prompts) {
+				if (!node || typeof node.getBoundingClientRect !== "function") continue;
+				const rect = node.getBoundingClientRect();
+				if (!passedVisibleBoundary && promptScrolledPast(node, top)) {
+					candidate = node;
+					continue;
+				}
+				passedVisibleBoundary = true;
+				if (Number(rect.bottom) > top + PROMPT_OVERLAY_EPSILON && Number(rect.top) < bottom - PROMPT_OVERLAY_EPSILON) visible.push({ node, rect });
+			}
+			// Two prompt bubbles in the viewport are already enough context; never add a third visual layer.
+			if (visible.length > 1) return null;
+			// The protection band covers the actual top edge, not a source-node marker.
+			if (visible.some(({ rect }) => Number(rect.top) < top + PROMPT_OVERLAY_TOP_PROTECTION_PX && Number(rect.bottom) > top + PROMPT_OVERLAY_EPSILON)) return null;
+			return candidate;
+		}
+		function overlayColumnBounds(root, node) {
+			if (!root || typeof root.getBoundingClientRect !== "function") return null;
+			let best = null;
+			const peers = typeof root.querySelectorAll === "function" ? root.querySelectorAll("[data-chat-flow-kind=assistant]") : [];
+			for (const peer of peers || []) {
+				if (!peer || typeof peer.getBoundingClientRect !== "function") continue;
+				const rect = peer.getBoundingClientRect();
+				const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
+				if (width < 40) continue;
+				if (!best || width > best.width) best = { left: Number(rect.left) || 0, width };
+			}
+			if (best) return best;
+			const parent = node && node.parentElement;
+			if (parent) {
+				const rect = typeof parent.getBoundingClientRect === "function" ? parent.getBoundingClientRect() : null;
+				const width = Number(parent.clientWidth) || (rect ? Math.max(0, Number(rect.right) - Number(rect.left)) : 0);
+				if (width >= 40) return { left: rect ? Number(rect.left) || 0 : 0, width };
+			}
+			const rect = root.getBoundingClientRect();
+			const width = Number(root.clientWidth) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
+			return width >= 40 ? { left: Number(rect.left) || 0, width } : null;
+		}
+		// The card must never cover the Chat composer, so the composer's top edge is the floor
+		// for the card height. Walking up a few levels keeps its padding and toolbar in view.
+		function composerTopEdge() {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
+			let edge = Infinity;
+			for (const area of document.querySelectorAll("textarea, [contenteditable='true']")) {
+				if (!area) continue;
+				// The composer is a wrapper around the field, so take the topmost usable box within
+				// a few levels rather than trusting the field element alone.
+				let candidate = Infinity;
+				let node = area;
+				for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+					if (typeof node.getBoundingClientRect !== "function") continue;
+					const rect = node.getBoundingClientRect();
+					if (!rect) continue;
+					const boxTop = Number(rect.top);
+					// Derive the height from the edges: an element with no box has top === bottom.
+					const boxHeight = Number(rect.height) || Number(rect.bottom) - Number(rect.top);
+					if (Number.isFinite(boxTop) && Number.isFinite(boxHeight) && boxHeight > 0) candidate = Math.min(candidate, boxTop);
+				}
+				if (Number.isFinite(candidate)) edge = Math.min(edge, candidate);
+			}
+			return Number.isFinite(edge) ? edge : null;
+		}
+		// The composer's horizontal extent: the box the user sees around the input field. The
+		// field itself is only the inner area, so walk up a few levels and take the widest box
+		// that is still narrower than the pane — an ancestor at pane width is the scroll
+		// container, not the composer.
+		function composerBounds(root) {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
+			let paneWidth = 0;
+			if (root && typeof root.getBoundingClientRect === "function") {
+				const rect = root.getBoundingClientRect();
+				paneWidth = Number(root.clientWidth) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
+			}
+			let best = null;
+			for (const area of document.querySelectorAll("textarea, [contenteditable='true']")) {
+				if (!area) continue;
+				let node = area;
+				for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
+					if (typeof node.getBoundingClientRect !== "function") continue;
+					const rect = node.getBoundingClientRect();
+					if (!rect) continue;
+					// A fake/empty box has no width field, so fall back to the edges.
+					const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
+					if (width < 40) continue;
+					if (paneWidth > 0 && width > paneWidth * 0.95) continue;
+					if (!best || width > best.width) best = { left: Number(rect.left) || 0, width };
+				}
+			}
+			return best;
+		}
+		function computeOverlayMetrics(root, node) {
+			if (!root || typeof root.getBoundingClientRect !== "function") return null;
+			const rootRect = root.getBoundingClientRect();
+			const top = Math.max(0, Number(rootRect.top) || 0);
+			const paneLeft = Number(rootRect.left) || 0;
+			const paneWidth = Number(root.clientWidth) || Math.max(0, Number(rootRect.right) - paneLeft) || 0;
+			const inset = 8;
+			const available = Math.max(1, paneWidth - inset * 2);
+			const maxWidth = available;
+			const paneRight = paneLeft + paneWidth - inset;
+			// Prefer the composer: matching the input box keeps the card aligned with the control
+			// the user is looking at, and follows the pane when it is widened or compacted.
+			const composerBox = composerBounds(root);
+			const column = composerBox ? null : overlayColumnBounds(root, node);
+			let left;
+			let width;
+			if (composerBox) {
+				left = composerBox.left;
+				width = composerBox.width;
+			} else if (column) {
+				left = column.left;
+				width = column.width;
+			} else {
+				left = paneLeft + inset;
+				width = available;
+			}
+			const minLeft = paneLeft + inset;
+			left = Math.max(left, minLeft);
+			width = Math.min(Math.max(1, width), available);
+			// Keep the left anchor and give back width instead: moving the card left is exactly the
+			// overflow this function exists to avoid. Only a column wider than the whole pane can
+			// reach here, and then a narrower card is the correct degradation.
+			if (left + width > paneRight) width = Math.max(1, paneRight - left);
+			const viewportHeight = typeof window !== "undefined" && Number(window.innerHeight) > 0 ? Number(window.innerHeight) : Math.max(1, Number(rootRect.bottom) || 1);
+			const composer = composerTopEdge();
+			const floor = composer !== null && composer > top ? composer : viewportHeight;
+			const availHeight = Math.max(1, floor - top - 8);
+			return { top, left, width, maxWidth, availHeight };
+		}
+		function applyOverlayStyle(host, metrics, extras) {
+			if (!host || !host.style || !metrics) return;
+			const set = (prop, value) => {
+				if (typeof host.style.setProperty === "function") host.style.setProperty(prop, value, "important");
+				else host.style[prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = value;
+			};
+			set("top", metrics.top + "px");
+			set("left", metrics.left + "px");
+			set("width", metrics.width + "px");
+			set("max-width", metrics.maxWidth + "px");
+			// No inline max-height: an inline declaration with !important OUTRANKS the stylesheet's
+			// !important clamp, so setting it here silently disabled the line budget and left the
+			// card capped only by the composer gap (the reported "I set 2 lines but it shows many").
+			// The stylesheet owns the height, capping at min(avail, line budget + attachments).
+			// The card height is the configured prompt-line budget plus whatever the attachments
+			// occupy. The CSS calc keeps rem math in the browser; the avail var is the hard cap.
+			set("--dsh-desktop-prompt-overlay-lines", String(promptOverlayMaxLines()));
+			set("--dsh-desktop-prompt-overlay-extra", Math.max(0, Number(extras) || 0) + "px");
+			set("--dsh-desktop-prompt-overlay-avail", Math.max(1, metrics.availHeight) + "px");
+		}
 
+        const PREVIEW_ACTION_ROLES = new Set(["button", "menuitem", "checkbox", "radio", "switch", "tab"]);
+        // Extensions decide whether a clickable element that wraps an image is a thumbnail
+        // (the image IS the content) or a file card (the image is just a type icon).
+        // Upstream action labels, in the languages DSH ships. Used only to decide whether a
+        // media-wrapping control is a message action or an attachment.
+        const PREVIEW_ACTION_LABEL = /复制|复制全文|编辑|重试|重新生成|分支|删除|撤销|copy|edit|retry|regenerate|branch|delete|undo|duplicate/i;
+        const PREVIEW_IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|svg|heic|tiff?)(?![a-z0-9])/i;
+        const PREVIEW_FILE_EXT = /\.(pdf|docx?|xlsx?|pptx?|csv|tsv|zip|tar|gz|rar|7z|txt|md|json|ya?ml|go|ts|tsx|js|jsx|py|rs|rb|java|c|cpp|h|sh|sql|log|mp4|mov|webm|m4v|mp3|wav|m4a|flac)(?![a-z0-9])/i;
+        function previewAttr(node, name) {
+            return node && typeof node.getAttribute === "function" ? String(node.getAttribute(name) || "").trim() : "";
+        }
+        function previewTag(node) {
+            return String(node && node.tagName || "").toUpperCase();
+        }
+        function normalizePreviewText(value) {
+            return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+        }
+        function isTimestampText(value) {
+            const text = normalizePreviewText(value).replace(/\s+/g, " ");
+            if (!text || text.length > 64) return false;
+            return /^\d{1,2}:\d{2}(?::\d{2})?$/.test(text)
+                || /^\d{1,2}[月/-]\d{1,2}(?:日)?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(text)
+                || /^\d{4}[年/-]\d{1,2}[月/-]\d{1,2}(?:日)?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(text)
+                || /^[A-Za-z]{3,9}\s+\d{1,2}(?:,\s*|\s+)\d{4}(?:\s+\d{1,2}:\d{2})?$/.test(text);
+        }
+        function isPreviewMedia(node) {
+            return ["IMG", "VIDEO", "CANVAS"].includes(previewTag(node));
+        }
+        function hasPreviewMediaDescendant(node) {
+            for (const child of node?.childNodes || []) {
+                if (isPreviewMedia(child) || hasPreviewMediaDescendant(child)) return true;
+            }
+            return false;
+        }
+        function isPreviewImageName(name) {
+            return PREVIEW_IMAGE_EXT.test(String(name || ""));
+        }
+        function isPreviewFileName(name) {
+            return PREVIEW_FILE_EXT.test(String(name || ""));
+        }
+        // A clickable element that WRAPS an image is normally a thumbnail: DSH renders image
+        // attachments as a button/role=button carrying a native filename tooltip (e.g.
+        // "image.png，点击查看原图") around the <img>. Treating it as an operation hid the
+        // thumbnail AND proxied the attachment into the action strip. Only claim it as an
+        // attachment with real evidence, so an icon-bearing action button stays an action.
+        function looksLikeAttachmentGroup(node) {
+            if (!node || !hasPreviewMediaDescendant(node)) return false;
+            // An explicit action marker always wins: this is a control, not an attachment.
+            if (previewAttr(node, "data-action") || previewAttr(node, "data-operation")) return false;
+            for (const name of ["data-attachment", "data-file", "data-upload", "data-filename", "data-file-name", "data-mime", "data-content-type"]) {
+                if (typeof node.hasAttribute === "function" && node.hasAttribute(name)) return true;
+            }
+            const label = normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || previewAttr(node, "aria-label") || previewAttr(node, "title") || "");
+            if (isPreviewImageName(label) || isPreviewFileName(label)) return true;
+            const hints = [previewAttr(node, "class"), previewAttr(node, "data-testid")].join(" ").toLowerCase();
+            if (/attachment|upload|thumbnail/.test(hints)) return true;
+            // Default to content: a media wrapper with no label, or with a label that does not
+            // read like a message action, is an attachment. Upstream may put the filename on an
+            // inner element, and missing a thumbnail is far worse than hiding an icon button.
+            return !PREVIEW_ACTION_LABEL.test(label);
+        }
+        function isPreviewAttachment(node) {
+            if (!node || !node.tagName || isPreviewMedia(node)) return false;
+            const tag = previewTag(node);
+            const hints = [previewAttr(node, "class"), previewAttr(node, "data-testid"), previewAttr(node, "aria-label"), previewAttr(node, "title")].join(" ").toLowerCase();
+            const label = normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || previewAttr(node, "aria-label") || previewAttr(node, "title") || node.textContent || "");
+            const explicitName = previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || isPreviewFileName(label) || isPreviewImageName(label);
+            if (hasPreviewMediaDescendant(node)) {
+                // A file card that renders a file-type icon: the name wins, the icon is just
+                // decoration. Anything else wraps a real thumbnail, so descend and render the
+                // image instead of a generic name chip.
+                return isPreviewFileName(label) && !isPreviewImageName(label);
+            }
+            for (const name of ["data-attachment", "data-file", "data-upload", "data-filename", "data-file-name", "data-mime", "data-content-type"]) {
+                if (typeof node.hasAttribute === "function" && node.hasAttribute(name)) return true;
+            }
+            if (/attachment|upload|filename|file-card|mime|content-type|document/.test(hints)) return true;
+            if (tag === "A" || tag === "BUTTON" || tag === "DIV") return Boolean(explicitName);
+            return false;
+        }
+        function previewAttachmentLabel(node) {
+            return normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "aria-label") || previewAttr(node, "title") || node?.textContent || t("bridge.overlay_attachment"));
+        }
+        function isPreviewOperation(node) {
+            if (!node || !node.tagName) return false;
+            const tag = previewTag(node);
+            const role = previewAttr(node, "role").toLowerCase();
+            if (tag === "TIME" || isTimestampText(node.textContent)) return true;
+            if (tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || PREVIEW_ACTION_ROLES.has(role)) return true;
+            if (node.hasAttribute?.("data-action") || node.hasAttribute?.("data-operation")) return true;
+            if ((tag === "A" || tag === "SPAN") && (previewAttr(node, "aria-label") || previewAttr(node, "title"))) return true;
+            return false;
+        }
+        function promptIdentity(source) {
+            return String(previewAttr(source, "data-chat-flow-key") || previewAttr(source, "data-message-key") || previewAttr(source, "id") || "").trim();
+        }
+        function hasPromptRelation(node, source) {
+            const key = promptIdentity(source);
+            if (!node || !key) return false;
+            const accepted = new Set([key]);
+            const sourceId = previewAttr(source, "id");
+            if (sourceId) accepted.add(sourceId);
+            let cur = node;
+            while (cur) {
+                for (const name of ["data-chat-flow-key", "data-message-key", "data-chat-flow-for", "data-message-for", "aria-controls", "aria-labelledby"]) {
+                    const value = previewAttr(cur, name);
+                    if (value && value.split(/[\s,]+/).some((part) => accepted.has(part))) return true;
+                }
+                cur = cur.parentElement;
+            }
+            return false;
+        }
+        // The overlay renders read-only clones, so a click must be forwarded to the official
+        // media element. DSH opens its image viewer from that element, so clicking the native
+        // node reproduces the native "click to zoom" behaviour without copying any of it.
+        function mediaSignature(src) {
+            return "media:" + String(src || "").trim();
+        }
+        function nativeMediaBySrc(source, src) {
+            if (!source || !src) return null;
+            const want = String(src).trim();
+            const walk = (node) => {
+                if (!node) return null;
+                if (isPreviewMedia(node)) {
+                    const own = previewAttr(node, "src") || previewAttr(node, "data-src") || previewAttr(node, "poster");
+                    if (own && own.trim() === want) return node;
+                }
+                for (const child of node.childNodes || []) {
+                    const found = walk(child);
+                    if (found) return found;
+                }
+                return null;
+            };
+            const media = walk(source);
+            if (!media) return null;
+            // DSH normally opens the viewer from the control that WRAPS the image, so click
+            // that when it exists and fall back to the image itself.
+            let node = media.parentElement;
+            while (node && node !== source) {
+                const tag = previewTag(node);
+                const role = previewAttr(node, "role").toLowerCase();
+                if (tag === "BUTTON" || tag === "A" || role === "button") return node;
+                node = node.parentElement;
+            }
+            return media;
+        }
+        function collectNativeOperationControls(source) {
+            if (!source) return [];
+            const out = [];
+            const seen = new Set();
+            const add = (node) => {
+                // Attachments must never be proxied into the action strip, even when the
+                // official element is a button carrying a filename tooltip.
+                if (!node || seen.has(node) || isPreviewAttachment(node) || looksLikeAttachmentGroup(node) || previewTag(node) === "TIME" || isTimestampText(node.textContent) || !isPreviewOperation(node)) return;
+                seen.add(node);
+                out.push(node);
+            };
+            const walk = (node) => {
+                for (const child of node?.childNodes || []) {
+                    add(child);
+                    walk(child);
+                }
+            };
+            walk(source);
+            const key = promptIdentity(source);
+            if (key && typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
+                for (const node of document.querySelectorAll("button, a, [role='button'], [role='menuitem'], [data-action], [data-operation]")) {
+                    if (!node || (source.contains && source.contains(node)) || isPromptOverlayNode(node)) continue;
+                    if (hasPromptRelation(node, source)) add(node);
+                }
+            }
+            return out;
+        }
+        function operationLabel(node) {
+            const fallback = t("bridge.overlay_action");
+            return normalizePreviewText(previewAttr(node, "aria-label") || previewAttr(node, "title") || previewAttr(node, "data-action") || previewAttr(node, "data-operation") || node?.textContent || fallback).slice(0, 48) || fallback;
+        }
+        function operationSignature(node) {
+            for (const name of ["data-action", "data-operation", "data-testid", "aria-label", "title"]) {
+                const value = previewAttr(node, name);
+                if (value) return name + ":" + value;
+            }
+            return "text:" + operationLabel(node);
+        }
+        // Whether a native action is the copy control. Used to hide copy on an attachment-only
+        // prompt: there is no text to copy, and official Chat does not offer it there either.
+        function isCopyOperation(label) {
+            return /复制|copy/i.test(String(label || ""));
+        }
+        function actionGlyph(label) {
+            // Copy is drawn with the official Chat path; the rest keep a text glyph because no
+            // official path was extracted for them, and a wrong drawing is worse than a plain one.
+            if (isCopyOperation(label)) return { path: PROMPT_OVERLAY_ICON_COPY, text: "⧉" };
+            if (/编辑|edit/i.test(label)) return { path: "", text: "✎" };
+            if (/重试|重新生成|retry|regenerate/i.test(label)) return { path: "", text: "↻" };
+            if (/分支|branch/i.test(label)) return { path: "", text: "⑂" };
+            return { path: "", text: "⋯" };
+        }
+        // One filled official path inside a 16x16 viewBox. createElementNS (not innerHTML) because
+        // the Chat page may enforce Trusted Types, where an innerHTML assignment throws.
+        function promptGlyphNode(path) {
+            if (!path || typeof document === "undefined" || typeof document.createElementNS !== "function") return null;
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            if (!svg || typeof svg.setAttribute !== "function") return null;
+            svg.setAttribute("viewBox", "0 0 16 16");
+            svg.setAttribute("fill", "none");
+            svg.setAttribute("aria-hidden", "true");
+            svg.setAttribute("focusable", "false");
+            svg.setAttribute(PROMPT_OVERLAY_GLYPH_ATTR, "");
+            const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            if (!shape || typeof shape.setAttribute !== "function") return null;
+            shape.setAttribute("d", path);
+            shape.setAttribute("fill", "currentColor");
+            svg.appendChild(shape);
+            return svg;
+        }
+        // Draws the glyph, falling back to the text form when the engine has no SVG support or no
+        // official path is known for this action.
+        function setActionGlyph(button, glyph) {
+            if (!button || typeof button.setAttribute !== "function") return;
+            const spec = glyph && typeof glyph === "object" ? glyph : { path: "", text: String(glyph || "") };
+            clearElementChildren(button);
+            const node = promptGlyphNode(spec.path);
+            if (node) {
+                button.appendChild(node);
+                return;
+            }
+            button.textContent = spec.text;
+        }
+        function collectPromptTimes(source) {
+            const out = [];
+            const seen = new Set();
+            const walk = (node) => {
+                for (const child of node?.childNodes || []) {
+                    const tag = previewTag(child);
+                    const text = normalizePreviewText(child?.textContent || "");
+                    if ((tag === "TIME" || isTimestampText(text)) && !seen.has(text)) {
+                        seen.add(text);
+                        out.push(text);
+                    }
+                    walk(child);
+                }
+            };
+            walk(source);
+            return out;
+        }
+        function resolveNativeOperation(descriptor, state) {
+            if (!descriptor || !state?.source) return null;
+            const current = descriptor.target;
+            if (current && isPreviewOperation(current) && !isPreviewAttachment(current) && (state.source.contains?.(current) || hasPromptRelation(current, state.source))) return current;
+            const matches = collectNativeOperationControls(state.source).filter((node) => operationSignature(node) === descriptor.signature);
+            return matches.length === 1 ? matches[0] : null;
+        }
+        // Confirmed actions are tracked per operation signature, not per button: proxying an
+        // official control makes DSH re-render the message, which rebuilds the card and would
+        // otherwise wipe the confirmation on the very next frame. An entry also lets a fresh
+        // button re-render already-confirmed, so one click is enough (no double-click needed).
+        const promptActionConfirmations = new Map();
+        let promptOverlayRefresh = null;
+        function promptActionConfirmed(signature) {
+            const until = promptActionConfirmations.get(signature);
+            if (!until) return false;
+            if (Date.now() >= until) {
+                promptActionConfirmations.delete(signature);
+                return false;
+            }
+            return true;
+        }
+        function markPromptActionDone(button, confirmLabel, signature) {
+            if (signature) {
+                promptActionConfirmations.set(signature, Date.now() + PROMPT_OVERLAY_ACTION_DONE_MS);
+                if (typeof setTimeout === "function") {
+                    setTimeout(() => {
+                        if (promptActionConfirmations.get(signature) === undefined) return;
+                        promptActionConfirmations.delete(signature);
+                        // Rebuild so the button returns to its normal glyph.
+                        if (typeof promptOverlayRefresh === "function") promptOverlayRefresh();
+                    }, PROMPT_OVERLAY_ACTION_DONE_MS);
+                }
+            }
+            if (!button || typeof button.setAttribute !== "function") return;
+            // The label is carried as the attribute value so the CSS tooltip stays locale-free.
+            if (confirmLabel) button.setAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR, confirmLabel);
+            // Official Chat swaps to its own check drawing, so the overlay does too.
+            setActionGlyph(button, { path: PROMPT_OVERLAY_ICON_CHECK, text: "✓" });
+        }
+        function createPromptToolbar(source, state) {
+            const times = collectPromptTimes(source);
+            // Copy is dropped when the card mirrors no text at all (an image/file-only prompt has
+            // nothing to copy). Upstream would not offer it there either, but the card must not
+            // re-introduce it just because the official strip happened to be rendered.
+            const hasText = !(state && state.hasText === false);
+            const controls = collectNativeOperationControls(source)
+                .filter((target) => hasText || !isCopyOperation(operationLabel(target)));
+            if (!times.length && !controls.length) return null;
+            const toolbar = document.createElement("div");
+            toolbar.setAttribute(PROMPT_OVERLAY_TOOLBAR_ATTR, "");
+            toolbar.setAttribute("aria-label", t("bridge.overlay_toolbar"));
+            if (times.length) {
+                const time = document.createElement("time");
+                time.setAttribute(PROMPT_OVERLAY_TIME_ATTR, "");
+                time.textContent = times[0];
+                toolbar.appendChild(time);
+            }
+            for (const target of controls) {
+                const label = operationLabel(target);
+                const button = document.createElement("button");
+                button.setAttribute("type", "button");
+                button.setAttribute(PROMPT_OVERLAY_ACTION_ATTR, "");
+                button.setAttribute("aria-label", label);
+                const signature = operationSignature(target);
+                const confirmLabel = /复制|copy/i.test(label) ? t("bridge.overlay_copied") : "";
+                // A rebuilt card must keep showing a confirmation that is still within its window.
+                if (confirmLabel && promptActionConfirmed(signature)) {
+                    button.setAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR, confirmLabel);
+                    setActionGlyph(button, { path: PROMPT_OVERLAY_ICON_CHECK, text: "✓" });
+                } else {
+                    setActionGlyph(button, actionGlyph(label));
+                }
+                const showHint = () => {
+                    // Read the label at hover time so a confirmation replaces the action name.
+                    const text = button.getAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR) || button.getAttribute("aria-label") || "";
+                    if (text) toolbar.setAttribute(PROMPT_OVERLAY_HINT_ATTR, text);
+                };
+                const hideHint = () => toolbar.removeAttribute?.(PROMPT_OVERLAY_HINT_ATTR);
+                button.addEventListener?.("mouseenter", showHint);
+                button.addEventListener?.("focus", showHint);
+                button.addEventListener?.("mouseleave", hideHint);
+                button.addEventListener?.("blur", hideHint);
+                const descriptor = { proxy: button, target, signature };
+                button.addEventListener?.("click", (event) => {
+                    const current = resolveNativeOperation(descriptor, state);
+                    if (!current || typeof current.click !== "function") return;
+                    event.preventDefault?.();
+                    event.stopPropagation?.();
+                    try { current.click(); } catch (_) { /* fail closed after an upstream rerender */ }
+                    markPromptActionDone(button, confirmLabel, signature);
+                });
+                toolbar.appendChild(button);
+                state.proxyDescriptors.push(descriptor);
+            }
+            return toolbar;
+        }
+        function isPreviewTextNode(node) {
+            return Boolean(node && (node.nodeType === 3 || (!node.tagName && typeof node.textContent === "string")));
+        }
+        function appendPreviewText(parts, seen, value) {
+            const text = normalizePreviewText(value);
+            if (!text || isTimestampText(text)) return;
+            const key = text.replace(/\s+/g, " ");
+            if (seen.has(key)) return;
+            seen.add(key);
+            parts.push({ kind: "text", value: text });
+        }
+        function collectPromptPreviewParts(source) {
+            const parts = [];
+            const seenText = new Set();
+            const seenMedia = new Set();
+            const seenFiles = new Set();
+            const addMedia = (node) => {
+                const srcset = previewAttr(node, "srcset");
+                const firstSrcset = srcset ? srcset.split(",")[0].trim().split(/\s+/)[0] : "";
+                const src = previewAttr(node, "src") || previewAttr(node, "data-src") || previewAttr(node, "poster") || firstSrcset;
+                if (!src || seenMedia.has(src)) return;
+                seenMedia.add(src);
+                parts.push({ kind: "media", tag: previewTag(node) === "VIDEO" ? "video" : "img", src, alt: previewAttr(node, "alt") });
+            };
+            const addFile = (node) => {
+                const name = previewAttachmentLabel(node);
+                if (!name || seenFiles.has(name)) return;
+                seenFiles.add(name);
+                parts.push({ kind: "file", value: name });
+            };
+            const visit = (node, isRoot = false) => {
+                if (!node) return;
+                if (isPreviewTextNode(node)) {
+                    appendPreviewText(parts, seenText, node.textContent);
+                    return;
+                }
+                if (isPreviewMedia(node)) {
+                    addMedia(node);
+                    return;
+                }
+                if (isPreviewAttachment(node)) {
+                    addFile(node);
+                    return;
+                }
+                // A genuine action control is skipped, but one that merely WRAPS an
+                // attachment is content: descend so the thumbnail or file chip still renders.
+                if (!isRoot && isPreviewOperation(node) && !looksLikeAttachmentGroup(node)) return;
+                if (typeof node._textContent === "string" && node._textContent) appendPreviewText(parts, seenText, node._textContent);
+                const children = [...(node.childNodes || [])];
+                if (children.length) {
+                    for (const child of children) visit(child);
+                } else if (typeof node.textContent === "string") {
+                    appendPreviewText(parts, seenText, node.textContent);
+                }
+            };
+            visit(source, true);
+            if (!parts.length) {
+                const fallback = normalizePreviewText(source?.innerText || source?.textContent || "");
+                if (fallback && !isTimestampText(fallback)) parts.push({ kind: "text", value: fallback });
+            }
+            return parts;
+        }
+        function appendPreviewTextNode(host, value) {
+            const node = document.createElement("div");
+            node.setAttribute(PROMPT_OVERLAY_TEXT_ATTR, "");
+            node.textContent = value;
+            host.appendChild(node);
+        }
+        function buildPromptPreview(source, state, metrics) {
+            if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
+            const content = document.createElement("div");
+            content.setAttribute(PROMPT_OVERLAY_CONTENT_ATTR, "");
+            content.setAttribute("aria-hidden", "true");
+            // All parts go into the inner scrolling body; the card only supplies padding/chrome.
+            const body = document.createElement("div");
+            body.setAttribute(PROMPT_OVERLAY_BODY_ATTR, "");
+            // Bound here rather than in the caller: every rebuild creates a new body, so the
+            // listener has to travel with the element.
+            body.addEventListener?.("scroll", () => syncOverlayFade(body));
+            content.appendChild(body);
+            const parts = collectPromptPreviewParts(source);
+            const mediaParts = parts.filter((part) => part.kind === "media");
+            const fileParts = parts.filter((part) => part.kind === "file");
+            const textParts = parts.filter((part) => part.kind === "text");
+            // Attachments get their own 2-row budget on top of the text-line budget, so the
+            // measure of the content width is shared by both attachment branches. Prefer the
+            // card's own resolved width (minus its padding and hairline border) so the row
+            // budget matches the space actually available; fall back to the native bubble.
+            const cardWidth = Number(metrics && metrics.width) || 0;
+            const usableContentWidth = Math.max(1, cardWidth > 0
+                ? cardWidth - PROMPT_OVERLAY_CONTENT_PAD * 2 - 1
+                : (Number(source?.clientWidth) || PROMPT_OVERLAY_MAX_WIDTH_PX) - 24);
+            let fileRows = 0;
+            const perRowRef = { value: 1 };
+            // Thumbnails only. Files are separate chips, so a media-wrapped attachment always
+            // renders as its image rather than a generic name.
+            const tileCount = mediaParts.length;
+            if (tileCount) {
+                const row = document.createElement("div");
+                row.setAttribute(PROMPT_OVERLAY_MEDIA_ATTR, "");
+                const usableWidth = usableContentWidth;
+                // Attachments flow from the top-left and wrap. Capacity is capped at 2 rows;
+                // when tiles do not fit, the last visible cell becomes a +N chip so the grid
+                // stays exactly within the 2-row budget.
+                const perRow = Math.max(1, Math.floor((usableWidth + PROMPT_OVERLAY_THUMB_GAP) / (PROMPT_OVERLAY_THUMB_W + PROMPT_OVERLAY_THUMB_GAP)));
+                perRowRef.value = perRow;
+                const capacity = perRow * PROMPT_OVERLAY_MEDIA_ROWS;
+                const visibleCount = tileCount <= capacity ? tileCount : Math.max(1, capacity - 1);
+                const visibleMedia = mediaParts.slice(0, visibleCount);
+                for (const part of visibleMedia) {
+                    const media = document.createElement(part.tag || "img");
+                    media.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
+                    media.setAttribute("src", part.src);
+                    if (part.alt) media.setAttribute("alt", part.alt);
+                    else media.setAttribute("alt", "");
+                    // Forward the click so the official viewer opens, exactly as in native DSH.
+                    const mediaSrc = part.src;
+                    media.setAttribute("role", "button");
+                    media.setAttribute("tabindex", "0");
+                    media.setAttribute("aria-label", part.alt || t("bridge.overlay_attachment"));
+                    const openNative = (event) => {
+                        const native = nativeMediaBySrc(source, mediaSrc);
+                        if (!native || typeof native.click !== "function") return;
+                        event.preventDefault?.();
+                        event.stopPropagation?.();
+                        try { native.click(); } catch (_) { /* fail closed after an upstream rerender */ }
+                    };
+                    media.addEventListener?.("click", openNative);
+                    media.addEventListener?.("keydown", (event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        openNative(event);
+                    });
+                    row.appendChild(media);
+                }
+                const hiddenMedia = mediaParts.length - visibleMedia.length;
+                if (hiddenMedia > 0) {
+                    const more = document.createElement("span");
+                    more.setAttribute(PROMPT_OVERLAY_MORE_ATTR, "");
+                    more.setAttribute("aria-label", t("bridge.overlay_more", hiddenMedia));
+                    more.textContent = "+" + hiddenMedia;
+                    row.appendChild(more);
+                }
+                body.appendChild(row);
+            }
+            if (fileParts.length) {
+                const row = document.createElement("div");
+                row.setAttribute(PROMPT_OVERLAY_FILES_ATTR, "");
+                // File chips get the same 2-row budget as the thumbnails. Chip widths are
+                // content-dependent, so this is an estimate; the row itself clips, so the
+                // card still stays inside its budget even when the estimate is generous.
+                const chipsPerRow = Math.max(1, Math.floor(usableContentWidth / PROMPT_OVERLAY_CHIP_AVG_W));
+                const chipCapacity = chipsPerRow * PROMPT_OVERLAY_MEDIA_ROWS;
+                const visibleFiles = fileParts.length <= chipCapacity ? fileParts : fileParts.slice(0, Math.max(1, chipCapacity - 1));
+                for (const part of visibleFiles) {
+                    const file = document.createElement("span");
+                    file.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
+                    file.textContent = part.value;
+                    row.appendChild(file);
+                }
+                const hiddenFiles = fileParts.length - visibleFiles.length;
+                if (hiddenFiles > 0) {
+                    const more = document.createElement("span");
+                    more.setAttribute(PROMPT_OVERLAY_MORE_ATTR, "");
+                    more.setAttribute("aria-label", t("bridge.overlay_more", hiddenFiles));
+                    more.textContent = "+" + hiddenFiles;
+                    row.appendChild(more);
+                }
+                fileRows = Math.max(1, Math.ceil((visibleFiles.length + (hiddenFiles > 0 ? 1 : 0)) / chipsPerRow));
+                body.appendChild(row);
+            }
+            for (const part of textParts) appendPreviewTextNode(body, part.value);
+            if (!mediaParts.length && !fileParts.length && !textParts.length) appendPreviewTextNode(body, t("bridge.overlay_hidden"));
+            // The action strip is a SIBLING of the scrolling body, absolutely placed on the last
+            // line of the card: it must not scroll with the text, and it must not reserve a row.
+            // hasText tells it whether this prompt carries any copyable text at all.
+            const toolbar = createPromptToolbar(source, Object.assign({
+                proxyDescriptors: [],
+                hasText: textParts.length > 0,
+            }, state || {}));
+            // Media rows are exact (fixed-size tiles); file rows are rows of chips.
+            const mediaRows = tileCount ? Math.min(PROMPT_OVERLAY_MEDIA_ROWS, Math.ceil(Math.min(tileCount, PROMPT_OVERLAY_MEDIA_ROWS * perRowRef.value) / Math.max(1, perRowRef.value))) : 0;
+            const extra = mediaRows * (PROMPT_OVERLAY_THUMB_H + PROMPT_OVERLAY_THUMB_GAP)
+                + fileRows * PROMPT_OVERLAY_CHIP_ROW_H
+                + (tileCount ? PROMPT_OVERLAY_THUMB_GAP : 0)
+                + (fileRows ? PROMPT_OVERLAY_THUMB_GAP : 0)
+                + (tileCount || fileRows ? PROMPT_OVERLAY_BLOCK_PAD : 0);
+            return { content, body, toolbar, extra };
+        }
+        function clearElementChildren(node) {
+            if (!node || typeof node.removeChild !== "function") return;
+            while (node.firstChild) node.removeChild(node.firstChild);
+        }
+        function detachOverlayEvents(_host, state) {
+            if (state) state.proxyDescriptors = [];
+        }
+		function removeOverlayHost(state) {
+			if (!state || !state.host) return;
+			detachOverlayEvents(state.host, state);
+			if (state.host.parentNode && typeof state.host.parentNode.removeChild === "function") state.host.parentNode.removeChild(state.host);
+			state.host = null;
+			state.content = null;
+			state.toolbar = null;
+			state.source = null;
+			state.proxyDescriptors = [];
+		}
+		// Fade the last visible line only while there is more to scroll to. Hiding it at the
+		// bottom matters: a permanent fade would keep suggesting content that is no longer there.
+		function syncOverlayFade(body) {
+			if (!body || typeof body.setAttribute !== "function") return;
+			const full = Number(body.scrollHeight) || 0;
+			const view = Number(body.clientHeight) || 0;
+			const top = Number(body.scrollTop) || 0;
+			const moreBelow = full > view + 1 && top + view < full - 2;
+			if (moreBelow) body.setAttribute(PROMPT_OVERLAY_MORE_BELOW_ATTR, "");
+			else if (typeof body.removeAttribute === "function") body.removeAttribute(PROMPT_OVERLAY_MORE_BELOW_ATTR);
+		}
+		// Line height of a text element in px, so the last LINE BOX can be located inside a block
+		// holding several lines. A zero-height marker would NOT do: an inline box sits on the
+		// baseline, which biases every measurement by several px.
+		function previewLineHeight(node) {
+			if (!node || typeof getComputedStyle !== "function") return PROMPT_OVERLAY_LINE_FALLBACK;
+			let style = null;
+			try { style = getComputedStyle(node); } catch (_) { style = null; }
+			if (!style) return PROMPT_OVERLAY_LINE_FALLBACK;
+			const size = Number.parseFloat(style.fontSize);
+			const raw = String(style.lineHeight == null ? "" : style.lineHeight);
+			const value = Number.parseFloat(raw);
+			const fallback = isFinite(size) && size > 0 ? size * 1.2 : PROMPT_OVERLAY_LINE_FALLBACK;
+			if (!isFinite(value) || value <= 0) return fallback;                 // "normal"
+			if (/%$/.test(raw)) return isFinite(size) && size > 0 ? size * value / 100 : fallback;
+			if (/[a-z%]+$/i.test(raw)) return value;                             // already a length
+			return isFinite(size) && size > 0 ? value * size : PROMPT_OVERLAY_LINE_FALLBACK;
+		}
+		// The line the strip must hang on: the LAST LINE BOX of the last text block, or the middle
+		// of the last row when the card holds no text (an attachment-only prompt). A row is not a
+		// line — that difference is exactly why a flow-row strip drifted a whole row lower there.
+		function overlayStripReference(body) {
+			if (!body || typeof body.getBoundingClientRect !== "function") return null;
+			const children = body.childNodes || [];
+			for (let i = children.length - 1; i >= 0; i--) {
+				const node = children[i];
+				if (!node || typeof node.getBoundingClientRect !== "function") continue;
+				if (previewTag(node) === "TIME") continue;
+				const rect = node.getBoundingClientRect() || {};
+				const top = Number(rect.top);
+				const bottom = Number(rect.bottom);
+				if (!(bottom > top)) continue;
+				const isText = typeof node.hasAttribute === "function" && node.hasAttribute(PROMPT_OVERLAY_TEXT_ATTR);
+				return isText
+					? { centre: bottom - previewLineHeight(node) / 2, text: true }
+					: { centre: top + (bottom - top) / 2, text: false };
+			}
+			return null;
+		}
+		// Centres the strip on that reference, then keeps it inside the visible body box, so a last
+		// line scrolled out of sight pins the strip to the bottom edge rather than floating it
+		// outside the card. Runs on every sync, which is what makes it follow a scroll.
+		function positionOverlayStrip(state) {
+			const strip = state && state.toolbar;
+			const body = state && state.body;
+			const host = state && state.host;
+			if (!strip || !strip.style || !body || !host) return;
+			if (typeof host.getBoundingClientRect !== "function" || typeof strip.getBoundingClientRect !== "function") return;
+			const clearTop = () => {
+				if (typeof strip.style.removeProperty === "function") strip.style.removeProperty("top");
+				else strip.style.top = "";
+			};
+			const hostRect = host.getBoundingClientRect() || {};
+			if (!(Number(hostRect.bottom) > Number(hostRect.top))) { clearTop(); return; }
+			const reference = overlayStripReference(body);
+			if (!reference) { clearTop(); return; }
+			const stripRect = strip.getBoundingClientRect() || {};
+			const measured = Number(stripRect.bottom) - Number(stripRect.top);
+			// Hidden by default (display: none), so there is no box to measure in the common case;
+			// the constant mirrors the strip's own CSS height.
+			const height = measured > 4 ? measured : PROMPT_OVERLAY_STRIP_H;
+			const bodyRect = body.getBoundingClientRect() || {};
+			let top = reference.centre - Number(hostRect.top) - height / 2;
+			if (!isFinite(top)) { clearTop(); return; }
+			const min = Number(bodyRect.top) - Number(hostRect.top);
+			const max = Number(bodyRect.bottom) - Number(hostRect.top) - height;
+			if (isFinite(min) && isFinite(max) && max >= min) top = Math.min(Math.max(top, min), max);
+			const value = Math.round(top) + "px";
+			if (typeof strip.style.setProperty === "function") strip.style.setProperty("top", value, "important");
+			else strip.style.top = value;
+		}
+		function setStickyPrompt(next, root, state) {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function" || !state) return;
+			for (const host of document.querySelectorAll("[" + PROMPT_OVERLAY_ATTR + "]")) {
+				if (host !== state.host && host.parentNode && typeof host.parentNode.removeChild === "function") host.parentNode.removeChild(host);
+			}
+			if (!next || !root || !document.body || typeof document.createElement !== "function") {
+				removeOverlayHost(state);
+				return;
+			}
+			if (state.host && state.host.parentNode !== document.body) removeOverlayHost(state);
+			if (!state.host) {
+				state.host = document.createElement("div");
+				state.host.setAttribute(PROMPT_OVERLAY_ATTR, "");
+				state.host.setAttribute("tabindex", "0");
+				document.body.appendChild(state.host);
+			}
+			// Re-applied every paint: the host outlives a language switch, so a label set only
+			// at creation could stay in the previous locale.
+			state.host.setAttribute("aria-label", t("bridge.overlay_label"));
+			// Metrics first: the attachment grid budgets its rows from the card's own resolved
+			// width, so the width has to be known before the body is built.
+			const metrics = computeOverlayMetrics(root, next);
+			// A locale, line-budget or width change must also re-render the card body.
+			const locale = currentLocale();
+			const maxLines = promptOverlayMaxLines();
+			const width = metrics ? metrics.width : 0;
+			// Ignore sub-pixel jitter so a drag-resize does not rebuild the grid on every event.
+			const widthChanged = Math.abs(width - (Number(state.width) || 0)) >= 8;
+			if (state.source !== next || state.needsRefresh || !state.content || state.locale !== locale || state.maxLines !== maxLines || widthChanged) {
+				clearElementChildren(state.host);
+				state.source = next;
+				const built = buildPromptPreview(next, state, metrics);
+				state.content = built && built.content ? built.content : null;
+				state.body = built && built.body ? built.body : null;
+				state.toolbar = built && built.toolbar ? built.toolbar : null;
+				state.extra = built ? built.extra || 0 : 0;
+				if (state.content) state.host.appendChild(state.content);
+				// The toolbar is a sibling of the body, not a child, so it never scrolls with it.
+				if (state.toolbar) state.host.appendChild(state.toolbar);
+				state.needsRefresh = false;
+				state.locale = locale;
+				state.maxLines = maxLines;
+				state.width = width;
+			}
+			applyOverlayStyle(state.host, metrics, state.extra);
+			// After the size lands: reading the scroller's geometry before this would measure the
+			// previous frame's box.
+			syncOverlayFade(state.body);
+			// Same reason: the strip is centred on a measured line box, so it can only be placed
+			// once the card has its final width and height.
+			positionOverlayStrip(state);
+		}
+		function installHoverMessageActions() {
+			if (typeof document === "undefined") return () => {};
+			let style = typeof document.querySelector === "function"
+				? document.querySelector("style[data-plugin-css=\"" + HOVER_MESSAGE_ACTIONS_STYLE_ID + "\"]")
+				: null;
+			if (!style && typeof document.createElement === "function") {
+				style = document.createElement("style");
+				style.dataset.plugin = STYLE_ID;
+				style.dataset.pluginCss = HOVER_MESSAGE_ACTIONS_STYLE_ID;
+				if (document.head && typeof document.head.appendChild === "function") document.head.appendChild(style);
+			}
+			let enabled = typeof window === "undefined" ? true : window[HOVER_MESSAGE_ACTIONS_GLOBAL] !== false;
+			let frame = 0;
+			const state = { host: null, content: null, toolbar: null, extra: 0, maxLines: 0, source: null, proxyDescriptors: [], needsRefresh: false, syncing: false, pending: false };
+			const writeCSS = () => {
+				if (!style) return;
+				if (document.head && style.parentNode !== document.head && typeof document.head.appendChild === "function") document.head.appendChild(style);
+				const css = hoverMessageActionsCSS();
+				if (style.textContent !== css) style.textContent = css;
+			};
+			let observeLayout = () => {};
+			// Lets a settled action confirmation rebuild the card to drop its ✓ again.
+			promptOverlayRefresh = () => schedule();
+			const syncOverlay = () => {
+				if (state.syncing) {
+					state.pending = true;
+					return;
+				}
+				state.syncing = true;
+				try {
+					writeCSS();
+					if (!enabled) {
+						setStickyPrompt(null, null, state);
+						clearComposerCompactMarks(document);
+						return;
+					}
+					const root = conversationScrollRoot();
+					setStickyPrompt(pickStickyPrompt(root), root, state);
+					markComposerCompact();
+					observeLayout();
+				} finally {
+					state.syncing = false;
+					if (state.pending) {
+						state.pending = false;
+						schedule();
+					}
+				}
+			};
+			const schedule = () => {
+				if (typeof requestAnimationFrame === "function") {
+					if (frame) return;
+					frame = requestAnimationFrame(() => {
+						frame = 0;
+						syncOverlay();
+					});
+					return;
+				}
+				syncOverlay();
+			};
+			const applyEnabled = (value) => {
+				enabled = value !== false;
+				setHoverMessageActionsAttr(enabled);
+				writeCSS();
+				if (enabled) schedule();
+				else setStickyPrompt(null, null, state);
+			};
+			applyEnabled(enabled);
+			const onSettingChange = (event) => applyEnabled(event.detail !== false);
+			const onScroll = () => schedule();
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				window.addEventListener(HOVER_MESSAGE_ACTIONS_EVENT, onSettingChange);
+				window.addEventListener("scroll", onScroll, true);
+				window.addEventListener("resize", onScroll);
+			}
+			let observer = null;
+			if (typeof MutationObserver === "function" && document.documentElement) {
+				observer = new MutationObserver((records) => {
+					for (const record of records || []) {
+						const target = record && record.target;
+						if (!target || (state.host && (target === state.host || (state.host.contains && state.host.contains(target))))) continue;
+						if (state.source && (target === state.source || (state.source.contains && state.source.contains(target)) || hasPromptRelation(target, state.source))) state.needsRefresh = true;
+					}
+					schedule();
+				});
+				observer.observe(document.documentElement, { childList: true, subtree: true });
+			}
+			let resizeObserver = null;
+			observeLayout = () => {
+				if (typeof ResizeObserver !== "function") return;
+				const root = conversationScrollRoot();
+				if (!resizeObserver) resizeObserver = new ResizeObserver(() => schedule());
+				try { resizeObserver.disconnect(); } catch {}
+				if (root && typeof resizeObserver.observe === "function") resizeObserver.observe(root);
+				if (root && root.parentElement && typeof resizeObserver.observe === "function") resizeObserver.observe(root.parentElement);
+				if (state.source && typeof resizeObserver.observe === "function") resizeObserver.observe(state.source);
+				if (state.host && typeof resizeObserver.observe === "function") resizeObserver.observe(state.host);
+			};
+			observeLayout();
+			return () => {
+				if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+					window.removeEventListener(HOVER_MESSAGE_ACTIONS_EVENT, onSettingChange);
+					window.removeEventListener("scroll", onScroll, true);
+					window.removeEventListener("resize", onScroll);
+				}
+				if (observer) observer.disconnect();
+				if (resizeObserver) { try { resizeObserver.disconnect(); } catch {} }
+				if (frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+				removeOverlayHost(state);
+				clearComposerCompactMarks(document);
+				setHoverMessageActionsAttr(false);
+				if (style && style.parentNode && typeof style.parentNode.removeChild === "function") style.parentNode.removeChild(style);
+			};
+		}
 		const CHAT_CONTENT_VISIBILITY_GLOBAL = "__DSH_DESKTOP_CHAT_CONTENT_VISIBILITY__";
 		const CHAT_CONTENT_VISIBILITY_EVENT = "dsh-desktop-chat-content-visibility";
 		const CHAT_CONTENT_VISIBILITY_ATTR = "data-dsh-desktop-chat-cv";
@@ -387,6 +1778,13 @@ window.__ModuleLoader__.load({
 					background-size: 5px 5px, 5px 5px;
 					background-repeat: no-repeat;
 				}
+				/* One setting on two lines: the outer row owns the bottom divider only, so the two
+				   lines never get a rule between them. */
+				.dshDesktopBridgeRowStacked { flex-direction: column !important; align-items: stretch !important; gap: 0 !important; padding: 0 !important; }
+				.dshDesktopBridgeRowStacked > .dshDesktopBridgeRow { border-bottom: none !important; padding: 16px 0 0 !important; }
+				.dshDesktopBridgeRowStacked > .dshDesktopBridgeRow:last-child { padding-bottom: 16px !important; }
+				.dshDesktopBridgeNumber { width: 66px !important; padding: 5px 8px !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.3)) 92%, transparent) !important; border-radius: 8px !important; background: var(--dsw-alias-bg-layer-2, Canvas) !important; color: var(--dsw-alias-text-primary, inherit) !important; font-size: .82rem !important; font-variant-numeric: tabular-nums !important; text-align: center !important; }
+				.dshDesktopBridgeNumber:disabled { opacity: .5 !important; cursor: not-allowed !important; }
 				.dshDesktopBridgeToggle {
 					appearance: none;
 					-webkit-appearance: none;
@@ -726,7 +2124,13 @@ window.__ModuleLoader__.load({
 
 		// dshweb maps unknown settings.section ids to IconSettingsOutline16 (same as 通用设置).
 		// Swap the nav glyph for 「桌面设置」 to a distinct desktop/monitor outline in the same 16px stroke language.
-		const DESKTOP_NAV_LABEL = "桌面设置";
+		// The nav row is located by text, so accept the localized label and the English
+		// fallback: the section may have been registered before the catalog loaded.
+		const DESKTOP_NAV_LABEL = "Desktop settings";
+		const desktopNavLabels = () => {
+			const localized = t("tray.open_settings");
+			return localized === DESKTOP_NAV_LABEL ? [localized] : [localized, DESKTOP_NAV_LABEL];
+		};
 		function desktopNavIconSVG(className) {
 			const ns = "http://www.w3.org/2000/svg";
 			const svg = document.createElementNS(ns, "svg");
@@ -750,8 +2154,9 @@ window.__ModuleLoader__.load({
 			if (typeof document === "undefined") return () => {};
 			const paint = () => {
 				const labels = document.querySelectorAll("button, [role='button'], div, span");
+				const accepted = desktopNavLabels();
 				for (const el of labels) {
-					if ((el.textContent || "").trim() !== DESKTOP_NAV_LABEL) continue;
+					if (!accepted.includes((el.textContent || "").trim())) continue;
 					const row = el.closest("button") || el.parentElement;
 					if (!row) continue;
 					const existing = row.querySelector("svg.dshDesktopBridgeNavIcon");
@@ -1070,7 +2475,7 @@ window.__ModuleLoader__.load({
 			const call = react.useCallback(async (endpoint, payload, signal) => {
 				const result = await callDesktopRPC(connection, endpoint, payload, signal);
 				if (!result.ok) {
-					const err = new Error(result.error?.message || "桌面桥接调用失败");
+					const err = new Error(desktopErrorMessage(result.error));
 					err.code = result.error?.code;
 					throw err;
 				}
@@ -1092,6 +2497,9 @@ window.__ModuleLoader__.load({
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
 					publishShowCopySessionId(nextPrefs);
+					publishHoverMessageActions(nextPrefs);
+					publishPromptOverlayLanguage(nextPrefs);
+					publishPromptOverlayMaxLines(nextPrefs);
 					publishChatContentVisibility(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
@@ -1111,7 +2519,7 @@ window.__ModuleLoader__.load({
 				} catch (error) {
 					if (error?.name === "AbortError") return;
 					setLink(classifyLinkError(error));
-					setMessage(error?.message || "无法读取桌面端状态");
+					setMessage(error?.message || t("bridge.err_read_status"));
 					setMessageKind("error");
 				}
 			}, [call]);
@@ -1140,12 +2548,16 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
 				if (looksLikeUpdate) setUpdate(value);
 				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
 				publishShowCopySessionId(value);
+				publishHoverMessageActions(value);
+				publishPromptOverlayLanguage(value);
+				publishPromptOverlayMaxLines(value);
 				publishChatContentVisibility(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
@@ -1159,6 +2571,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
+				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -1174,7 +2587,7 @@ window.__ModuleLoader__.load({
 					}
 				} catch (error) {
 					setLink(classifyLinkError(error));
-					setMessage(error?.message || "桌面管理操作失败");
+					setMessage(error?.message || t("bridge.err_manage"));
 					setMessageKind("error");
 				} finally {
 					if (!quiet) setPending(false);
@@ -1188,10 +2601,10 @@ window.__ModuleLoader__.load({
 			const connected = link === "connected";
 			const enhancementDisabled = Boolean(transport && transport.compatible === false && transport.capabilities);
 			const transportLabel = !transport
-				? "正在协商桌面能力…"
+				? t("bridge.handshake_negotiating")
 				: enhancementDisabled
-					? "能力不兼容，已回退 HTTP 并关闭增强功能"
-					: (transport.mode === "http-fallback" ? "HTTP 兼容回退" : "loopback HTTP");
+					? t("bridge.handshake_incompatible")
+					: (transport.mode === "http-fallback" ? t("bridge.transport_fallback") : t("bridge.transport_loopback"));
 			const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
 			const DEFAULT_SHORTCUTS = {
 				openSettings: "CmdOrCtrl+,",
@@ -1200,13 +2613,15 @@ window.__ModuleLoader__.load({
 				hide: "CmdOrCtrl+h",
 				hideOthers: "CmdOrCtrl+OptionOrAlt+h"
 			};
-			const SHORTCUT_LABELS = {
-				openSettings: "打开桌面设置",
-				closeChat: "关闭/隐藏 Chat",
-				quit: "退出",
-				hide: "隐藏应用",
-				hideOthers: "隐藏其他"
+			const SHORTCUT_LABEL_KEYS = {
+				openSettings: "shortcut.open_settings_label",
+				closeChat: "shortcut.close_chat_label",
+				quit: "shortcut.quit_label",
+				hide: "shortcut.hide_label",
+				hideOthers: "shortcut.hide_others_label"
 			};
+			// A shortcut id without a catalog entry still renders itself instead of a blank row.
+			const shortcutLabel = (id) => (SHORTCUT_LABEL_KEYS[id] ? t(SHORTCUT_LABEL_KEYS[id]) : id);
 			const formatAccel = (accel) => {
 				if (accel == null || accel === "") return "";
 				let s = String(accel);
@@ -1244,7 +2659,7 @@ window.__ModuleLoader__.load({
 						return;
 					}
 					if (parsed.invalid || !parsed.accel) {
-						setMessage("无效快捷键");
+						setMessage(t("shortcut.invalid"));
 						setMessageKind("error");
 						return;
 					}
@@ -1254,7 +2669,7 @@ window.__ModuleLoader__.load({
 					for (const otherId of Object.keys(current)) {
 						if (otherId === id) continue;
 						if (normalizeAccelCompare(current[otherId]) === want && current[otherId] !== "") {
-							setMessage(`快捷键与「${SHORTCUT_LABELS[otherId] || otherId}」冲突`);
+							setMessage(t("shortcut.conflict", shortcutLabel(otherId)));
 							setMessageKind("error");
 							return;
 						}
@@ -1286,6 +2701,14 @@ window.__ModuleLoader__.load({
 			const quitShortcutLabel = boundShortcutLabel("quit");
 			const closeChatShortcutLabel = boundShortcutLabel("closeChat");
 			const inlineShortcut = (id, label) => jsx("kbd", { className: "dshDesktopBridgeInlineKbd", children: label }, id);
+			// The catalog hint carries {0} where the inline shortcut chip goes. Split on that
+			// token so the chip keeps its kbd styling and the wording still comes from the catalog.
+			const hintWithShortcut = (key, id, label) => {
+				const template = t(key);
+				const at = template.indexOf("{0}");
+				if (at < 0) return template;
+				return [template.slice(0, at), inlineShortcut(id, label), template.slice(at + 3)];
+			};
 			const shortcutRows = shortcutIds.map((id) => {
 				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : DEFAULT_SHORTCUTS[id];
 				const defaultAccel = DEFAULT_SHORTCUTS[id] || "";
@@ -1296,7 +2719,7 @@ window.__ModuleLoader__.load({
 					className: "dshDesktopBridgeShortcutRow",
 					key: id,
 					children: [
-						jsx("div", { className: "dshDesktopBridgeTitle", children: SHORTCUT_LABELS[id] || id }),
+						jsx("div", { className: "dshDesktopBridgeTitle", children: shortcutLabel(id) }),
 						jsxs("div", {
 							className: "dshDesktopBridgeShortcutActions",
 							children: [
@@ -1304,7 +2727,7 @@ window.__ModuleLoader__.load({
 									className: "dshDesktopBridgeKbd" + (cleared && !recording ? " is-cleared" : "") + (recording ? " is-recording" : ""),
 									role: "button",
 									tabIndex: 0,
-									title: "点击录制新快捷键",
+									title: t("shortcut.recording"),
 									onClick: () => {
 										if (!connected || pending || !prefs) return;
 										setRecordingShortcutId((prev) => (prev === id ? null : id));
@@ -1316,7 +2739,7 @@ window.__ModuleLoader__.load({
 										if (!connected || pending || !prefs) return;
 										setRecordingShortcutId(id);
 									},
-									children: recording ? "按下新快捷键…" : (cleared ? "已清除" : (formatAccel(accel) || accel))
+									children: recording ? t("shortcut.recording") : (cleared ? t("shortcut.cleared") : (formatAccel(accel) || accel))
 								}),
 								jsx("button", {
 									className: "dshDesktopBridgeSelector",
@@ -1326,7 +2749,7 @@ window.__ModuleLoader__.load({
 										setRecordingShortcutId(null);
 										void setOneShortcut(id, "");
 									},
-									children: "清除"
+									children: t("shortcut.clear")
 								}),
 								jsx("button", {
 									className: "dshDesktopBridgeSelector",
@@ -1336,7 +2759,7 @@ window.__ModuleLoader__.load({
 										setRecordingShortcutId(null);
 										void setOneShortcut(id, defaultAccel);
 									},
-									children: "恢复默认"
+									children: t("shortcut.reset")
 								})
 							]
 						})
@@ -1350,14 +2773,14 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "状态" }),
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("bridge.card_status") }),
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "能力握手" }),
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.capability_title") }),
 										jsx("div", { className: "dshDesktopBridgeDesc", children: transportLabel })
 									]
 								})
@@ -1369,8 +2792,8 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "连接" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "与本机桌面端控制面的桥接状态。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.connection_title") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.connection_desc") })
 									]
 								}),
 								jsxs("div", {
@@ -1380,7 +2803,7 @@ window.__ModuleLoader__.load({
 											className: "dshDesktopBridgeStatus",
 											children: [
 												jsx("span", { className: "dshDesktopBridgeDot", "data-link": link }),
-												jsx("span", { children: linkLabels[link] || link })
+												jsx("span", { children: linkLabel(link) })
 											]
 										}),
 										jsx("button", {
@@ -1392,7 +2815,7 @@ window.__ModuleLoader__.load({
 												setLink("reconnecting");
 												void refresh();
 											},
-											children: "重新连接"
+											children: t("bridge.reconnect")
 										})
 									]
 								})
@@ -1407,10 +2830,10 @@ window.__ModuleLoader__.load({
 										jsxs("div", {
 											className: "dshDesktopBridgeRowText",
 											children: [
-												jsx("div", { className: "dshDesktopBridgeTitle", children: "DSH 进程" }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: options.executable ? `CLI：${options.executable}` : "尚未配置 CLI" }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: options.port ? `地址：http://127.0.0.1:${options.port}/` : "地址：未就绪" }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: appVersion ? `桌面端版本：${appVersion}` : "桌面端版本：—" })
+												jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.process_title") }),
+												jsx("div", { className: "dshDesktopBridgeDesc", children: options.executable ? t("bridge.cli_configured", options.executable) : t("bridge.cli_unset") }),
+												jsx("div", { className: "dshDesktopBridgeDesc", children: options.port ? t("bridge.address", "http://127.0.0.1:" + options.port + "/") : t("bridge.address_not_ready") }),
+												jsx("div", { className: "dshDesktopBridgeDesc", children: appVersion ? t("bridge.desktop_version", appVersion) : t("bridge.desktop_version", "—") })
 											]
 										}),
 										jsxs("div", {
@@ -1420,7 +2843,7 @@ window.__ModuleLoader__.load({
 													className: "dshDesktopBridgeStatus",
 													children: [
 														jsx("span", { className: "dshDesktopBridgeDot", "data-state": state }),
-														jsx("span", { children: stateLabels[state] || state })
+														jsx("span", { children: stateLabel(state) })
 													]
 												})
 											]
@@ -1438,15 +2861,15 @@ window.__ModuleLoader__.load({
 												executable: draft.executable,
 												home: draft.home,
 												workspace: draft.workspace
-											}, state === "running" ? "已请求重启并打开 Chat" : "已请求启动并打开 Chat", { heavy: true }),
-											children: state === "running" ? "重启并打开 Chat" : "启动并打开 Chat"
+											}, state === "running" ? t("bridge.msg_requested_restart") : t("bridge.msg_requested_start"), { heavy: true }),
+											children: state === "running" ? t("bridge.restart_open_chat") : t("btn.start_open_chat")
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
 											onClick: () => void invoke("openManagement", {}),
-											children: "打开冷启动配置"
+											children: t("bridge.open_cold_start")
 										})
 									]
 								})
@@ -1463,7 +2886,7 @@ window.__ModuleLoader__.load({
 							"aria-expanded": pathsOpen,
 							onClick: () => setPathsOpen((prev) => !prev),
 							children: [
-								jsx("span", { children: "路径" }),
+								jsx("span", { children: t("bridge.path_label") }),
 								jsx("svg", {
 									className: "dshDesktopBridgeCardChevron",
 									"data-open": pathsOpen ? "true" : "false",
@@ -1489,7 +2912,7 @@ window.__ModuleLoader__.load({
 							children: [
 								jsx("div", {
 									className: "dshDesktopBridgeRowText",
-									children: jsx("div", { className: "dshDesktopBridgeTitle", children: "dsh 可执行文件" })
+									children: jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.executable") })
 								}),
 								jsxs("div", {
 									className: "dshDesktopBridgePathRow",
@@ -1505,8 +2928,8 @@ window.__ModuleLoader__.load({
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
-											onClick: () => void invoke("chooseExecutable", {}, "已选择可执行文件"),
-											children: "选择"
+											onClick: () => void invoke("chooseExecutable", {}, t("bridge.msg_chose_executable")),
+											children: t("bridge.choose")
 										})
 									]
 								})
@@ -1533,15 +2956,15 @@ window.__ModuleLoader__.load({
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
-											onClick: () => void invoke("chooseHome", {}, "已选择 DSH Home"),
-											children: "选择"
+											onClick: () => void invoke("chooseHome", {}, t("bridge.msg_chose_home")),
+											children: t("bridge.choose")
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
 											onClick: () => void invoke("openHome", { home: draft.home, workspace: draft.workspace }),
-											children: "打开"
+											children: t("bridge.open")
 										})
 									]
 								})
@@ -1552,7 +2975,7 @@ window.__ModuleLoader__.load({
 							children: [
 								jsx("div", {
 									className: "dshDesktopBridgeRowText",
-									children: jsx("div", { className: "dshDesktopBridgeTitle", children: "Chat 工作目录" })
+									children: jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.workspace") })
 								}),
 								jsxs("div", {
 									className: "dshDesktopBridgePathRow",
@@ -1568,15 +2991,15 @@ window.__ModuleLoader__.load({
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
-											onClick: () => void invoke("chooseWorkspace", {}, "已选择工作目录"),
-											children: "选择"
+											onClick: () => void invoke("chooseWorkspace", {}, t("bridge.msg_chose_workspace")),
+											children: t("bridge.choose")
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
 											onClick: () => void invoke("openWorkspace", { home: draft.home, workspace: draft.workspace }),
-											children: "打开"
+											children: t("bridge.open")
 										})
 									]
 								})
@@ -1588,8 +3011,8 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "应用路径并打开 Chat" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "将上方路径写入并重启 / 启动 DSH，然后打开 Chat。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.apply_paths") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.apply_paths_hint") })
 									]
 								}),
 								jsx("div", {
@@ -1602,8 +3025,8 @@ window.__ModuleLoader__.load({
 											executable: draft.executable,
 											home: draft.home,
 											workspace: draft.workspace
-										}, "已应用路径并打开 Chat"),
-										children: "应用路径并打开 Chat"
+										}, t("bridge.msg_applied_paths")),
+										children: t("bridge.apply_paths")
 									})
 								})
 							]
@@ -1616,13 +3039,13 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "偏好" }),
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("bridge.card_prefs") }),
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
 								jsx("div", {
 									className: "dshDesktopBridgeRowText",
-									children: jsx("div", { className: "dshDesktopBridgeTitle", children: "界面语言" })
+									children: jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.language") })
 								}),
 								jsx("div", {
 									className: "dshDesktopBridgeControl",
@@ -1631,7 +3054,7 @@ window.__ModuleLoader__.load({
 										disabled: !connected || pending || !prefs,
 										onChange: (language) => void invoke("setLanguage", { language }),
 										options: [
-											{ value: "", label: "跟随系统" },
+											{ value: "", label: t("lang.system") },
 											...(prefs?.supported || [
 												{ code: "zh-CN", nativeName: "简体中文" },
 												{ code: "en", nativeName: "English" }
@@ -1647,10 +3070,10 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "退出确认" }),
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.confirm_quit") }),
 										jsxs("div", { className: "dshDesktopBridgeDesc", children: quitShortcutLabel
-											? ["仅在有会话任务正在运行时，关闭窗口或 ", inlineShortcut("quit", quitShortcutLabel), " 会二次确认；空闲时直接退出。"]
-											: "仅在有会话任务正在运行时，关闭窗口会二次确认；空闲时直接退出。"
+											? hintWithShortcut("field.confirm_quit_hint_dashboard", "quit", quitShortcutLabel)
+											: t("field.confirm_quit_hint_dashboard_none")
 										})
 									]
 								}),
@@ -1674,10 +3097,10 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "开启系统托盘" }),
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.tray_enabled") }),
 										jsxs("div", { className: "dshDesktopBridgeDesc", children: closeChatShortcutLabel
-											? ["总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。", inlineShortcut("closeChat", closeChatShortcutLabel), " 仍会隐藏窗口（无托盘时回到程序坞/任务栏）。"]
-											: "总开关。关闭后不创建托盘图标；下方「任务显示数量」与「关闭窗口到托盘」不可用。"
+											? hintWithShortcut("field.tray_enabled_hint_dashboard", "closeChat", closeChatShortcutLabel)
+											: t("field.tray_enabled_hint_dashboard_none")
 										})
 									]
 								}),
@@ -1701,8 +3124,8 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "任务显示数量" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条，按最近活动排序。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.tray_session_limit") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.tray_session_limit_hint_dashboard") })
 									]
 								}),
 								jsx("div", {
@@ -1725,10 +3148,10 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "关闭窗口到托盘" }),
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.close_to_tray") }),
 										jsxs("div", { className: "dshDesktopBridgeDesc", children: quitShortcutLabel
-											? ["需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。", inlineShortcut("quit-tray", quitShortcutLabel), " 和「退出」仍会退出。"]
-											: "需先开启系统托盘。开启后：点 Chat 窗口 X 会隐藏到托盘，不会退出。「退出」仍会退出。"
+											? hintWithShortcut("field.close_to_tray_hint_dashboard", "quit-tray", quitShortcutLabel)
+											: t("field.close_to_tray_hint_dashboard_none")
 										})
 									]
 								}),
@@ -1751,15 +3174,15 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "DSH增强设置" }),
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("bridge.card_enhancements") }),
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "显示“复制会话ID”菜单" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "在会话右侧菜单中显示“复制会话ID”选项，便于调试、脚本调用和问题反馈。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.show_copy_session_id") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.show_copy_session_id_hint") })
 									]
 								}),
 								jsx("div", {
@@ -1776,14 +3199,82 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
+						// One grouped block: the toggle decides whether the card exists, and the line
+						// budget only means something once it does, so they belong together rather than
+						// as two unrelated rows.
+						// One grouped setting on two lines. Both lines are ordinary rows, so they inherit the
+						// panel typography; only the outer row keeps a divider (below the whole setting).
+						jsxs("div", {
+							className: "dshDesktopBridgeRow dshDesktopBridgeRowStacked",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRow",
+									children: [
+											jsxs("div", {
+												className: "dshDesktopBridgeRowText",
+												children: [
+													jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.enhanced_hover_title") }),
+													jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.enhanced_hover_hint") })
+												]
+											}),
+										jsx("div", {
+											className: "dshDesktopBridgeControl",
+											children: jsx("input", {
+												className: "dshDesktopBridgeToggle",
+												type: "checkbox",
+												role: "switch",
+												"aria-checked": prefs?.hoverMessageActions !== false,
+												checked: prefs?.hoverMessageActions !== false,
+												disabled: !connected || pending || !prefs || enhancementDisabled,
+												onChange: (event) => void invoke("setHoverMessageActions", { enabled: event.target.checked })
+											})
+										})
+									]
+								}),
+								// The line budget only means something while the card exists.
+								prefs?.hoverMessageActions !== false
+									? jsxs("div", {
+										className: "dshDesktopBridgeRow",
+										children: [
+											jsxs("div", {
+												className: "dshDesktopBridgeRowText",
+												children: [
+													jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.overlay_max_lines") }),
+													jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.overlay_max_lines_hint") })
+												]
+											}),
+											jsx("div", {
+												className: "dshDesktopBridgeControl",
+												// The input alone is the readout: its value is derived from the clamped pref,
+												// so it already re-renders with whatever the host accepted. A separate
+												// "5 行" label next to it only printed the same number twice.
+												children: jsx("input", {
+													className: "dshDesktopBridgeNumber",
+													type: "number",
+													min: String(PROMPT_OVERLAY_MIN_LINES),
+													max: String(PROMPT_OVERLAY_MAX_LINES),
+													step: "1",
+													value: String(promptOverlayMaxLinesFromPrefs(prefs)),
+													"aria-label": t("bridge.overlay_max_lines"),
+													// The range the host will clamp to, so the limit is discoverable.
+													title: PROMPT_OVERLAY_MIN_LINES + "–" + PROMPT_OVERLAY_MAX_LINES,
+													disabled: !connected || pending || !prefs || enhancementDisabled,
+													onChange: (event) => void invoke("setPromptOverlayMaxLines", { lines: Number(event.target.value) })
+												})
+											})
+										]
+									})
+									: null
+							]
+						}),
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: "Chat 滚动渲染优化" }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: "对视口外的对话节点使用 content-visibility，减轻长会话滚动绘制。关闭后立即恢复默认。加载更早历史时滚动位置可能轻微跳动。" })
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.chat_content_visibility") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.chat_content_visibility_hint") })
 									]
 								}),
 								jsx("div", {
@@ -1805,11 +3296,11 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "快捷键" }),
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("dashboard.shortcuts_title") }),
 						jsx("div", {
 							className: "dshDesktopBridgeDesc",
 							style: { padding: "0 0 8px" },
-							children: "点击按键可录制新快捷键；清除可取消加速键（菜单仍可点）；恢复默认还原该条内置绑定。未按下新组合时点击空白处取消录制。绑定的关闭/隐藏 Chat 快捷键始终隐藏 Chat（开托盘则进托盘）；窗口 X 遵循「关闭到托盘」。"
+							children: t("dashboard.shortcuts_hint")
 						}),
 						...shortcutRows,
 						]
@@ -1817,7 +3308,7 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: "更新" }),
+						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("dashboard.update_title") }),
 						jsxs("div", {
 							className: "dshDesktopBridgeStack",
 							children: [
@@ -1827,12 +3318,12 @@ window.__ModuleLoader__.load({
 										jsxs("div", {
 											className: "dshDesktopBridgeRowText",
 											children: [
-												jsx("div", { className: "dshDesktopBridgeTitle", children: "更新" }),
+												jsx("div", { className: "dshDesktopBridgeTitle", children: t("dashboard.update_title") }),
 												jsx("div", {
 													className: "dshDesktopBridgeDesc",
 													children: update?.latestVersion
-														? `最新版本：${update.latestVersion}（当前 ${update.currentVersion || appVersion || "—"}）`
-														: `当前版本：${update?.currentVersion || appVersion || "—"}`
+														? t("bridge.version_latest", update.latestVersion, update.currentVersion || appVersion || "—")
+														: t("bridge.version_current", update?.currentVersion || appVersion || "—")
 												})
 											]
 										})
@@ -1844,8 +3335,8 @@ window.__ModuleLoader__.load({
 										jsxs("div", {
 											className: "dshDesktopBridgeRowText",
 											children: [
-												jsx("div", { className: "dshDesktopBridgeTitle", children: "自动检查更新" }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: "启动成功后每天自动检查更新。" })
+												jsx("div", { className: "dshDesktopBridgeTitle", children: t("dashboard.auto_check") }),
+												jsx("div", { className: "dshDesktopBridgeDesc", children: t("dashboard.update_hint") })
 											]
 										}),
 										jsx("div", {
@@ -1869,22 +3360,22 @@ window.__ModuleLoader__.load({
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
-											onClick: () => void invoke("checkUpdate", {}, "已开始检查更新"),
-											children: "检查更新"
+											onClick: () => void invoke("checkUpdate", {}, t("bridge.msg_check_update")),
+											children: t("btn.check_update")
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector dshDesktopBridgePrimary",
 											type: "button",
 											disabled: !connected || pending || (update?.state !== "available" && update?.state !== "ready"),
-											onClick: () => void invoke("installUpdate", {}, "已开始安装更新"),
-											children: "安装更新"
+											onClick: () => void invoke("installUpdate", {}, t("bridge.msg_install_update")),
+											children: t("btn.install_update")
 										}),
 										jsx("button", {
 											className: "dshDesktopBridgeSelector",
 											type: "button",
 											disabled: !connected || pending,
 											onClick: () => void invoke("openReleasePage", {}),
-											children: "发行说明"
+											children: t("btn.open_release")
 										})
 									]
 								})
@@ -1966,6 +3457,9 @@ window.__ModuleLoader__.load({
 		const OPEN_SESSION_WARM_CHUNK = 5;
 		const OPEN_SESSION_WARM_LIMIT_MAX = 20;
 		function apply(ctx) {
+			// Capture the connection first: prefs syncs below publish the language and may
+			// trigger a catalog load, which needs this to be set already.
+			localeConnection = ctx.connection;
 			installStyle();
 			void ensureDesktopHandshake(ctx.connection);
 			let trayEnabled = false;
@@ -1992,16 +3486,21 @@ window.__ModuleLoader__.load({
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (!result?.ok) return;
 				publishShowCopySessionId(result.value);
+				publishHoverMessageActions(result.value);
+				publishPromptOverlayLanguage(result.value);
+				publishPromptOverlayMaxLines(result.value);
 				publishChatContentVisibility(result.value);
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
 			const stopCopySessionIdMenu = installCopySessionIdMenu();
+			const stopHoverMessageActions = installHoverMessageActions();
 			const stopChatContentVisibility = installChatContentVisibility();
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
 					stopCopySessionIdMenu();
+					stopHoverMessageActions();
 					stopChatContentVisibility();
 				});
 			}
@@ -2009,13 +3508,25 @@ window.__ModuleLoader__.load({
 			// Do NOT use a sticky globalThis guard: Cordis HMR disposes the fiber and
 			// re-applies; a sticky flag would skip re-registration and hide 「桌面设置」
 			// without restarting the desktop app (exactly after hot-updating overlay).
-			ctx.slots.inject("settings.section", () => ctx.slots.register({
-				name: "settings.section",
-				id: "deepseek-harness-desktop",
-				// Before built-in general (order 0) / models (10) / plugins (15).
-				order: -10,
-				label: () => "桌面设置"
-			}, () => jsx(DesktopSettingsTab, { connection: ctx.connection })));
+			// The nav caches its label from the first render, which can happen before the async
+			// catalog arrives; with no catalog t() can only answer in English. Register at once so
+			// the entry always exists, then re-register when the language actually changes so the
+			// label localizes (and follows a later switch).
+			let disposeDesktopNav = null;
+			const registerDesktopNav = () => {
+				if (typeof disposeDesktopNav === "function") {
+					try { disposeDesktopNav(); } catch (_) { /* re-register below regardless */ }
+				}
+				disposeDesktopNav = ctx.slots.inject("settings.section", () => ctx.slots.register({
+					name: "settings.section",
+					id: "deepseek-harness-desktop",
+					// Before built-in general (order 0) / models (10) / plugins (15).
+					order: -10,
+					label: () => t("tray.open_settings")
+				}, () => jsx(DesktopSettingsTab, { connection: ctx.connection })));
+			};
+			registerDesktopNav();
+			onLocaleChange(() => registerDesktopNav());
 
 			// Official busy signal: SessionSummary.running from api-session-controller
 			// (api-session/status). Push to the desktop loopback for Cmd+Q confirm.

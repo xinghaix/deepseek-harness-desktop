@@ -13,6 +13,9 @@ import (
 
 func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	owner := New()
+	// The locale bundle is a host capability, so inject a host before asserting
+	// that the endpoint serves the catalog.
+	owner.SetBridgeHost(&recordingBridgeHost{})
 	endpoint := filepath.Join(t.TempDir(), "desktop-bridge-endpoint.json")
 	bridge, err := newDesktopBridge(owner, endpoint)
 	if err != nil {
@@ -97,6 +100,39 @@ func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	if response.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("wrong method was accepted with status %d", response.StatusCode)
 	}
+	// The floating-card line budget is a normal clamped pref write over the same plane.
+	linesRequest, err := http.NewRequest(http.MethodPost, bridge.url+"/v1/set-prompt-overlay-max-lines", bytes.NewReader([]byte(`{"lines":9}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	linesRequest.Header.Set(desktopBridgeTokenHeader, bridge.token)
+	linesRequest.Header.Set("Content-Type", "application/json")
+	linesResponse, err := client.Do(linesRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linesBody, err := io.ReadAll(linesResponse.Body)
+	_ = linesResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linesResponse.StatusCode != http.StatusOK || !strings.Contains(string(linesBody), `"promptOverlayMaxLines":9`) {
+		t.Fatalf("set prompt overlay max lines response: %d %s", linesResponse.StatusCode, linesBody)
+	}
+	response, _ = get("/v1/set-prompt-overlay-max-lines", bridge.token)
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("max-lines accepted GET with status %d", response.StatusCode)
+	}
+
+	// The Chat webview loads the shared UI catalog through the same token-fenced plane.
+	response, body = get("/v1/locale-bundle", bridge.token)
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "\"locale\":\"en\"") || !strings.Contains(string(body), "\"bridge.card_status\":\"Status\"") {
+		t.Fatalf("locale bundle response: %d %s", response.StatusCode, body)
+	}
+	response, _ = get("/v1/locale-bundle", "wrong")
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("locale bundle accepted an invalid token with status %d", response.StatusCode)
+	}
 	response, _ = get("/unknown", bridge.token)
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown endpoint was accepted with status %d", response.StatusCode)
@@ -145,7 +181,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := string(clientBytes)
-	for _, fragment := range []string{"settings.section", "桌面设置", "DSH增强设置", "showCopySessionId", "setShowCopySessionId", "chatContentVisibility", "setChatContentVisibility", "Chat 滚动渲染优化", "快捷键", "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
+	for _, fragment := range []string{"settings.section", `t("tray.open_settings")`, `t("bridge.card_enhancements")`, "showCopySessionId", "setShowCopySessionId", "hoverMessageActions", "setHoverMessageActions", "chatContentVisibility", `t("field.chat_content_visibility")`, `t("dashboard.shortcuts_title")`, "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client overlay missing %q", fragment)
 		}
