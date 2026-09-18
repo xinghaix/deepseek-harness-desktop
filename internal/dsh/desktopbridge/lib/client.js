@@ -364,6 +364,7 @@ window.__ModuleLoader__.load({
 			const action = root + " " + actionPath;
 			// Descendant paths re-anchored on the overlay element, for `:hover`-prefixed selectors.
 			const toolbarSuffix = " [" + PROMPT_OVERLAY_TOOLBAR_ATTR + "]";
+			const bodySuffix = " [" + PROMPT_OVERLAY_BODY_ATTR + "]";
 			// The bottom fade ramp: opaque until the band starts, then linear to fully transparent at
 			// the very bottom edge. Ending it AT the edge (not above it) is what keeps the band a
 			// fading peek instead of a strip of invisible content followed by dead space.
@@ -375,7 +376,8 @@ window.__ModuleLoader__.load({
 				// card's padding insets on every side. A scroll container's own padding-bottom scrolls
 				// out of view, so a card that scrolled itself clipped its last line flush against the
 				// bottom border while keeping its top padding — the asymmetric look this fixes.
-				body + " { display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-width: thin !important; scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 32%, transparent) transparent !important; }",
+				body + " { display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-width: thin !important; scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 15%, transparent) transparent !important; transition: scrollbar-color .15s ease !important; }",
+				overlay + ":hover" + bodySuffix + ", " + overlay + ":focus-within" + bodySuffix + " { scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 32%, transparent) transparent !important; }",
 				// Text fades out at the very bottom so the next line looks like it continues below. A mask
 				// on the scroller is used instead of a painted gradient: the text fades to transparent
 				// and the card's own (translucent, blurred) surface shows through, so there is no need
@@ -384,7 +386,10 @@ window.__ModuleLoader__.load({
 				body + "[" + PROMPT_OVERLAY_MORE_BELOW_ATTR + "] { -webkit-mask-image: " + fadeMask + " !important; mask-image: " + fadeMask + " !important; }",
 				body + "::-webkit-scrollbar { width: 8px !important; height: 8px !important; }",
 				body + "::-webkit-scrollbar-track { background: transparent !important; }",
-				body + "::-webkit-scrollbar-thumb { border: 2px solid transparent !important; border-radius: 999px !important; background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 30%, transparent) !important; background-clip: padding-box !important; }",
+				// Unfocused / default state: lower contrast (subtle 15% opacity), so it doesn't distract when reading.
+				body + "::-webkit-scrollbar-thumb { border: 2px solid transparent !important; border-radius: 999px !important; background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 15%, transparent) !important; background-clip: padding-box !important; transition: background .15s ease !important; }",
+				// Restores current contrast (30%) when card is hovered or focused, and 48% when directly hovered on thumb.
+				overlay + ":hover" + bodySuffix + "::-webkit-scrollbar-thumb, " + overlay + ":focus-within" + bodySuffix + "::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 30%, transparent) !important; background-clip: padding-box !important; }",
 				body + "::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 48%, transparent) !important; background-clip: padding-box !important; }",
 				// Keep the body inset exactly symmetric: whatever block comes first or last must not
 				// add its own margin on top of the padding, or a text-only card and an

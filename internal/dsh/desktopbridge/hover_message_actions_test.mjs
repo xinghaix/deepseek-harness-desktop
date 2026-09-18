@@ -591,8 +591,11 @@ assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-action/);
 assert.match(hoverStyle.textContent, /prompt-overlay-action\] \{ position: relative !important[^}]*width: 22px !important; height: 22px !important/);
 assert.match(hoverStyle.textContent, /prompt-overlay-time\] \{ margin-right: 3px[^}]*font-size: \.68rem !important/);
 assert.match(hoverStyle.textContent, /border-radius:\s*0 0 16px 16px/);
-assert.match(hoverStyle.textContent, /::-webkit-scrollbar-thumb/);
-assert.match(hoverStyle.textContent, /scrollbar-color/);
+// The scrollbar thumb has lower contrast (15%) when idle/unfocused, restoring to 30% on hover/focus-within.
+assert.match(hoverStyle.textContent, /scrollbar-color: color-mix\(in srgb, var\(--dsw-alias-text-tertiary, #8a8a8a\) 15%, transparent\) transparent !important;/);
+assert.match(hoverStyle.textContent, /:hover [^}]*scrollbar-color: color-mix\(in srgb, var\(--dsw-alias-text-tertiary, #8a8a8a\) 32%, transparent\) transparent !important;/);
+assert.match(hoverStyle.textContent, /::-webkit-scrollbar-thumb \{[^}]*15%, transparent\)/);
+assert.match(hoverStyle.textContent, /:hover [^}]*::-webkit-scrollbar-thumb, [^}]*::-webkit-scrollbar-thumb \{ background: color-mix\(in srgb, var\(--dsw-alias-text-tertiary, #8a8a8a\) 30%, transparent\)/);
 // The tooltip text is attribute-driven, so no locale string is baked into the CSS.
 // The confirmation tooltip is attribute-driven so no locale string lives in CSS.
 assert.match(hoverStyle.textContent, /content: attr\(data-dsh-desktop-prompt-overlay-hint\)/);
