@@ -13,7 +13,7 @@ if [ -n "$v" ]; then
 	exit 0
 fi
 
-exact=$(git describe --tags --exact-match 2>/dev/null || true)
+exact=$(git describe --tags --match 'v[0-9]*' --match 'V[0-9]*' --exact-match 2>/dev/null || true)
 exact=${exact#v}
 exact=${exact#V}
 if [ -n "$exact" ]; then
@@ -21,7 +21,7 @@ if [ -n "$exact" ]; then
 	exit 0
 fi
 
-tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+tag=$(git describe --tags --match 'v[0-9]*' --match 'V[0-9]*' --abbrev=0 2>/dev/null || true)
 tag=${tag#v}
 tag=${tag#V}
 if [ -z "$tag" ]; then
