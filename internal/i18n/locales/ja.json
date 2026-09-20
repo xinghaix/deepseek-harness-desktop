@@ -136,6 +136,8 @@
   "dashboard.ready_message": "DSH を起動する準備ができました…",
   "dashboard.version_unknown": "未検出",
   "dashboard.metric_cli": "CLI",
+  "dashboard.metric_cli_version": "CLI バージョン",
+  "bridge.cli_version": "CLI バージョン: {0}",
   "dashboard.metric_home": "DSH Home",
   "dashboard.metric_desktop_dir": "デスクトップディレクトリ",
   "dashboard.metric_workspace": "Chat 作業ディレクトリ",

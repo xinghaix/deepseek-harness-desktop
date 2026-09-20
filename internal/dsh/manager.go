@@ -77,11 +77,12 @@ type Options struct {
 }
 
 type Status struct {
-	State   string  `json:"state"`
-	Options Options `json:"options"`
-	URL     string  `json:"url"`
-	Logs    string  `json:"logs"`
-	Error   string  `json:"error"`
+	State      string  `json:"state"`
+	Options    Options `json:"options"`
+	URL        string  `json:"url"`
+	Logs       string  `json:"logs"`
+	Error      string  `json:"error"`
+	CLIVersion string  `json:"cliVersion"`
 }
 
 type ownedProcessMarker struct {
@@ -609,6 +610,9 @@ func (d *Manager) commitCLIOptions(o Options) {
 	if d.cmd != nil {
 		return
 	}
+	if d.options.Executable != o.Executable {
+		d.dshVersion = UnknownVersion
+	}
 	d.options, d.launchOptions = o, o
 	if d.state == "failed" {
 		d.state, d.lastError, d.url = "stopped", "", ""
@@ -650,6 +654,15 @@ func (d *Manager) start(o Options) error {
 		return i18n.ErrorfActive("err.dsh_already_running")
 	}
 	d.mu.Unlock()
+	if version, probeErr := checkCLI(o); probeErr == nil && strings.TrimSpace(version) != "" {
+		d.mu.Lock()
+		d.dshVersion = version
+		d.mu.Unlock()
+	} else if probeErr != nil {
+		d.mu.Lock()
+		d.dshVersion = UnknownVersion
+		d.mu.Unlock()
+	}
 	if o.DesktopDir, err = ensureDesktopDataDir(o.Home); err != nil {
 		return err
 	}
@@ -1057,7 +1070,16 @@ func closeBridge(bridge *desktopBridge) error {
 func (d *Manager) Status() Status {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	s := Status{State: d.state, Options: d.options, Error: d.lastError}
+	cliVersion := d.dshVersion
+	if strings.TrimSpace(cliVersion) == "" {
+		cliVersion = UnknownVersion
+	}
+	s := Status{
+		State:      d.state,
+		Options:    d.options,
+		Error:      d.lastError,
+		CLIVersion: cliVersion,
+	}
 	if d.output != nil {
 		s.Logs = d.output.text()
 	}

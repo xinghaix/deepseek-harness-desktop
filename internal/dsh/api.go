@@ -79,6 +79,9 @@ func (d *Manager) DiscoverCLI() (DiscoveryResult, error) {
 		d.mu.Unlock()
 		return result, nil
 	}
+	d.mu.Lock()
+	d.dshVersion = UnknownVersion
+	d.mu.Unlock()
 	result.Message = i18n.TActive("msg.cli_not_found_path")
 	return result, nil
 }
@@ -99,6 +102,9 @@ func (d *Manager) CheckCLI(o Options) (CheckResult, error) {
 	}
 	version, err := checkCLI(normalized)
 	if err != nil {
+		d.mu.Lock()
+		d.dshVersion = UnknownVersion
+		d.mu.Unlock()
 		return CheckResult{}, err
 	}
 	d.commitCLIOptions(normalized)

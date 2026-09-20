@@ -136,6 +136,8 @@
   "dashboard.ready_message": "DSH를 시작할 준비 완료…",
   "dashboard.version_unknown": "아직 감지되지 않음",
   "dashboard.metric_cli": "CLI",
+  "dashboard.metric_cli_version": "CLI 버전",
+  "bridge.cli_version": "CLI 버전: {0}",
   "dashboard.metric_home": "DSH Home",
   "dashboard.metric_desktop_dir": "데스크톱 디렉터리",
   "dashboard.metric_workspace": "Chat 작업 디렉터리",

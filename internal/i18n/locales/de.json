@@ -136,6 +136,8 @@
   "dashboard.ready_message": "Bereit, DSH zu starten…",
   "dashboard.version_unknown": "Noch nicht erkannt",
   "dashboard.metric_cli": "CLI",
+  "dashboard.metric_cli_version": "CLI-Version",
+  "bridge.cli_version": "CLI-Version: {0}",
   "dashboard.metric_home": "DSH Home",
   "dashboard.metric_desktop_dir": "Desktop-Verzeichnis",
   "dashboard.metric_workspace": "Chat-Arbeitsverzeichnis",

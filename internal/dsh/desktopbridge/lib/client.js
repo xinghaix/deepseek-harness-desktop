@@ -181,7 +181,8 @@ window.__ModuleLoader__.load({
 			"bridge.overlay_more": "{0} more",
 			"bridge.overlay_max_lines": "Max prompt lines",
 			// The settings nav resolves its label once, possibly before the catalog arrives.
-			"tray.open_settings": "Desktop settings"
+			"tray.open_settings": "Desktop settings",
+			"bridge.cli_version": "CLI Version: {0}"
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -2882,6 +2883,7 @@ window.__ModuleLoader__.load({
 											children: [
 												jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.process_title") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: options.executable ? t("bridge.cli_configured", options.executable) : t("bridge.cli_unset") }),
+												jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.cli_version", status?.cliVersion && status.cliVersion !== "unknown" ? status.cliVersion : "—") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: options.port ? t("bridge.address", "http://127.0.0.1:" + options.port + "/") : t("bridge.address_not_ready") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: appVersion ? t("bridge.desktop_version", appVersion) : t("bridge.desktop_version", "—") })
 											]

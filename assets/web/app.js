@@ -47,6 +47,13 @@ function setMessage(text, isError = false) {
   $("dashboard-message").textContent = text || t("dashboard.ready_message");
 }
 function setHidden(id, hidden) { $(id).hidden = hidden; }
+function updateCLIVersion(v) {
+  const dash = t("msg.em_dash");
+  const text = v && v !== "unknown" ? v : dash;
+  if ($("metric-cli-version")) $("metric-cli-version").textContent = text;
+  if ($("config-cli-version")) $("config-cli-version").textContent = text;
+  if ($("version")) $("version").textContent = text;
+}
 function fillOptions(o) { if (!o) return; $("executable").value = o.executable || ""; $("home").value = o.home || ""; $("workspace").value = o.workspace || ""; }
 function configSnapshot(o = options()) { return { executable: o.executable || "", home: o.home || "", workspace: o.workspace || "", port: 0 }; }
 function configKey(o = options()) { return [o.executable || "", o.home || "", o.workspace || ""].join("\n"); }
@@ -136,6 +143,10 @@ function renderStatus(status) {
   $("logs").textContent = status.logs || t("dashboard.no_logs");
   const o = status.options || {};
   $("metric-executable").textContent = o.executable || dash;
+  if (status.cliVersion && status.cliVersion !== "unknown") {
+    lastVersion = status.cliVersion;
+  }
+  updateCLIVersion(lastVersion);
   $("metric-home").textContent = o.home || dash;
   $("metric-workspace").textContent = o.workspace || dash;
   $("metric-url").textContent = status.url || t("dashboard.url_not_ready");
@@ -209,7 +220,7 @@ async function run(action, success) {
 async function probeSelected() {
   try {
     const result = await api("CheckCLI", options());
-    fillOptions(result.options); lastVersion = result.version || t("msg.version_detected"); $("version").textContent = lastVersion; cliReady = true;
+    fillOptions(result.options); lastVersion = result.version || t("msg.version_detected"); updateCLIVersion(lastVersion); cliReady = true;
     const runningNow = Boolean(result.alreadyRunning);
     setDetect("found", runningNow ? t("detect.running") : t("detect.found"), runningNow ? t("detect.running_saved", result.options.executable) : t("detect.verified", result.options.executable, lastVersion));
     setHidden("install-card", true); saveOptions(false); markBaseline(); setMessage(runningNow ? t("msg.runtime_saved") : t("msg.cli_ok"));
@@ -223,7 +234,7 @@ async function discover() {
   setDetect("checking", t("detect.checking_title"), t("detect.checking_detail")); cliReady = false; updateButtons();
   try {
     const result = await api("DiscoverCLI");
-    if (result.found) { fillOptions(result.options); lastVersion = result.version || t("msg.version_detected"); $("version").textContent = lastVersion; cliReady = true; saveOptions(false); markBaseline(); setDetect("found", t("detect.found"), t("detect.found_version", result.options.executable, lastVersion)); setHidden("install-card", true); setMessage(t("msg.cli_ok")); }
+    if (result.found) { fillOptions(result.options); lastVersion = result.version || t("msg.version_detected"); updateCLIVersion(lastVersion); cliReady = true; saveOptions(false); markBaseline(); setDetect("found", t("detect.found"), t("detect.found_version", result.options.executable, lastVersion)); setHidden("install-card", true); setMessage(t("msg.cli_ok")); }
     else { setDetect("missing", t("detect.missing"), result.message || t("detect.missing_message")); setHidden("install-card", false); $("advanced-settings").open = true; setMessage(t("msg.choose_or_install")); }
     updateButtons(); return result;
   } catch (error) { setDetect("error", t("detect.check_failed"), errorText(error)); setMessage(errorText(error), true); updateButtons(); return { found: false, error: errorText(error) }; }
@@ -709,7 +720,15 @@ bindLanguageSelect("ui-language");
 bindLanguageSelect("ui-language-dashboard");
 $("install-update").onclick = () => run(() => api("InstallUpdate"), () => setMessage(t("update.installing")));
 $("open-release").onclick = () => run(() => api("OpenReleasePage"));
-["executable", "workspace"].forEach((id) => $(id).addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); }));
+["executable", "workspace"].forEach((id) => $(id).addEventListener("input", () => {
+  cliReady = false;
+  if (id === "executable") {
+    lastVersion = "";
+    updateCLIVersion("");
+  }
+  updateButtons();
+  syncConfigDirty();
+}));
 $("home").addEventListener("input", () => { cliReady = false; updateButtons(); syncConfigDirty(); });
 async function load() {
   // Paint splash immediately; load locale in parallel with Defaults.
@@ -752,7 +771,7 @@ async function load() {
   if (saved && saved.executable && saved.lastStartSucceeded === true) {
     cliReady = true;
     lastVersion = saved.version || t("msg.version_last_ok");
-    $("version").textContent = lastVersion;
+    updateCLIVersion(lastVersion);
     setDetect("cached", t("detect.cached_title"), t("detect.cached_message", saved.executable));
     await startAutomatically(true);
     await refresh();

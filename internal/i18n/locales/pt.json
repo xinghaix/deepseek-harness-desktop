@@ -136,6 +136,8 @@
   "dashboard.ready_message": "Pronto para iniciar o DSH…",
   "dashboard.version_unknown": "Ainda não detetado",
   "dashboard.metric_cli": "CLI",
+  "dashboard.metric_cli_version": "Versão da CLI",
+  "bridge.cli_version": "Versão da CLI: {0}",
   "dashboard.metric_home": "DSH Home",
   "dashboard.metric_desktop_dir": "Diretório de ambiente de trabalho",
   "dashboard.metric_workspace": "Diretório de trabalho do Chat",

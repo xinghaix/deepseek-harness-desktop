@@ -102,6 +102,9 @@ func (d *Manager) SaveLaunchOptions(o Options, lastStartSucceeded bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.cmd == nil {
+		if d.options.Executable != o.Executable {
+			d.dshVersion = UnknownVersion
+		}
 		d.options, d.launchOptions = o, o
 	} else {
 		d.launchOptions = o
