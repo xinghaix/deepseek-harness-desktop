@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -68,6 +69,7 @@ func (d *DSH) OpenExternalURL(raw string) error {
 }
 
 type report struct {
+	NativeMenu    bool             `json:"nativeMenu"`
 	NativeActions map[string]int32 `json:"nativeActions,omitempty"`
 	Queued        int              `json:"queued"`
 	BeforeReady   int              `json:"beforeReady"`
@@ -126,6 +128,7 @@ const remoteProbe = `
  await new Promise(resolve => setTimeout(resolve, 150));
  if (window.__NAV_PROBE_RPC_PENDING__) await Promise.allSettled([...window.__NAV_PROBE_RPC_PENDING__]);
  result.origin = location.origin;
+ result.nativeMenu = typeof window.webkit?.messageHandlers?.dshContextMenu?.postMessage === "function";
  result.alerts = window.__NAV_PROBE_ALERTS__;
  await fetch("/report", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(result)});
  if (window.__NAV_PROBE_READINESS__ && !reload) {sessionStorage.setItem("readinessReload", "1");location.reload();}
@@ -275,6 +278,7 @@ func run(bridge bool, readiness string) error {
 	}
 
 	remoteWindow = app.Window.NewWithOptions(options)
+	desktop.TuneNativeWebView(remoteWindow)
 	remoteWindow.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { runtimeReady.Add(1) })
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "control", Title: "Isolated embedded native control", URL: "/", Width: 500, Height: 250,
@@ -298,6 +302,10 @@ func run(bridge bool, readiness string) error {
 					break collect
 				}
 				seen[item.Stage] = item
+				if runtime.GOOS == "darwin" && item.Stage != "control" && readiness != "baseline" && !item.NativeMenu {
+					failure = fmt.Errorf("native menu handler was not attached to actual Wails Chat WebView")
+					break collect
+				}
 				encoded, _ := json.Marshal(item)
 				fmt.Println(string(encoded))
 			case <-timer.C:

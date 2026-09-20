@@ -463,6 +463,14 @@ const desktopExternalJSTemplate = `
   document.addEventListener("contextmenu", (event) => {
     const payload = contextPayload(event);
     window.__DSH_CTX__ = payload;
+    // WKWebView no longer provides the old private synchronous JS reader.
+    // Send the current event context before WebKit constructs its native menu.
+    if (!useCustomMenu) {
+      const native = window.webkit?.messageHandlers?.dshContextMenu;
+      if (typeof native?.postMessage === "function") {
+        try { native.postMessage(payload); } catch (_) { /* preserve the system menu */ }
+      }
+    }
     const el = event.target instanceof Element ? event.target : (event.target && event.target.parentElement) || document.body;
     if (!el || !el.style) return;
     el.style.removeProperty("--custom-contextmenu");

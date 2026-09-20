@@ -14,11 +14,13 @@ func TuneNativeWebView(window application.Window) {
 	if window == nil {
 		return
 	}
+	attached := attachNativeContextMenu(window)
 	unlockWebKitDisplayRefresh(window)
-	if window.NativeWindow() != nil {
+	if window.NativeWindow() != nil && attached {
 		return
 	}
 	window.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		attachNativeContextMenu(window)
 		unlockWebKitDisplayRefresh(window)
 	})
 }

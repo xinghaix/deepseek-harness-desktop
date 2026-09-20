@@ -4,7 +4,7 @@
 
 ## 安装或更新
 
-需要已安装的 DSH（`>=0.1.1-rc.1`）和 Node.js 20 或更高版本，以及 DSH Host 提供的 settings / web 插件。
+需要已安装的 DSH（`>=0.1.6-alpha.2`，提供新版主侧栏插件管理页）和 Node.js 20 或更高版本，以及 DSH Host 提供的 settings / web 插件。
 
 直接从 GitHub 安装，无需先克隆仓库或发布到 npm。以下命令可在任意目录执行，适用于 macOS / Linux 和 Windows PowerShell（需已安装 pnpm 和 Git）：
 
@@ -20,9 +20,11 @@ dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#path:/plugins/ds
 
 ## 使用与安全边界
 
-1. 打开 **设置 → 插件 → 插件配置**，找到 **Web fetch allowlist** 卡片。
+1. 关闭设置弹窗，打开 **Chat 主侧栏 → 插件 → 已安装 → dsh-web-fetch-allowlist**；启用插件后，白名单表单直接显示在插件详情页。**设置 → 内置插件** 只是插件清单，不再承载本插件的设置。
 2. 每行填写一个域名、通配域名或 URL，例如 `example.com`、`*.example.com` 或 `https://example.com/docs`。
-3. 保存后，在新的对话轮次调用 `web_fetch`；保存的配置在后续调用生效。
+3. 点击 **保存** 后，在新的对话轮次调用 `web_fetch`；保存的配置在后续调用生效。离开插件详情页会放弃未保存的修改。
+
+新版配置页使用 `plugins.bundle.config`，按包名 `dsh-web-fetch-allowlist` 挂载；旧的 `settings.plugin.item` 入口已移除。设置命名空间仍为 `web-fetch-allowlist`，原有已保存域名无需迁移。旧版 DSH 请固定到本次适配之前的插件提交。
 
 白名单主机可以解析为公网单播地址或 Fake-IP `198.18.0.0/15`；loopback、RFC1918 私网、link-local 和元数据地址仍被阻止。裸域名及通配域名的匹配规则见 [测试](lib/hosts.test.js)。
 

@@ -4,5 +4,5 @@
     - id: web-fetch-allowlist
       name: dsh-web-fetch-allowlist
       config:
-        # No bundled hosts: configure your own allowlist in Settings.
+        # No bundled hosts: configure your own allowlist on the Plugins page.
         hosts: ""
