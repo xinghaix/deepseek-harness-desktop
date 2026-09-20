@@ -56,12 +56,11 @@ darwin)
 		go build -tags "$tags" -ldflags "$ldflags" -trimpath -buildvcs=false -o "$dist/$app" .
 	bundle="$dist/$bundle_name.app"
 	rm -rf "$dist/$app.app" "$bundle"
-	mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/plugins"
+	mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 	cp "$dist/$app" "$bundle/Contents/MacOS/$app"
 	cp assets/darwin/icons.icns "$bundle/Contents/Resources/icons.icns"
 	cp assets/darwin/Info.plist "$bundle/Contents/Info.plist"
 	python3 scripts/stamp-plist-version.py "$bundle/Contents/Info.plist" "$version"
-	cp -R plugins/deepseek-harness-desktop-bridge "$bundle/Contents/Resources/plugins/deepseek-harness-desktop-bridge"
 	chmod 755 "$bundle/Contents/MacOS/$app"
 	sh scripts/sign.sh "$bundle"
 	sh scripts/package-darwin-dmg.sh "$bundle" "$dist/$app-darwin-$goarch.dmg"
