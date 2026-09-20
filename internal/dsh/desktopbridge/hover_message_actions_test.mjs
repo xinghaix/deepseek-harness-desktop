@@ -244,6 +244,7 @@ u2.appendChild(imageAttachment);
 // it is a file chip — its icon must not leak into the thumbnail row.
 const fileAttachment = new FakeElement("button");
 fileAttachment.setAttribute("title", "quarterly.xlsx");
+fileAttachment.setAttribute("data-file-name", "quarterly.xlsx");
 const fileTypeIcon = new FakeElement("img");
 fileTypeIcon.setAttribute("src", "https://example.test/icons/xlsx.svg");
 fileAttachment.appendChild(fileTypeIcon);
@@ -294,6 +295,7 @@ u3Attachment.appendChild(u3Image);
 u3.appendChild(u3Attachment);
 const u3File = new FakeElement("button");
 u3File.setAttribute("title", "notes.pdf");
+u3File.setAttribute("data-filename", "notes.pdf");
 u3.appendChild(u3File);
 const u3Ops = new FakeElement("div");
 const u3Copy = new FakeElement("button");
@@ -382,10 +384,12 @@ function getComputedStyle(el) {
 }
 
 class ResizeObserver {
-  constructor(cb) { this.cb = cb; this.targets = new Set(); }
-  observe(el) { if (el) this.targets.add(el); }
-  disconnect() { this.targets.clear(); }
-  trigger() { this.cb([]); }
+  static instances = [];
+  constructor(cb) { this.cb = cb; this.targets = new Set(); this.observeCalls = 0; this.disconnectCalls = 0; ResizeObserver.instances.push(this); }
+  observe(el) { if (el) { this.targets.add(el); this.observeCalls++; } }
+  unobserve(el) { this.targets.delete(el); }
+  disconnect() { this.targets.clear(); this.disconnectCalls++; }
+  trigger(target) { if (!target || this.targets.has(target)) this.cb(target ? [{ target }] : []); }
 }
 vm.runInNewContext(source, {
   window,
@@ -577,10 +581,10 @@ const bodyPadding = 12 * 2;
 assert.equal(cardChrome - bodyPadding, 20, "card chrome beyond padding equals the fade band");
 assert.doesNotMatch(hoverStyle.textContent, /\+ 90px\)\) !important/, "the old strip row is no longer reserved in the height budget");
 
-// Attachments wrap from the top-left instead of a nowrap strip.
-assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-media\] \{ display: flex !important; flex-wrap: wrap/);
+// Images and files occupy one bounded grid, rather than independent wrapping strips.
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-attachments\] \{ display: grid !important; flex: 0 0 auto !important; grid-template-columns: repeat/);
 assert.match(hoverStyle.textContent, /overflow-y:\s*auto/);
-assert.match(hoverStyle.textContent, /64px/);
+assert.match(hoverStyle.textContent, /minmax\(0, 1fr\)/);
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-media/);
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-files/);
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-text/);
@@ -605,7 +609,7 @@ assert.doesNotMatch(source, /PROMPT_OVERLAY_COPY/);
 for (const key of ["overlay_label", "overlay_toolbar", "overlay_hidden", "overlay_action", "overlay_attachment", "overlay_copied"]) {
   assert.ok(source.includes('t("bridge.' + key + '")'), "overlay uses catalog key bridge." + key);
 }
-assert.match(source, /t\("bridge\.overlay_more", hiddenMedia\)/);
+assert.match(source, /t\("bridge\.overlay_more", count\)/);
 // The catalog is fetched from the desktop control plane, exactly like the config page.
 assert.match(source, /function t\(key, \.\.\.vars\)/);
 assert.match(source, /callDesktopRPC\(localeConnection, "localeBundle"/);
@@ -696,7 +700,7 @@ assert.ok(filesRow, "render compact file row");
 assert.doesNotMatch(filesRow.textContent, /image\.png/, "an image wrapper is not demoted to a file chip");
 assert.match(filesRow.textContent, /report\.csv/, "a real file card still renders as a file chip");
 assert.match(filesRow.textContent, /quarterly\.xlsx/, "a clickable file card renders as a file chip");
-assert.doesNotMatch(mediaRow.textContent, /xlsx/, "a file card's type icon is not rendered as a thumbnail");
+assert.doesNotMatch([...mediaRow.querySelectorAll("img")].map((node) => node.getAttribute("src")).join(" "), /xlsx/, "a file card's type icon is not rendered as a thumbnail");
 // The decisive regression: attachments must never be proxied as message actions.
 const attachmentTitles = [...toolbar.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]")]
     .map((button) => (button.getAttribute("title") || "") + (button.getAttribute("aria-label") || ""));
@@ -745,9 +749,8 @@ composer.rect = savedComposer;
 // assertion still sees the default rather than a value this block happened to leave behind.
 delete window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__;
 window.dispatchEvent(new CustomEvent("resize"));
-// Attachments are budgeted on top of the text lines: one thumbnail row (48+6) plus one
-// chip row (30) plus the gaps/padding = 98px.
-assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-extra"], "98px", "the attachment block gets its own height budget");
+// Shared grid: two 48px rows + 6px row gap + 8px separation from the body = 110px.
+assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-extra"], "110px", "the combined attachment block gets one height budget");
 assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-lines"], "5", "the default line budget is applied");
 
 // A single click confirms immediately (no second click needed) and stays confirmed.
@@ -899,8 +902,12 @@ assert.ok(narrowRow, "narrow card still renders the media row");
 assert.equal(narrowRow.querySelectorAll("img").length, 1, "a narrow card shows one thumbnail per row");
 const overflowChip = narrowRow.querySelector("[data-dsh-desktop-prompt-overlay-more]");
 assert.ok(overflowChip, "overflowing attachments get a +N cell");
-assert.equal(overflowChip.textContent, "+3", "the +N cell reports the hidden attachment count");
-assert.match(overflowChip.getAttribute("aria-label"), /3/, "the +N cell is labelled for assistive tech");
+assert.equal(overflowChip.textContent, "+5", "shared overflow includes three hidden images and two hidden files");
+assert.match(overflowChip.getAttribute("aria-label"), /5/, "combined hidden count is accessible");
+assert.ok(overflowChip.querySelector("svg"), "more attachments are signalled by a real SVG icon");
+assert.equal(overflowChip.getAttribute("title"), overflowChip.getAttribute("aria-label"));
+assert.equal(narrowRow, overlay.querySelector("[data-dsh-desktop-prompt-overlay-files]"), "images and files share one grid");
+assert.equal(narrowRow.childNodes.length, 2, "one-column mixed grid has only two rows including the more tile");
 // Restore the fixture so later geometry assertions see the original layout. The wide-card
 // media rendering is already covered by the assertions above.
 scroll.rect = wideRects.scroll;
@@ -1025,10 +1032,192 @@ onlyBody.rect = { top: 212, bottom: 308, left: 112, right: 488 };
 lastBlock.rect = { top: 240, bottom: 270, left: 112, right: 480 };
 window.dispatchEvent(new CustomEvent("scroll"));
 assert.equal(onlyStrip.style._props.top, "43px", "the strip centres on the attachment row, not under it");
+// A unified two-row grid must anchor the toolbar to its LAST cell, not the whole grid centre.
+overlay.rect = { top: 200, bottom: 450, left: 100, right: 500 };
+onlyBody.rect = { top: 212, bottom: 430, left: 112, right: 488 };
+lastBlock.rect = { top: 240, bottom: 342, left: 112, right: 480 };
+lastBlock.childNodes[lastBlock.childNodes.length - 1].rect = { top: 294, bottom: 342, left: 112, right: 240 };
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(onlyStrip.style._props.top, "106px", "two-row attachment-only toolbar aligns with the last row");
+assert.notEqual(overlay.querySelector("[data-dsh-desktop-prompt-overlay-content]").getAttribute("aria-hidden"), "true", "overflow labels and focusable previews are exposed to assistive technology");
+
 for (const [key, key3] of [["u1", u1], ["u2", u2], ["u3", u3], ["a1", a1], ["a2", a2], ["a3", a3]]) {
   key3.rect = flowRects[key];
 }
 window.dispatchEvent(new CustomEvent("scroll"));
+
+// Regression replay through the actual overlay entry point.
+function replayAttachments(nodes) {
+  window.dispatchEvent(new CustomEvent("dsh-desktop-hover-message-actions", { detail: false }));
+  while (u2.firstChild) u2.removeChild(u2.firstChild);
+  u2.textContent = "";
+  for (const node of nodes) u2.appendChild(node);
+  window.dispatchEvent(new CustomEvent("dsh-desktop-hover-message-actions", { detail: true }));
+  window.dispatchEvent(new CustomEvent("scroll"));
+  assert.equal(overlays().length, 1);
+  return overlays()[0];
+}
+function fixtureFile(name, path) {
+  const node = new FakeElement("div");
+  node.setAttribute("data-filename", name);
+  if (path) node.setAttribute("data-file-path", path);
+  return node;
+}
+const fileItems = (card) => card.querySelector("[data-dsh-desktop-prompt-overlay-files]")?.querySelectorAll("[data-dsh-desktop-prompt-overlay-item]") || [];
+for (const text of ["请修改 src/main.go 实现批量创建", "README.md", "请参考 image.png 和 report.pdf"]) {
+  const prose = new FakeElement("div");
+  prose.textContent = text;
+  const card = replayAttachments([prose]);
+  assert.equal(fileItems(card).length, 0, "ordinary prose and path mentions are not attachments");
+  assert.equal(card.querySelector("[data-dsh-desktop-prompt-overlay-text]").textContent, text);
+}
+// Same-name/content image attachments stay separate and route to their own native viewer.
+const twins = [0, 1].map(() => {
+  const button = new FakeElement("button");
+  button.setAttribute("title", "image.png，点击查看原图");
+  const image = new FakeElement("img");
+  image.setAttribute("src", "https://example.test/same-content.png");
+  image.setAttribute("alt", "image.png");
+  button.appendChild(image);
+  return button;
+});
+const twinCard = replayAttachments(twins);
+const twinImages = twinCard.querySelector("[data-dsh-desktop-prompt-overlay-media]").querySelectorAll("img");
+assert.equal(twinImages.length, 2, "distinct images may share the same normalized source URL");
+twinImages[1].dispatchEvent({ type: "click" });
+assert.equal(twins[1].clicked, 1);
+assert.equal(twins[0].clicked || 0, 0);
+u2.removeChild(twins[1]);
+twinImages[1].dispatchEvent({ type: "click" });
+assert.equal(twins[0].clicked || 0, 0, "stale thumbnail must never fall back to a different attachment");
+
+// Current DSH: attachment rows contain inert SPAN file cards, including extensionless names.
+const nativeRow = new FakeElement("div");
+nativeRow.setAttribute("data-message-attachments", "true");
+nativeRow.setAttribute("class", "FreshHash_attachmentRow");
+for (const name of ["README", "report.csv", "report.csv"]) {
+  const card = new FakeElement("span");
+  card.setAttribute("class", "FreshHash_fileCard");
+  card.setAttribute("title", name);
+  const label = new FakeElement("span");
+  label.setAttribute("class", "FreshHash_fileName");
+  label.textContent = name;
+  const meta = new FakeElement("span");
+  meta.textContent = "CSV 1024 B";
+  card.appendChild(label);
+  card.appendChild(meta);
+  nativeRow.appendChild(card);
+}
+let nativeCard = replayAttachments([nativeRow]);
+assert.equal(fileItems(nativeCard).length, 3, "extract individual native cards, not their container or metadata");
+assert.equal(fileItems(nativeCard)[0].textContent, "README");
+assert.deepEqual([...fileItems(nativeCard)].map((node) => node.getAttribute("title")), ["README", "report.csv", "report.csv"]);
+assert.notEqual(fileItems(nativeCard)[1].textContent, fileItems(nativeCard)[2].textContent);
+// Generic classes/tooltips and action labels never count as file metadata.
+for (const className of ["document", "filename", "upload", "FreshHash_fileCard"]) {
+  const prose = new FakeElement("div");
+  prose.setAttribute("class", className);
+  prose.setAttribute("title", "请修改 src/main.go");
+  prose.textContent = "请修改 src/main.go";
+  assert.equal(fileItems(replayAttachments([prose])).length, 0);
+}
+const paths = ["a/report.csv", "b/report.csv", "C:/work/report.csv"];
+
+let edgeCard = replayAttachments(paths.map((path) => fixtureFile("report.csv", path)));
+assert.equal(fileItems(edgeCard).length, 3, "same basename from different paths must not be deduplicated");
+assert.deepEqual([...fileItems(edgeCard)].map((node) => node.getAttribute("title")), paths);
+edgeCard = replayAttachments([fixtureFile("report.csv"), fixtureFile("report.csv")]);
+assert.equal(fileItems(edgeCard).length, 2, "distinct nodes remain distinct even without paths");
+assert.notEqual(fileItems(edgeCard)[0].textContent, fileItems(edgeCard)[1].textContent);
+const longName = "很长的附件名😀".repeat(300) + ".csv";
+const hostileName = '<img src=x onerror="alert(1)">.txt';
+edgeCard = replayAttachments([fixtureFile(longName), fixtureFile(hostileName), fixtureFile("README")]);
+assert.equal(fileItems(edgeCard).length, 3);
+assert.equal(fileItems(edgeCard)[0].getAttribute("title"), longName);
+assert.equal(fileItems(edgeCard)[1].textContent, hostileName);
+assert.equal(fileItems(edgeCard)[1].querySelector("img"), null);
+for (const item of fileItems(edgeCard)) {
+  assert.equal(item.getAttribute("href"), null);
+  assert.equal(item.getAttribute("onclick"), null);
+}
+const spoofName = "report" + String.fromCharCode(0x202e) + "fdp.exe";
+edgeCard = replayAttachments([fixtureFile(spoofName), fixtureFile("line" + String.fromCharCode(10) + "break.csv")]);
+assert.equal(fileItems(edgeCard)[0].getAttribute("title"), "report\\u202efdp.exe");
+assert.equal(fileItems(edgeCard)[1].getAttribute("title"), "line\\u000abreak.csv");
+assert.equal(fileItems(edgeCard)[0].textContent.includes(String.fromCharCode(0x202e)), false);
+assert.match(hoverStyle.textContent, /text-overflow: ellipsis/);
+assert.match(hoverStyle.textContent, /grid-template-columns: repeat/);
+edgeCard = replayAttachments(Array.from({ length: 30 }, () => fixtureFile(longName)));
+const renderedFiles = fileItems(edgeCard).length;
+assert.ok(renderedFiles > 0 && renderedFiles < 30);
+assert.equal(edgeCard.querySelector("[data-dsh-desktop-prompt-overlay-files]").querySelector("[data-dsh-desktop-prompt-overlay-more]").textContent, "+" + (30 - renderedFiles));
+// Exact capacity and one over it: the single overflow tile also consumes one cell.
+function fixtureImage(index) {
+  const image = new FakeElement("img");
+  image.setAttribute("src", "https://example.test/mixed-" + index + ".png");
+  return image;
+}
+for (const [imageCount, fileCount] of [[0, 0], [20, 0], [0, 20], [2, 8], [2, 9], [30, 20]]) {
+  const nodes = [...Array.from({ length: imageCount }, (_, i) => fixtureImage(i)), ...Array.from({ length: fileCount }, () => fixtureFile(longName))];
+  const card = replayAttachments(nodes);
+  const grid = card.querySelector("[data-dsh-desktop-prompt-overlay-attachments]");
+  const total = imageCount + fileCount;
+  if (!total) { assert.equal(grid, null); continue; }
+  const columns = Number(grid.style._props["--dsh-desktop-attachment-columns"]);
+  const items = grid.querySelectorAll("[data-dsh-desktop-prompt-overlay-item]");
+  const moreTiles = grid.querySelectorAll("[data-dsh-desktop-prompt-overlay-more]");
+  assert.ok(grid.childNodes.length <= columns * 2, "images + files + more share at most two rows");
+  assert.equal(moreTiles.length, total > columns * 2 ? 1 : 0, "at most one shared overflow tile");
+  if (moreTiles.length) {
+    assert.equal(moreTiles[0].textContent, "+" + (total - items.length));
+    assert.equal(moreTiles[0], grid.childNodes[grid.childNodes.length - 1], "more is always the last visible cell");
+    assert.ok(moreTiles[0].querySelector("svg"));
+    assert.equal(moreTiles[0].getAttribute("role"), "img", "indicator does not pretend to be an interactive button");
+  } else assert.equal(items.length, total);
+  assert.equal(grid.style._props["--dsh-desktop-attachment-height"], imageCount ? "48px" : "30px");
+}
+// Resize the SAME live prompt; no preference toggles, text mutations or source replacement.
+const responsiveRects = { scroll: { ...scroll.rect }, composer: { ...composer.rect }, textarea: { ...textarea.rect } };
+scroll.rect = { ...scroll.rect, right: 1500 };
+const liveNodes = [fixtureImage(0), fixtureImage(1), ...Array.from({ length: 10 }, () => fixtureFile(longName))];
+const responsiveCard = replayAttachments(liveNodes);
+const resizeCard = (width, target) => {
+  composer.rect = { ...composer.rect, left: 40, right: 40 + width };
+  textarea.rect = { ...textarea.rect, left: 56, right: 40 + width - 16 };
+  if (target) target.trigger(composer);
+  else window.dispatchEvent(new CustomEvent("resize"));
+  const grid = responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-attachments]");
+  const expectedColumns = Math.max(1, Math.floor((width - 25 + 6) / 126));
+  assert.equal(Number.parseFloat(responsiveCard.style.width), width, "overlay follows the live composer width");
+  assert.equal(Number(grid.style._props["--dsh-desktop-attachment-columns"]), expectedColumns, "column capacity updates even on a 1px threshold crossing");
+  const expectedVisible = 12 <= expectedColumns * 2 ? 12 : expectedColumns * 2 - 1;
+  assert.equal(grid.querySelectorAll("[data-dsh-desktop-prompt-overlay-item]").length, expectedVisible);
+  const more = grid.querySelector("[data-dsh-desktop-prompt-overlay-more]");
+  assert.equal(more?.textContent || "", expectedVisible < 12 ? "+" + (12 - expectedVisible) : "", "more count shrinks, disappears, and returns on narrowing");
+  assert.deepEqual(u2.childNodes, liveNodes, "resize never mutates the original attachments");
+  return grid;
+};
+for (const width of [270, 271, 396, 397, 775, 1040, 271, 270]) resizeCard(width);
+const liveResizeObserver = ResizeObserver.instances.find((item) => item.targets.has(scroll));
+assert.ok(liveResizeObserver?.targets.has(composer), "observe composer-only resizing, not just window/pane resize");
+resizeCard(775, liveResizeObserver);
+const stableGrid = resizeCard(780, liveResizeObserver);
+assert.equal(resizeCard(782, liveResizeObserver), stableGrid, "reuse grid within a column band rather than recreate thumbnails each pixel");
+const observationCount = liveResizeObserver.observeCalls;
+const disconnectCount = liveResizeObserver.disconnectCalls;
+liveResizeObserver.trigger(composer);
+assert.equal(liveResizeObserver.observeCalls, observationCount, "settled resize does not re-observe unchanged nodes");
+assert.equal(liveResizeObserver.disconnectCalls, disconnectCount, "avoid a perpetual initial-notification resize loop");
+responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-body]").scrollTop = 40;
+resizeCard(270, liveResizeObserver);
+assert.equal(responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-body]").scrollTop, 40, "retain preview reading position across capacity changes");
+scroll.rect = responsiveRects.scroll;
+composer.rect = responsiveRects.composer;
+textarea.rect = responsiveRects.textarea;
+window.dispatchEvent(new CustomEvent("resize"));
+console.log("ok - live width expansion, collapse, column thresholds and stable observation");
+console.log("ok - mixed attachments share two rows and one icon-based overflow tile");
+console.log("ok - attachment identity, prose classification, long names and inert labels");
 
 window.dispatchEvent(new CustomEvent("dsh-desktop-hover-message-actions", { detail: false }));
 assert.equal(overlays().length, 0, "setting off removes the detached overlay");

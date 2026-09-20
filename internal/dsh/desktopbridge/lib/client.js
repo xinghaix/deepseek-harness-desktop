@@ -137,6 +137,7 @@ window.__ModuleLoader__.load({
 		const PROMPT_OVERLAY_CONTENT_ATTR = "data-dsh-desktop-prompt-overlay-content";
 		const PROMPT_OVERLAY_MEDIA_ATTR = "data-dsh-desktop-prompt-overlay-media";
 		const PROMPT_OVERLAY_FILES_ATTR = "data-dsh-desktop-prompt-overlay-files";
+		const PROMPT_OVERLAY_ATTACHMENTS_ATTR = "data-dsh-desktop-prompt-overlay-attachments";
 		const PROMPT_OVERLAY_TEXT_ATTR = "data-dsh-desktop-prompt-overlay-text";
 		// The scrolling box, INSIDE the card. Kept separate from the card so the card's padding
 		// stays on screen while the text scrolls (see the CSS comment below).
@@ -333,7 +334,7 @@ window.__ModuleLoader__.load({
 		const PROMPT_OVERLAY_THUMB_H = 48;
 		const PROMPT_OVERLAY_THUMB_GAP = 6;
 		const PROMPT_OVERLAY_MEDIA_ROWS = 2;
-		// Rough width of one file chip, used only to budget rows; the row itself clips.
+		// Target grid-track width for file chips; CSS uses exactly the computed column count.
 		const PROMPT_OVERLAY_CHIP_AVG_W = 120;
 		const PROMPT_OVERLAY_CHIP_ROW_H = 30;
 		// Vertical padding the body adds around the attachment block.
@@ -343,7 +344,7 @@ window.__ModuleLoader__.load({
 			const overlayPath = "[" + PROMPT_OVERLAY_ATTR + "]";
 			const contentPath = overlayPath + " [" + PROMPT_OVERLAY_CONTENT_ATTR + "]";
 			const mediaPath = contentPath + " [" + PROMPT_OVERLAY_MEDIA_ATTR + "]";
-			const morePath = mediaPath + " [" + PROMPT_OVERLAY_MORE_ATTR + "]";
+			const morePath = contentPath + " [" + PROMPT_OVERLAY_MORE_ATTR + "]";
 			const filesPath = contentPath + " [" + PROMPT_OVERLAY_FILES_ATTR + "]";
 			const bodyPath = contentPath + " [" + PROMPT_OVERLAY_BODY_ATTR + "]";
 			const textPath = contentPath + " [" + PROMPT_OVERLAY_TEXT_ATTR + "]";
@@ -356,6 +357,7 @@ window.__ModuleLoader__.load({
 			const content = root + " " + contentPath;
 			const body = root + " " + bodyPath;
 			const media = root + " " + mediaPath;
+			const attachments = content + " [" + PROMPT_OVERLAY_ATTACHMENTS_ATTR + "]";
 			const more = root + " " + morePath;
 			const files = root + " " + filesPath;
 			const text = root + " " + textPath;
@@ -434,17 +436,20 @@ window.__ModuleLoader__.load({
 				// outside the card. JS copies the hovered button's label into the hint attribute,
 				// which also keeps the confirmation text in the active locale.
 				toolbar + "[" + PROMPT_OVERLAY_HINT_ATTR + "]:not([" + PROMPT_OVERLAY_HINT_ATTR + "=''])::after { content: attr(" + PROMPT_OVERLAY_HINT_ATTR + ") !important; position: absolute !important; right: calc(100% + 8px) !important; top: 50% !important; transform: translateY(-50%) !important; padding: 3px 8px !important; border-radius: 6px !important; background: rgba(24, 24, 27, .94) !important; color: #fff !important; font-size: .72rem !important; line-height: 1.35 !important; white-space: nowrap !important; pointer-events: none !important; }",
-// Attachments flow from the top-left and wrap; JS caps them at 2 rows with a +N cell.
-media + " { display: flex !important; flex-wrap: wrap !important; align-items: flex-start !important; align-content: flex-start !important; justify-content: flex-start !important; gap: 6px !important; min-height: 0 !important; overflow: hidden !important; height: auto !important; }",
-				more + " { display: inline-flex !important; flex: 0 0 auto !important; align-items: center !important; justify-content: center !important; width: 64px !important; min-width: 64px !important; height: 48px !important; padding: 0 !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 88%, transparent) !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 82%, transparent) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .78rem !important; font-variant-numeric: tabular-nums !important; }",
-				media + " img, " + media + " video, " + media + " canvas { display: block !important; flex: 0 0 auto !important; width: 64px !important; height: 48px !important; max-width: 64px !important; max-height: 48px !important; object-fit: cover !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 88%, transparent) !important; }",
+				// One grid for all attachments; the overflow tile is included in its two-row cap.
+				attachments + " { display: grid !important; flex: 0 0 auto !important; grid-template-columns: repeat(var(--dsh-desktop-attachment-columns, 1), minmax(0, 1fr)) !important; grid-auto-rows: var(--dsh-desktop-attachment-height, 48px) !important; gap: 6px !important; min-width: 0 !important; min-height: 0 !important; overflow: hidden !important; }",
+				more + " { display: flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important; box-sizing: border-box !important; min-width: 0 !important; width: 100% !important; height: var(--dsh-desktop-attachment-height, 48px) !important; overflow: hidden !important; padding: 0 4px !important; border: 1px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 18%, transparent) !important; border-radius: 9px !important; background: linear-gradient(145deg, color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 9%, Canvas), color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 3%, Canvas)) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .75rem !important; font-weight: 500 !important; font-variant-numeric: tabular-nums !important; white-space: nowrap !important; cursor: default !important; }",
+				media + " img, " + media + " video, " + media + " canvas { display: block !important; flex: 0 0 auto !important; width: 100% !important; min-width: 0 !important; height: var(--dsh-desktop-attachment-height, 48px) !important; max-width: 100% !important; max-height: 48px !important; object-fit: cover !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 88%, transparent) !important; }",
 				// Thumbnails open the official viewer, so they read as clickable.
 				media + " [role='button'] { cursor: pointer !important; transition: filter .12s ease, transform .12s ease !important; }",
 				media + " [role='button']:hover { filter: brightness(1.06) !important; }",
 				media + " [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 70%, transparent) !important; outline-offset: 2px !important; }",
-				files + " { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; min-height: 0 !important; }",
-				files + " [" + PROMPT_OVERLAY_ITEM_ATTR + "] { display: inline-flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; max-width: 100% !important; padding: 5px 8px !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 72%, transparent) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .78rem !important; line-height: 1.25 !important; }",
-				files + " [" + PROMPT_OVERLAY_ITEM_ATTR + "]::before { content: \"▧\"; opacity: .72; font-size: .9rem; }",
+				files + " > span[" + PROMPT_OVERLAY_ITEM_ATTR + "] { display: inline-flex !important; align-items: center !important; gap: 6px !important; box-sizing: border-box !important; min-width: 0 !important; max-width: 100% !important; height: var(--dsh-desktop-attachment-height, 30px) !important; overflow: hidden !important; white-space: nowrap !important; padding: 5px 8px !important; border: .5px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; border-radius: 9px !important; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, Canvas) 72%, transparent) !important; color: var(--dsw-alias-text-secondary, inherit) !important; font-size: .78rem !important; line-height: 1.25 !important; }",
+				files + " > span[" + PROMPT_OVERLAY_ITEM_ATTR + "]::before { content: \"▧\"; flex: 0 0 auto; opacity: .72; font-size: .9rem; }",
+				files + " bdi { display: block !important; flex: 1 1 auto !important; min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; unicode-bidi: isolate !important; }",
+				files + " > span[" + PROMPT_OVERLAY_ITEM_ATTR + "] > span { flex: 0 0 auto !important; }",
+				more + " svg { display: block !important; width: 20px !important; height: 20px !important; flex: 0 1 20px !important; min-width: 12px !important; opacity: .8 !important; }",
+				more + " > span { min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; }",
 				text + " { display: block !important; min-width: 0 !important; font-size: .86rem !important; white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; line-height: 1.45 !important; color: var(--dsw-alias-text-primary, inherit) !important; }",
 				overlay + ":focus-visible { outline: 2px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 70%, transparent) !important; outline-offset: 2px !important; }",
 			].join("\n");
@@ -589,18 +594,18 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 				const rect = peer.getBoundingClientRect();
 				const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
 				if (width < 40) continue;
-				if (!best || width > best.width) best = { left: Number(rect.left) || 0, width };
+				if (!best || width > best.width) best = { left: Number(rect.left) || 0, width, element: peer };
 			}
 			if (best) return best;
 			const parent = node && node.parentElement;
 			if (parent) {
 				const rect = typeof parent.getBoundingClientRect === "function" ? parent.getBoundingClientRect() : null;
 				const width = Number(parent.clientWidth) || (rect ? Math.max(0, Number(rect.right) - Number(rect.left)) : 0);
-				if (width >= 40) return { left: rect ? Number(rect.left) || 0 : 0, width };
+				if (width >= 40) return { left: rect ? Number(rect.left) || 0 : 0, width, element: parent };
 			}
 			const rect = root.getBoundingClientRect();
 			const width = Number(root.clientWidth) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-			return width >= 40 ? { left: Number(rect.left) || 0, width } : null;
+			return width >= 40 ? { left: Number(rect.left) || 0, width, element: root } : null;
 		}
 		// The card must never cover the Chat composer, so the composer's top edge is the floor
 		// for the card height. Walking up a few levels keeps its padding and toolbar in view.
@@ -649,7 +654,7 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 					const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
 					if (width < 40) continue;
 					if (paneWidth > 0 && width > paneWidth * 0.95) continue;
-					if (!best || width > best.width) best = { left: Number(rect.left) || 0, width };
+					if (!best || width > best.width) best = { left: Number(rect.left) || 0, width, element: node };
 				}
 			}
 			return best;
@@ -691,7 +696,7 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 			const composer = composerTopEdge();
 			const floor = composer !== null && composer > top ? composer : viewportHeight;
 			const availHeight = Math.max(1, floor - top - 8);
-			return { top, left, width, maxWidth, availHeight };
+			return { top, left, width, maxWidth, availHeight, widthTarget: composerBox?.element || column?.element || root };
 		}
 		function applyOverlayStyle(host, metrics, extras) {
 			if (!host || !host.style || !metrics) return;
@@ -775,27 +780,40 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
             // inner element, and missing a thumbnail is far worse than hiding an icon button.
             return !PREVIEW_ACTION_LABEL.test(label);
         }
-        function isPreviewAttachment(node) {
-            if (!node || !node.tagName || isPreviewMedia(node)) return false;
-            const tag = previewTag(node);
-            const hints = [previewAttr(node, "class"), previewAttr(node, "data-testid"), previewAttr(node, "aria-label"), previewAttr(node, "title")].join(" ").toLowerCase();
-            const label = normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || previewAttr(node, "aria-label") || previewAttr(node, "title") || node.textContent || "");
-            const explicitName = previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || isPreviewFileName(label) || isPreviewImageName(label);
-            if (hasPreviewMediaDescendant(node)) {
-                // A file card that renders a file-type icon: the name wins, the icon is just
-                // decoration. Anything else wraps a real thumbnail, so descend and render the
-                // image instead of a generic name chip.
-                return isPreviewFileName(label) && !isPreviewImageName(label);
+        function hasPreviewClass(node, suffix) {
+            return previewAttr(node, "class").split(/\s+/).some((token) => token === suffix || token.endsWith("_" + suffix));
+        }
+        function isNativePreviewFile(node) {
+            if (!hasPreviewClass(node, "fileCard")) return false;
+            for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+                if (parent.hasAttribute?.("data-message-attachments") || hasPreviewClass(parent, "attachmentRow")) return true;
+                if (parent.hasAttribute?.("data-chat-flow-kind")) break;
             }
-            for (const name of ["data-attachment", "data-file", "data-upload", "data-filename", "data-file-name", "data-mime", "data-content-type"]) {
-                if (typeof node.hasAttribute === "function" && node.hasAttribute(name)) return true;
-            }
-            if (/attachment|upload|filename|file-card|mime|content-type|document/.test(hints)) return true;
-            if (tag === "A" || tag === "BUTTON" || tag === "DIV") return Boolean(explicitName);
             return false;
         }
+        function isPreviewAttachment(node) {
+            if (!node || !node.tagName || isPreviewMedia(node)) return false;
+            if (node.hasAttribute?.("data-action") || node.hasAttribute?.("data-operation")) return false;
+            // The row is a container, never a file. Ordinary prose (including paths and titles)
+            // supplies no attachment evidence; only actual cards or explicit metadata do.
+            if (node.hasAttribute?.("data-message-attachments") || hasPreviewClass(node, "attachmentRow")) return false;
+            if (isNativePreviewFile(node)) return true;
+            const named = previewAttr(node, "data-filename") || previewAttr(node, "data-file-name");
+            if (hasPreviewMediaDescendant(node)) {
+                // Explicit file names can describe a type icon; otherwise descend to images.
+                return Boolean(named && isPreviewFileName(named) && !isPreviewImageName(named));
+            }
+            return ["data-attachment", "data-file", "data-upload", "data-filename", "data-file-name", "data-mime", "data-content-type"]
+                .some((name) => node.hasAttribute?.(name));
+        }
+        function safePreviewFileLabel(value) {
+            // Make invisible direction/control characters visible instead of letting a filename
+            // spoof an extension or reorder adjacent labels. Never interpret path/URL syntax.
+            return String(value || "").replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+                (char) => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"));
+        }
         function previewAttachmentLabel(node) {
-            return normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "aria-label") || previewAttr(node, "title") || node?.textContent || t("bridge.overlay_attachment"));
+            return normalizePreviewText(previewAttr(node, "data-filename") || previewAttr(node, "data-file-name") || previewAttr(node, "title") || previewAttr(node, "aria-label") || node?.textContent || t("bridge.overlay_attachment"));
         }
         function isPreviewOperation(node) {
             if (!node || !node.tagName) return false;
@@ -829,26 +847,9 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
         // The overlay renders read-only clones, so a click must be forwarded to the official
         // media element. DSH opens its image viewer from that element, so clicking the native
         // node reproduces the native "click to zoom" behaviour without copying any of it.
-        function mediaSignature(src) {
-            return "media:" + String(src || "").trim();
-        }
-        function nativeMediaBySrc(source, src) {
-            if (!source || !src) return null;
-            const want = String(src).trim();
-            const walk = (node) => {
-                if (!node) return null;
-                if (isPreviewMedia(node)) {
-                    const own = previewAttr(node, "src") || previewAttr(node, "data-src") || previewAttr(node, "poster");
-                    if (own && own.trim() === want) return node;
-                }
-                for (const child of node.childNodes || []) {
-                    const found = walk(child);
-                    if (found) return found;
-                }
-                return null;
-            };
-            const media = walk(source);
-            if (!media) return null;
+        function nativeMediaTarget(source, media) {
+            // A stale proxy fails closed; never resolve a different attachment by name or URL.
+            if (!source || !media || !source.contains?.(media)) return null;
             // DSH normally opens the viewer from the control that WRAPS the image, so click
             // that when it exists and fall back to the image itself.
             let node = media.parentElement;
@@ -1072,20 +1073,21 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
             const parts = [];
             const seenText = new Set();
             const seenMedia = new Set();
-            const seenFiles = new Set();
+            const seenFiles = new Set(); // DOM identity, never a display name.
             const addMedia = (node) => {
                 const srcset = previewAttr(node, "srcset");
                 const firstSrcset = srcset ? srcset.split(",")[0].trim().split(/\s+/)[0] : "";
                 const src = previewAttr(node, "src") || previewAttr(node, "data-src") || previewAttr(node, "poster") || firstSrcset;
-                if (!src || seenMedia.has(src)) return;
-                seenMedia.add(src);
-                parts.push({ kind: "media", tag: previewTag(node) === "VIDEO" ? "video" : "img", src, alt: previewAttr(node, "alt") });
+                if (!src || seenMedia.has(node)) return;
+                seenMedia.add(node);
+                parts.push({ kind: "media", tag: previewTag(node) === "VIDEO" ? "video" : "img", src, alt: previewAttr(node, "alt"), node });
             };
             const addFile = (node) => {
                 const name = previewAttachmentLabel(node);
-                if (!name || seenFiles.has(name)) return;
-                seenFiles.add(name);
-                parts.push({ kind: "file", value: name });
+                if (!name || seenFiles.has(node)) return;
+                seenFiles.add(node);
+                const path = previewAttr(node, "data-file-path") || previewAttr(node, "data-path");
+                parts.push({ kind: "file", value: name, path });
             };
             const visit = (node, isRoot = false) => {
                 if (!node) return;
@@ -1125,11 +1127,53 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
             node.textContent = value;
             host.appendChild(node);
         }
+        function createAttachmentMore(count) {
+            const more = document.createElement("span");
+            more.setAttribute(PROMPT_OVERLAY_MORE_ATTR, "");
+            more.setAttribute("role", "img");
+            more.setAttribute("aria-label", t("bridge.overlay_more", count));
+            more.setAttribute("title", t("bridge.overlay_more", count));
+            // Layered-card outline + ellipsis: scalable, theme-aware and safe under Trusted Types.
+            if (typeof document.createElementNS === "function") {
+                const ns = "http://www.w3.org/2000/svg";
+                const svg = document.createElementNS(ns, "svg");
+                svg.setAttribute("viewBox", "0 0 20 20");
+                svg.setAttribute("aria-hidden", "true");
+                svg.setAttribute("focusable", "false");
+                svg.setAttribute("fill", "none");
+                svg.setAttribute("stroke", "currentColor");
+                svg.setAttribute("stroke-width", "1.35");
+                svg.setAttribute("stroke-linecap", "round");
+                svg.setAttribute("stroke-linejoin", "round");
+                const path = document.createElementNS(ns, "path");
+                path.setAttribute("d", "M6 3h9a2 2 0 0 1 2 2v9M5 6h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z");
+                svg.appendChild(path);
+                for (const x of [6, 9, 12]) {
+                    const dot = document.createElementNS(ns, "circle");
+                    dot.setAttribute("cx", String(x));
+                    dot.setAttribute("cy", "11.5");
+                    dot.setAttribute("r", ".65");
+                    dot.setAttribute("fill", "currentColor");
+                    dot.setAttribute("stroke", "none");
+                    svg.appendChild(dot);
+                }
+                more.appendChild(svg);
+            }
+            const label = document.createElement("span");
+            label.textContent = "+" + count;
+            more.appendChild(label);
+            return more;
+        }
+        function attachmentColumns(cardWidth, tileWidth) {
+            const contentWidth = Math.max(1, cardWidth - PROMPT_OVERLAY_CONTENT_PAD * 2 - 1);
+            return Math.max(1, Math.floor((contentWidth + PROMPT_OVERLAY_THUMB_GAP) / (tileWidth + PROMPT_OVERLAY_THUMB_GAP)));
+        }
         function buildPromptPreview(source, state, metrics) {
             if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
             const content = document.createElement("div");
             content.setAttribute(PROMPT_OVERLAY_CONTENT_ATTR, "");
-            content.setAttribute("aria-hidden", "true");
+            // Keep the visible preview accessible: it contains focusable thumbnails and a
+            // labelled overflow indicator. Hiding an ancestor would mask both from readers.
             // All parts go into the inner scrolling body; the card only supplies padding/chrome.
             const body = document.createElement("div");
             body.setAttribute(PROMPT_OVERLAY_BODY_ATTR, "");
@@ -1141,90 +1185,73 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
             const mediaParts = parts.filter((part) => part.kind === "media");
             const fileParts = parts.filter((part) => part.kind === "file");
             const textParts = parts.filter((part) => part.kind === "text");
-            // Attachments get their own 2-row budget on top of the text-line budget, so the
-            // measure of the content width is shared by both attachment branches. Prefer the
-            // card's own resolved width (minus its padding and hairline border) so the row
-            // budget matches the space actually available; fall back to the native bubble.
-            const cardWidth = Number(metrics && metrics.width) || 0;
-            const usableContentWidth = Math.max(1, cardWidth > 0
-                ? cardWidth - PROMPT_OVERLAY_CONTENT_PAD * 2 - 1
-                : (Number(source?.clientWidth) || PROMPT_OVERLAY_MAX_WIDTH_PX) - 24);
-            let fileRows = 0;
-            const perRowRef = { value: 1 };
-            // Thumbnails only. Files are separate chips, so a media-wrapped attachment always
-            // renders as its image rather than a generic name.
-            const tileCount = mediaParts.length;
-            if (tileCount) {
+            // Allocation and resize invalidation share the exact same width calculation.
+            const cardWidth = Number(metrics && metrics.width) || Number(source?.clientWidth) || PROMPT_OVERLAY_MAX_WIDTH_PX;
+            // One shared grid: media, files and the overflow indicator consume the same cells.
+            const attachments = [...mediaParts, ...fileParts];
+            const tileWidth = fileParts.length ? PROMPT_OVERLAY_CHIP_AVG_W : PROMPT_OVERLAY_THUMB_W;
+            const columns = attachmentColumns(cardWidth, tileWidth);
+            const capacity = columns * PROMPT_OVERLAY_MEDIA_ROWS;
+            const visibleCount = attachments.length <= capacity ? attachments.length : capacity - 1;
+            const visible = attachments.slice(0, visibleCount);
+            const hiddenCount = attachments.length - visible.length;
+            const rowHeight = mediaParts.length ? PROMPT_OVERLAY_THUMB_H : PROMPT_OVERLAY_CHIP_ROW_H;
+            const attachmentRows = Math.ceil((visible.length + (hiddenCount ? 1 : 0)) / columns);
+            if (attachments.length) {
                 const row = document.createElement("div");
-                row.setAttribute(PROMPT_OVERLAY_MEDIA_ATTR, "");
-                const usableWidth = usableContentWidth;
-                // Attachments flow from the top-left and wrap. Capacity is capped at 2 rows;
-                // when tiles do not fit, the last visible cell becomes a +N chip so the grid
-                // stays exactly within the 2-row budget.
-                const perRow = Math.max(1, Math.floor((usableWidth + PROMPT_OVERLAY_THUMB_GAP) / (PROMPT_OVERLAY_THUMB_W + PROMPT_OVERLAY_THUMB_GAP)));
-                perRowRef.value = perRow;
-                const capacity = perRow * PROMPT_OVERLAY_MEDIA_ROWS;
-                const visibleCount = tileCount <= capacity ? tileCount : Math.max(1, capacity - 1);
-                const visibleMedia = mediaParts.slice(0, visibleCount);
-                for (const part of visibleMedia) {
-                    const media = document.createElement(part.tag || "img");
-                    media.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
-                    media.setAttribute("src", part.src);
-                    if (part.alt) media.setAttribute("alt", part.alt);
-                    else media.setAttribute("alt", "");
-                    // Forward the click so the official viewer opens, exactly as in native DSH.
-                    const mediaSrc = part.src;
-                    media.setAttribute("role", "button");
-                    media.setAttribute("tabindex", "0");
-                    media.setAttribute("aria-label", part.alt || t("bridge.overlay_attachment"));
-                    const openNative = (event) => {
-                        const native = nativeMediaBySrc(source, mediaSrc);
-                        if (!native || typeof native.click !== "function") return;
-                        event.preventDefault?.();
-                        event.stopPropagation?.();
-                        try { native.click(); } catch (_) { /* fail closed after an upstream rerender */ }
-                    };
-                    media.addEventListener?.("click", openNative);
-                    media.addEventListener?.("keydown", (event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        openNative(event);
-                    });
-                    row.appendChild(media);
+                row.setAttribute(PROMPT_OVERLAY_ATTACHMENTS_ATTR, "");
+                // Retain semantic hooks, but both kinds now refer to the SAME physical grid.
+                if (mediaParts.length) row.setAttribute(PROMPT_OVERLAY_MEDIA_ATTR, "");
+                if (fileParts.length) row.setAttribute(PROMPT_OVERLAY_FILES_ATTR, "");
+                row.style.setProperty("--dsh-desktop-attachment-columns", String(columns));
+                row.style.setProperty("--dsh-desktop-attachment-height", rowHeight + "px");
+                const counts = new Map();
+                const occurrences = new Map();
+                for (const part of fileParts) {
+                    const label = safePreviewFileLabel(part.path || part.value);
+                    counts.set(label, (counts.get(label) || 0) + 1);
                 }
-                const hiddenMedia = mediaParts.length - visibleMedia.length;
-                if (hiddenMedia > 0) {
-                    const more = document.createElement("span");
-                    more.setAttribute(PROMPT_OVERLAY_MORE_ATTR, "");
-                    more.setAttribute("aria-label", t("bridge.overlay_more", hiddenMedia));
-                    more.textContent = "+" + hiddenMedia;
-                    row.appendChild(more);
-                }
-                body.appendChild(row);
-            }
-            if (fileParts.length) {
-                const row = document.createElement("div");
-                row.setAttribute(PROMPT_OVERLAY_FILES_ATTR, "");
-                // File chips get the same 2-row budget as the thumbnails. Chip widths are
-                // content-dependent, so this is an estimate; the row itself clips, so the
-                // card still stays inside its budget even when the estimate is generous.
-                const chipsPerRow = Math.max(1, Math.floor(usableContentWidth / PROMPT_OVERLAY_CHIP_AVG_W));
-                const chipCapacity = chipsPerRow * PROMPT_OVERLAY_MEDIA_ROWS;
-                const visibleFiles = fileParts.length <= chipCapacity ? fileParts : fileParts.slice(0, Math.max(1, chipCapacity - 1));
-                for (const part of visibleFiles) {
+                for (const part of visible) {
+                    if (part.kind === "media") {
+                        const media = document.createElement(part.tag || "img");
+                        media.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
+                        media.setAttribute("src", part.src);
+                        media.setAttribute("alt", part.alt || "");
+                        media.setAttribute("role", "button");
+                        media.setAttribute("tabindex", "0");
+                        media.setAttribute("aria-label", part.alt || t("bridge.overlay_attachment"));
+                        const openNative = (event) => {
+                            const native = nativeMediaTarget(source, part.node);
+                            if (!native || typeof native.click !== "function") return;
+                            event.preventDefault?.();
+                            event.stopPropagation?.();
+                            try { native.click(); } catch (_) { /* fail closed after an upstream rerender */ }
+                        };
+                        media.addEventListener?.("click", openNative);
+                        media.addEventListener?.("keydown", (event) => {
+                            if (event.key === "Enter" || event.key === " ") openNative(event);
+                        });
+                        row.appendChild(media);
+                        continue;
+                    }
                     const file = document.createElement("span");
                     file.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
-                    file.textContent = part.value;
+                    const fullLabel = safePreviewFileLabel(part.path || part.value);
+                    const index = (occurrences.get(fullLabel) || 0) + 1;
+                    occurrences.set(fullLabel, index);
+                    // Inert text only. The full name remains in the native hover tooltip.
+                    const label = document.createElement("bdi");
+                    label.textContent = fullLabel;
+                    file.appendChild(label);
+                    if (counts.get(fullLabel) > 1) {
+                        const ordinal = document.createElement("span");
+                        ordinal.textContent = " (" + index + "/" + counts.get(fullLabel) + ")";
+                        file.appendChild(ordinal);
+                    }
+                    file.setAttribute("title", fullLabel);
                     row.appendChild(file);
                 }
-                const hiddenFiles = fileParts.length - visibleFiles.length;
-                if (hiddenFiles > 0) {
-                    const more = document.createElement("span");
-                    more.setAttribute(PROMPT_OVERLAY_MORE_ATTR, "");
-                    more.setAttribute("aria-label", t("bridge.overlay_more", hiddenFiles));
-                    more.textContent = "+" + hiddenFiles;
-                    row.appendChild(more);
-                }
-                fileRows = Math.max(1, Math.ceil((visibleFiles.length + (hiddenFiles > 0 ? 1 : 0)) / chipsPerRow));
+                if (hiddenCount > 0) row.appendChild(createAttachmentMore(hiddenCount));
                 body.appendChild(row);
             }
             for (const part of textParts) appendPreviewTextNode(body, part.value);
@@ -1236,14 +1263,10 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
                 proxyDescriptors: [],
                 hasText: textParts.length > 0,
             }, state || {}));
-            // Media rows are exact (fixed-size tiles); file rows are rows of chips.
-            const mediaRows = tileCount ? Math.min(PROMPT_OVERLAY_MEDIA_ROWS, Math.ceil(Math.min(tileCount, PROMPT_OVERLAY_MEDIA_ROWS * perRowRef.value) / Math.max(1, perRowRef.value))) : 0;
-            const extra = mediaRows * (PROMPT_OVERLAY_THUMB_H + PROMPT_OVERLAY_THUMB_GAP)
-                + fileRows * PROMPT_OVERLAY_CHIP_ROW_H
-                + (tileCount ? PROMPT_OVERLAY_THUMB_GAP : 0)
-                + (fileRows ? PROMPT_OVERLAY_THUMB_GAP : 0)
-                + (tileCount || fileRows ? PROMPT_OVERLAY_BLOCK_PAD : 0);
-            return { content, body, toolbar, extra };
+            const extra = attachmentRows * rowHeight
+                + Math.max(0, attachmentRows - 1) * PROMPT_OVERLAY_THUMB_GAP
+                + (attachmentRows ? PROMPT_OVERLAY_THUMB_GAP + PROMPT_OVERLAY_BLOCK_PAD : 0);
+            return { content, body, toolbar, extra, attachmentLayout: attachments.length ? { columns, tileWidth } : null };
         }
         function clearElementChildren(node) {
             if (!node || typeof node.removeChild !== "function") return;
@@ -1260,6 +1283,8 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 			state.content = null;
 			state.toolbar = null;
 			state.source = null;
+			state.widthTarget = null;
+			state.attachmentLayout = null;
 			state.proxyDescriptors = [];
 		}
 		// Fade the last visible line only while there is more to scroll to. Hiding it at the
@@ -1304,6 +1329,17 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 				const top = Number(rect.top);
 				const bottom = Number(rect.bottom);
 				if (!(bottom > top)) continue;
+                if (node.hasAttribute?.(PROMPT_OVERLAY_ATTACHMENTS_ATTR)) {
+                    // Two grid rows are one body child. Anchor to the final rendered cell,
+                    // including the more tile, instead of the centre between the rows.
+                    const cells = node.childNodes || [];
+                    for (let j = cells.length - 1; j >= 0; j--) {
+                        const cell = cells[j].getBoundingClientRect?.();
+                        if (cell && Number(cell.bottom) > Number(cell.top)) {
+                            return { centre: (Number(cell.top) + Number(cell.bottom)) / 2, text: false };
+                        }
+                    }
+                }
 				const isText = typeof node.hasAttribute === "function" && node.hasAttribute(PROMPT_OVERLAY_TEXT_ATTR);
 				return isText
 					? { centre: bottom - previewLineHeight(node) / 2, text: true }
@@ -1365,13 +1401,17 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 			// Metrics first: the attachment grid budgets its rows from the card's own resolved
 			// width, so the width has to be known before the body is built.
 			const metrics = computeOverlayMetrics(root, next);
+			state.widthTarget = metrics?.widthTarget || null;
 			// A locale, line-budget or width change must also re-render the card body.
 			const locale = currentLocale();
 			const maxLines = promptOverlayMaxLines();
-			const width = metrics ? metrics.width : 0;
-			// Ignore sub-pixel jitter so a drag-resize does not rebuild the grid on every event.
-			const widthChanged = Math.abs(width - (Number(state.width) || 0)) >= 8;
+			const layout = state.attachmentLayout;
+			// Never miss a column boundary, even when crossed by 1px. Inside a column band,
+			// CSS resizes the existing cells without recreating thumbnails or losing focus.
+			const widthChanged = Boolean(layout && metrics && attachmentColumns(metrics.width, layout.tileWidth) !== layout.columns);
+			let restoreScrollTop = null;
 			if (state.source !== next || state.needsRefresh || !state.content || state.locale !== locale || state.maxLines !== maxLines || widthChanged) {
+				restoreScrollTop = state.source === next ? Number(state.body?.scrollTop) || 0 : 0;
 				clearElementChildren(state.host);
 				state.source = next;
 				const built = buildPromptPreview(next, state, metrics);
@@ -1385,9 +1425,11 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 				state.needsRefresh = false;
 				state.locale = locale;
 				state.maxLines = maxLines;
-				state.width = width;
+				state.attachmentLayout = built?.attachmentLayout || null;
 			}
 			applyOverlayStyle(state.host, metrics, state.extra);
+			// Restore after sizing so the browser can clamp naturally if the body got shorter.
+			if (restoreScrollTop !== null && state.body) state.body.scrollTop = restoreScrollTop;
 			// After the size lands: reading the scroller's geometry before this would measure the
 			// previous frame's box.
 			syncOverlayFade(state.body);
@@ -1459,7 +1501,7 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 				setHoverMessageActionsAttr(enabled);
 				writeCSS();
 				if (enabled) schedule();
-				else setStickyPrompt(null, null, state);
+				else { setStickyPrompt(null, null, state); observeLayout(); }
 			};
 			applyEnabled(enabled);
 			const onSettingChange = (event) => applyEnabled(event.detail !== false);
@@ -1482,15 +1524,18 @@ media + " { display: flex !important; flex-wrap: wrap !important; align-items: f
 				observer.observe(document.documentElement, { childList: true, subtree: true });
 			}
 			let resizeObserver = null;
+            let resizeTargets = new Set();
 			observeLayout = () => {
 				if (typeof ResizeObserver !== "function") return;
 				const root = conversationScrollRoot();
+                const targets = new Set(enabled ? [root, root?.parentElement, state.source, state.host, state.widthTarget].filter(Boolean) : []);
+                // Re-observing sends another initial notification in real browsers. Keep the
+                // subscriptions stable so a settled resize does not turn into an endless RAF loop.
+                if (targets.size === resizeTargets.size && [...targets].every((node) => resizeTargets.has(node))) return;
 				if (!resizeObserver) resizeObserver = new ResizeObserver(() => schedule());
 				try { resizeObserver.disconnect(); } catch {}
-				if (root && typeof resizeObserver.observe === "function") resizeObserver.observe(root);
-				if (root && root.parentElement && typeof resizeObserver.observe === "function") resizeObserver.observe(root.parentElement);
-				if (state.source && typeof resizeObserver.observe === "function") resizeObserver.observe(state.source);
-				if (state.host && typeof resizeObserver.observe === "function") resizeObserver.observe(state.host);
+                resizeTargets = targets;
+                for (const node of targets) resizeObserver.observe(node, { box: "border-box" });
 			};
 			observeLayout();
 			return () => {
