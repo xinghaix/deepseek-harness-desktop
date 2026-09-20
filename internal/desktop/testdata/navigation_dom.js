@@ -70,6 +70,16 @@ globalThis.runDesktopNavigationDOMTest = function(source) {
       a.addEventListener("contextmenu", e => e.preventDefault());
       a.dispatchEvent(new w.MouseEvent("contextmenu", {bubbles:true,cancelable:true}));
       check("DSH-owned context menu is not opened twice", menus.length === (custom ? 1 : 0));
+      const menuContainer = d.createElement("div");
+      menuContainer.setAttribute("role", "menu");
+      const menuBtn = d.createElement("button");
+      menuContainer.appendChild(menuBtn);
+      d.body.appendChild(menuContainer);
+      let outerFocusoutReceived = false;
+      d.body.addEventListener("focusout", () => { outerFocusoutReceived = true; });
+      const foEvent = new w.FocusEvent("focusout", {bubbles:true, cancelable:true, relatedTarget: null});
+      menuBtn.dispatchEvent(foEvent);
+      check("menu button focusout with null relatedTarget is intercepted", outerFocusoutReceived === false);
     } finally { frame.remove(); }
   }
   return {engine: navigator.userAgent, results};

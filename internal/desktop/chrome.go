@@ -460,6 +460,19 @@ const desktopExternalJSTemplate = `
   };
   document.addEventListener("click", routeLinkClick);
   document.addEventListener("auxclick", routeLinkClick);
+  // On macOS WebKit, mouse clicks on <button> inside a popup menu do not transfer
+  // focus. When a menu item is focused (e.g. DSH ModelSelect drill-down focusing the
+  // checked radio), clicking another item causes focusout with relatedTarget=null.
+  // ModelSelect's onBlur misinterprets this as focus leaving the menu, unmounting it
+  // on mousedown before the click event can fire.
+  // Intercepting focusout with relatedTarget=null originating from within [role="menu"]
+  // prevents the false blur while preserving normal closeOutside on document mousedown.
+  document.addEventListener("focusout", (event) => {
+    const target = event.target && (event.target.closest ? event.target : event.target.parentElement);
+    if (target && target.closest && target.closest('[role="menu"]') && event.relatedTarget === null) {
+      event.stopImmediatePropagation();
+    }
+  }, true);
   document.addEventListener("contextmenu", (event) => {
     const payload = contextPayload(event);
     window.__DSH_CTX__ = payload;
