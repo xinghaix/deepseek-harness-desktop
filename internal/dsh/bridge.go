@@ -38,6 +38,32 @@ type WindowHost interface {
 	ReloadChat(o Options) error
 }
 
+// ChatWindowActionHost is optional; legacy BridgeHost implementations remain valid.
+// Implementations must independently whitelist actions and target only existing Chat.
+type ChatWindowActionHost interface {
+	ChatWindowAction(action string) error
+}
+
+// ChatContextMenuHost is optional and accepts content and coordinates, not menu IDs.
+type ChatContextMenuHost interface {
+	ShowChatContextMenu(request ChatContextMenuRequest) error
+}
+
+type ChatContextMenuRequest struct {
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	Text string `json:"text"`
+	Href string `json:"href"`
+}
+
+// Validate bounds both authenticated HTTP and native callers before menu handling.
+func (r ChatContextMenuRequest) Validate() error {
+	if r.X < 0 || r.Y < 0 || r.X > 100000 || r.Y > 100000 || len(r.Text) > 8192 || len(r.Href) > 8192 {
+		return i18n.ErrorfActive("bridge.err_not_allowed")
+	}
+	return nil
+}
+
 type PathHost interface {
 	ChooseExecutable() (string, error)
 	ChooseHome() (string, error)
@@ -45,6 +71,12 @@ type PathHost interface {
 	OpenHome(o Options) error
 	OpenWorkspace(o Options) error
 	OpenSettings(o Options) error
+}
+
+// ExternalURLHost is optional so older hosts keep their existing bridge contract.
+// Implementations must validate the URL before invoking a native browser launcher.
+type ExternalURLHost interface {
+	OpenExternalURL(string) error
 }
 
 type PrefsHost interface {
@@ -59,6 +91,18 @@ type PrefsHost interface {
 	SetChatContentVisibility(enabled bool) (BridgePrefs, error)
 	SetPromptOverlayMaxLines(n int) (BridgePrefs, error)
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
+}
+
+// OpenSessionRequest identifies one native tray click across event and claim delivery.
+// RequestID is optional for compatibility with older bridge hosts and clients.
+type OpenSessionRequest struct {
+	SessionID string `json:"sessionId"`
+	RequestID uint64 `json:"requestId,omitempty"`
+}
+
+// SessionRequestHost adds sequenced claims without widening the legacy host contract.
+type SessionRequestHost interface {
+	ClaimOpenSessionRequest() OpenSessionRequest
 }
 
 type SessionHost interface {
@@ -406,6 +450,99 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
+	case "/v1/chat-context-menu":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		request, err := decodeChatContextMenu(r)
+		if err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		menus, ok := host.(ChatContextMenuHost)
+		if !ok {
+			writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		if err := menus.ShowChatContextMenu(request); err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case "/v1/chat-window-action":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		// Exactly one action field: never accept a window name or native method.
+		var body map[string]json.RawMessage
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var action string
+		if len(body) != 1 || json.Unmarshal(body["action"], &action) != nil {
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		switch action {
+		case "minimize", "maximize", "close", "settings", "dismiss-config":
+		default:
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		actions, ok := host.(ChatWindowActionHost)
+		if !ok {
+			writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		if err := actions.ChatWindowAction(action); err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case "/v1/open-external-url":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			URL string `json:"url"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if strings.TrimSpace(body.URL) == "" {
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("err.untrusted_chat_url", ""))
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		external, ok := host.(ExternalURLHost)
+		if !ok {
+			writeBridgeError(w, http.StatusConflict, i18n.TActive("err.bridge_not_found"))
+			return
+		}
+		if err := external.OpenExternalURL(body.URL); err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "/v1/open-management":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_open_mgmt_post_only"))
@@ -733,7 +870,11 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return
 		}
-		writeBridgeJSON(w, http.StatusOK, map[string]string{"sessionId": host.ClaimOpenSession()})
+		if sequenced, ok := host.(SessionRequestHost); ok {
+			writeBridgeJSON(w, http.StatusOK, sequenced.ClaimOpenSessionRequest())
+		} else {
+			writeBridgeJSON(w, http.StatusOK, map[string]string{"sessionId": host.ClaimOpenSession()})
+		}
 	case "/v1/update-status":
 		if r.Method != http.MethodGet {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
@@ -882,6 +1023,27 @@ func (b *desktopBridge) handleOpenPath(w http.ResponseWriter, r *http.Request, f
 		return
 	}
 	writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func decodeChatContextMenu(r *http.Request) (ChatContextMenuRequest, error) {
+	var request ChatContextMenuRequest
+	var body map[string]json.RawMessage
+	if err := decodeBridgeJSON(r, &body); err != nil {
+		return request, err
+	}
+	if len(body) != 4 {
+		return request, i18n.ErrorfActive("bridge.err_not_allowed")
+	}
+	for key, dest := range map[string]any{"x": &request.X, "y": &request.Y, "text": &request.Text, "href": &request.Href} {
+		raw := body[key]
+		if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+			return request, i18n.ErrorfActive("bridge.err_not_allowed")
+		}
+		if err := json.Unmarshal(raw, dest); err != nil {
+			return request, err
+		}
+	}
+	return request, request.Validate()
 }
 
 func decodeBridgeJSON(r *http.Request, dest any) error {

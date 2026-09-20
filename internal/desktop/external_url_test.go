@@ -32,6 +32,26 @@ func TestSanitizeExternalURL(t *testing.T) {
 	}
 }
 
+func TestSanitizeExternalURLLoopbackAliases(t *testing.T) {
+	for _, host := range []string{"１２７.０.０.１", "localhoſt", "127.1", "2130706433", "0177.0.0.1", "0x7f000001", "127.0.0.1.", "localhost.", "app.localhost", "[::]", "[::ffff:127.0.0.1]"} {
+		t.Run(host, func(t *testing.T) {
+			if got, err := sanitizeExternalURL("http://" + host + "/?token=secret"); err == nil {
+				t.Fatalf("token escaped to browser: %s", got)
+			}
+		})
+	}
+	for _, query := range []string{"token=&token=secret", "token=+&token=secret", "token=secret;ignored=x", "token=%zz"} {
+		if got, err := sanitizeExternalURL("http://127.0.0.1/?" + query); err == nil {
+			t.Errorf("ambiguous token query escaped: %s", got)
+		}
+	}
+	for _, raw := range []string{"http://127.1/", "https://例子.中国/路径", "https://example.com/?token=public", "https://127.example.com/?token=public"} {
+		if _, err := sanitizeExternalURL(raw); err != nil {
+			t.Errorf("safe URL rejected: %s", raw)
+		}
+	}
+}
+
 func TestWebSearchURL(t *testing.T) {
 	t.Parallel()
 	got, err := webSearchURL("foo bar")

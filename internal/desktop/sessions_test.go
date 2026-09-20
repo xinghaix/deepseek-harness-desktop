@@ -70,6 +70,27 @@ func TestOpenChatSessionJSEncodesID(t *testing.T) {
 	}
 }
 
+func TestPendingOpenSessionRequestIdentity(t *testing.T) {
+	var p pendingOpenSession
+	first := p.set("same-session")
+	claimed := p.claimRequest()
+	if claimed.SessionID != "same-session" || claimed.RequestID != first || first == 0 {
+		t.Fatalf("claim must carry first click identity: %#v, first=%d", claimed, first)
+	}
+	second := p.set("same-session")
+	if second <= first {
+		t.Fatalf("same-ID click needs a newer identity: %d <= %d", second, first)
+	}
+	// Completing the earlier claim cannot consume a click queued afterwards.
+	newer := p.claimRequest()
+	if newer.SessionID != "same-session" || newer.RequestID != second {
+		t.Fatalf("new click lost after earlier claim: %#v", newer)
+	}
+	if empty := p.claimRequest(); empty.SessionID != "" || empty.RequestID != 0 {
+		t.Fatalf("claim did not drain atomically: %#v", empty)
+	}
+}
+
 func TestPendingOpenSessionClaimDrains(t *testing.T) {
 	var p pendingOpenSession
 	p.set("  session-abc  ")

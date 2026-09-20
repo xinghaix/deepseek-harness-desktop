@@ -3518,6 +3518,26 @@ window.__ModuleLoader__.load({
 			// Capture the connection first: prefs syncs below publish the language and may
 			// trigger a catalog load, which needs this to be set already.
 			localeConnection = ctx.connection;
+			// Chat is a remote HTTP document: Wails Core does not expose Call.ByName.
+			// Use the existing authenticated DSH RPC; native bridge credentials stay host-side.
+			if (typeof window !== "undefined") {
+				const invokeNative = async (endpoint, payload) => {
+					const result = await callDesktopRPC(ctx.connection, endpoint, payload);
+					if (!result?.ok) throw new Error(desktopErrorMessage(result?.error));
+					return result.value;
+				};
+				const actions = {
+					__DSH_DESKTOP_OPEN_EXTERNAL_URL__: (url) => invokeNative("openExternalURL", { url }),
+					__DSH_DESKTOP_WINDOW_ACTION__: (action) => invokeNative("chatWindowAction", { action }),
+					__DSH_DESKTOP_CONTEXT_MENU__: (payload) => invokeNative("showChatContextMenu", payload),
+				};
+				for (const [name, handler] of Object.entries(actions)) window[name] = handler;
+				ctx.effect(() => () => {
+					for (const [name, handler] of Object.entries(actions)) {
+						if (window[name] === handler) delete window[name];
+					}
+				});
+			}
 			installStyle();
 			void ensureDesktopHandshake(ctx.connection);
 			let trayEnabled = false;
@@ -3616,6 +3636,7 @@ window.__ModuleLoader__.load({
 			const OPEN_SESSION_CLAIM_POLL_MAX_MS = 10000;
 			const OPEN_SESSION_DEDUPE_MS = 1000;
 			let pendingOpenSessionId = "";
+			let latestOpenRequestId = 0;
 			let lastOpenedSessionId = "";
 			let lastOpenedSessionAt = 0;
 			let warmTimer = null;
@@ -3722,10 +3743,16 @@ window.__ModuleLoader__.load({
 					markOpened(id);
 				} catch (_) { /* list/service may still be settling; retry on next snapshot */ }
 			};
-			const queueOpenSession = (sessionId, fromEvent = false) => {
+			const queueOpenSession = (sessionId, fromEvent = false, requestId = 0) => {
 				const id = String(sessionId || "").trim();
 				if (!id) return;
-				if (fromEvent && lastOpenedSessionId === id && Date.now() - lastOpenedSessionAt < OPEN_SESSION_DEDUPE_MS) {
+				// Sequence identifies a native click, unlike a session ID or time window.
+				// Late claim/event delivery cannot override a newer click or sidebar choice.
+				if (Number.isSafeInteger(requestId) && requestId > 0) {
+					if (requestId <= latestOpenRequestId) return;
+					latestOpenRequestId = requestId;
+				}
+				if (!requestId && fromEvent && lastOpenedSessionId === id && Date.now() - lastOpenedSessionAt < OPEN_SESSION_DEDUPE_MS) {
 					let current = "";
 					try {
 						current = ctx.sessions?.list?.getSnapshot?.()?.current || "";
@@ -3745,7 +3772,9 @@ window.__ModuleLoader__.load({
 				if (typeof window === "undefined") return;
 				const id = String(window[OPEN_SESSION_PENDING_GLOBAL] || "").trim();
 				window[OPEN_SESSION_PENDING_GLOBAL] = "";
-				if (id) queueOpenSession(id);
+				const requestId = window.__DSH_DESKTOP_OPEN_SESSION_PENDING_REQUEST_ID__ || 0;
+				window.__DSH_DESKTOP_OPEN_SESSION_PENDING_REQUEST_ID__ = 0;
+				if (id) queueOpenSession(id, false, requestId);
 			};
 			const syncBusy = () => {
 				try {
@@ -3777,6 +3806,11 @@ window.__ModuleLoader__.load({
 			const handleClaimedOpenSession = (result) => {
 				const id = result && result.ok && result.value ? result.value.sessionId : "";
 				if (!id) return false;
+				const requestId = result.value.requestId;
+				if (Number.isSafeInteger(requestId) && requestId > 0) {
+					queueOpenSession(id, false, requestId);
+					return true;
+				}
 				// The native click dispatches a WebView event and leaves the same id
 				// claimable for missed-event recovery. If the event path already opened
 				// it, consume the claim without starting a second history/layout update.
@@ -3797,13 +3831,13 @@ window.__ModuleLoader__.load({
 			const onOpenSession = (event) => {
 				const id = event && event.detail;
 				consumeQueuedOpenSession(id);
-				queueOpenSession(id, true);
+				queueOpenSession(id, true, event?.desktopRequestId || 0);
 			};
 			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
 				window.addEventListener(OPEN_SESSION_EVENT, onOpenSession);
-				window[OPEN_SESSION_FAST_GLOBAL] = (sessionId) => {
+				window[OPEN_SESSION_FAST_GLOBAL] = (sessionId, requestId = 0) => {
 					consumeQueuedOpenSession(sessionId);
-					queueOpenSession(sessionId, true);
+					queueOpenSession(sessionId, true, requestId);
 				};
 				if (typeof ctx.effect === "function") {
 					ctx.effect(() => () => {

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("./lib/client.js", import.meta.url), "utf8");
+let clockNow = 10000;
 let registration;
 const listeners = new Map();
 const timers = [];
@@ -53,6 +54,7 @@ vm.runInNewContext(
     setTimeout: scheduleTimer,
     clearTimeout: cancelTimer,
     console,
+    Date: { now: () => clockNow },
   },
   { filename: "desktop-bridge-client.js" },
 );
@@ -109,6 +111,7 @@ const opened = [];
 const warmed = [];
 const selectedPanels = [];
 let claimResult = "";
+let claimRequestId = 0;
 let claimCalls = 0;
 const ctx = {
   slots: { inject() {} },
@@ -127,7 +130,7 @@ const ctx = {
       call(_channel, method, payload) {
         if (method === "claimOpenSession") {
           claimCalls += 1;
-          return Promise.resolve({ ok: true, value: { sessionId: claimResult } });
+          return Promise.resolve({ ok: true, value: { sessionId: claimResult, requestId: claimRequestId } });
         }
         if (method === "reportSessions") reportedSessions.push(payload);
         if (method === "prefs") {
@@ -398,4 +401,80 @@ assert.ok(!newlyWarmed.includes("warm-00"), "oldest session must stay outside th
 assert.ok(!newlyWarmed.includes("warm-current"), "current session must not be warmed");
 assert.ok(!newlyWarmed.includes("warm-blank"), "blank session must not be warmed");
 
-console.log("ok - tray click survives early lists, missed events, duplicates, idle backoff, and fast-path navigation");
+// A late claim is the same delivery, not a second user request. A later
+// click on the SAME session with a lost WebView event must still recover.
+snapshot = {
+  byId: { A: { id: "A" }, B: { id: "B" } },
+  ids: ["A", "B"], current: "B",
+};
+window.__DSH_DESKTOP_OPEN_SESSION__("A", 41);
+assert.equal(snapshot.current, "A");
+clockNow += 2000;
+ctx.uiWorkspace.openSession("B");
+claimResult = "A";
+claimRequestId = 41;
+await timers.splice(nextClaimTimer(), 1)[0].fn();
+await flushMicrotasks();
+assert.equal(snapshot.current, "B", "delayed claim must not undo later sidebar navigation");
+claimRequestId = 42;
+await timers.splice(nextClaimTimer(), 1)[0].fn();
+await flushMicrotasks();
+assert.equal(snapshot.current, "A", "new same-ID tray click must recover when its event is lost");
+
+// An older claim can be in flight when a newer event is delivered. Neither its
+// response nor a delayed event for it may override the newer request.
+claimResult = "A";
+claimRequestId = 44;
+timers.splice(nextClaimTimer(), 1)[0].fn();
+window.__DSH_DESKTOP_OPEN_SESSION__("B", 45);
+await flushMicrotasks();
+assert.equal(snapshot.current, "B", "old in-flight claim must not override newer event");
+clockNow += 2000;
+handler({ detail: "A", desktopRequestId: 44 });
+assert.equal(snapshot.current, "B", "out-of-order native event must not override newer request");
+window.__DSH_DESKTOP_OPEN_SESSION__("A", 46);
+ctx.uiWorkspace.openSession("B");
+window.__DSH_DESKTOP_OPEN_SESSION__("A", 47);
+assert.equal(snapshot.current, "A", "fresh same-ID click must not be throttled by legacy time dedupe");
+
+console.log("ok - tray navigation preserves intent across late claims and same-ID clicks");
+
+// Load both production scripts with the real remote-page shape: NO Wails Call API.
+const chromeSource = fs.readFileSync(new URL("../../desktop/chrome.go", import.meta.url), "utf8")
+  .split("const desktopExternalJSTemplate = `")[1].split("\n`")[0].replace("@@USE_CUSTOM_MENU@@", "false");
+document.addEventListener = () => {};
+window.wails = {};
+const externalCalls = [], externalAlerts = [];
+window.alert = message => externalAlerts.push(message);
+let externalResult = {ok: true, value: {}};
+const savedRPC = ctx.connection.rpc.call;
+ctx.connection.rpc.call = (channel, method, payload, signal) => {
+  if (method !== "openExternalURL") return savedRPC(channel, method, payload, signal);
+  externalCalls.push({channel, method, payload});
+  return Promise.resolve(externalResult);
+};
+vm.runInNewContext(chromeSource, {window, document, URL, location: new URL("http://127.0.0.1:3080/"), console});
+assert.equal(typeof window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__, "function", "client must install authenticated external opener");
+window.open("https://github.com/xinghaix/deepseek-harness-desktop/releases", "_blank", "noopener,noreferrer");
+await flushMicrotasks();
+assert.equal(externalCalls.length, 1, "toolbar must reach desktop RPC without Wails runtime");
+assert.equal(externalCalls[0].channel, "/desktop-bridge");
+assert.equal(externalCalls[0].payload.url, "https://github.com/xinghaix/deepseek-harness-desktop/releases");
+assert.equal(externalAlerts.length, 0);
+externalResult = {ok: false, error: {code: "desktop-bridge/unavailable"}};
+window.open("https://example.com/");
+await flushMicrotasks();
+assert.equal(externalAlerts.length, 1, "native/transport rejection must reach visible feedback");
+console.log("ok - actual chrome and bridge client integrate without Wails Call runtime");
+const windowCalls = [];
+ctx.connection.rpc.call = (channel, method, payload) => {windowCalls.push({channel,method,payload});return Promise.resolve({ok:true,value:{}});};
+assert.equal(typeof window.__DSH_DESKTOP_WINDOW_ACTION__, "function", "window actions need authenticated transport without Wails runtime");
+assert.equal(typeof window.__DSH_DESKTOP_CONTEXT_MENU__, "function", "custom menu needs authenticated transport without full runtime");
+for (const action of ["minimize","maximize","close","settings","dismiss-config"]) await window.__DSH_DESKTOP_WINDOW_ACTION__(action);
+await window.__DSH_DESKTOP_CONTEXT_MENU__({x:10,y:20,text:"selected",href:"https://example.com/"});
+assert.equal(windowCalls.length,6);
+assert.deepEqual(windowCalls.map(c=>c.method),["chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction","showChatContextMenu"]);
+assert.equal(windowCalls[4].payload.action,"dismiss-config");
+assert.equal(windowCalls[5].payload.x,10);
+assert.ok(windowCalls.every(c=>c.channel==="/desktop-bridge"));
+console.log("ok - remote controls and context menu use authenticated client transport");

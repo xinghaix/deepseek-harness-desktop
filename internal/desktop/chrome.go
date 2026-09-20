@@ -323,46 +323,17 @@ const desktopChromeJS = `
   chrome.append(drag, controls);
   document.documentElement.appendChild(chrome);
 
-  const callWindow = (method) => {
-    const current = window.wails && window.wails.Window;
-    if (!current || typeof current[method] !== "function") {
-      window.setTimeout(() => callWindow(method), 100);
-      return;
-    }
-    current[method]();
-  };
-  // Maximize button toggles work-area maximise/restore. Title-band double-click zoom removed.
-  const toggleZoom = () => {
-    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-    if (typeof call === "function") {
-      void call("main.DSH.ToggleChatZoom");
-      return;
-    }
-    const current = window.wails && window.wails.Window;
-    if (current && typeof current.ToggleMaximise === "function") {
-      current.ToggleMaximise();
-      return;
-    }
-    window.setTimeout(toggleZoom, 100);
-  };
-  const openManagement = () => {
-    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-    if (typeof call !== "function") {
-      window.setTimeout(openManagement, 100);
-      return;
-    }
-    void call("main.DSH.OpenManagement");
-  };
+  const runWindowAction = (action) => window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__(action);
   controls.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;
     event.preventDefault();
     event.stopPropagation();
     switch (button.dataset.action) {
-      case "settings": openManagement(); break;
-      case "minimize": callWindow("Minimise"); break;
-      case "maximize": toggleZoom(); break;
-      case "close": callWindow("Close"); break;
+      case "settings": runWindowAction("settings"); break;
+      case "minimize": runWindowAction("minimize"); break;
+      case "maximize": runWindowAction("maximize"); break;
+      case "close": runWindowAction("close"); break;
     }
   });
 })();
@@ -390,10 +361,27 @@ const desktopExternalJSTemplate = `
       return "";
     }
   };
+  const reportOpenFailure = () => {
+    const catalog = window.__DSH_DESKTOP_LOCALE_BUNDLE__?.catalog;
+    const message = catalog?.["bridge.err_unreachable"] || "Desktop control plane is temporarily unreachable";
+    if (typeof window.alert === "function") window.alert(message);
+  };
   const callDesktop = (method, arg) => {
-    const call = window.wails && window.wails.Call && window.wails.Call.ByName;
-    if (typeof call !== "function") return;
-    void call("main.DSH." + method, arg);
+    // Remote Chat loads DSH HTTP, not the Wails asset server. Wails Core only
+    // installs an empty window.wails; Call.ByName is NOT available there.
+    const open = window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__;
+    try {
+      if (method === "OpenExternalURL" && typeof open === "function") {
+        Promise.resolve(open(arg)).catch(reportOpenFailure);
+        return;
+      }
+      const call = window.wails && window.wails.Call && window.wails.Call.ByName;
+      if (typeof call === "function") {
+        Promise.resolve(call("main.DSH." + method, arg)).catch(reportOpenFailure);
+        return;
+      }
+    } catch (_) { /* a synchronous bridge failure must be visible too */ }
+    reportOpenFailure();
   };
   const contextPayload = (event) => {
     const sel = ((window.getSelection() && window.getSelection().toString()) || "").trim();
@@ -413,13 +401,54 @@ const desktopExternalJSTemplate = `
     return Boolean(el.closest && el.closest("input, textarea, select, [contenteditable='true']"));
   };
   const originalOpen = window.open;
-  window.open = function(url) {
-    if (url && !allowed(url)) return null;
+  window.open = function(url, target, features) {
+    if (url == null || url === "" || url === "about:blank") {
+      // xterm OSC8 calls open(), clears opener, then assigns location.href.
+      // Reserve a one-shot navigation handle, not an unmanaged native WebView.
+      // This is intentionally not a full Window (no document.write/postMessage).
+      let closed = false;
+      let href = "about:blank";
+      const navigate = (value) => {
+        if (closed) return;
+        const external = resolveExternal(value);
+        if (!external && !allowed(value)) return;
+        href = new URL(value, location.href).href;
+        closed = true;
+        if (external) callDesktop("OpenExternalURL", external);
+        else if (typeof originalOpen === "function") originalOpen.call(window, href, target, features);
+      };
+      const deferredLocation = {
+        get href() { return href; },
+        set href(value) { navigate(value); },
+        assign: navigate,
+        replace: navigate,
+      };
+      return {
+        opener: null,
+        get closed() { return closed; },
+        get location() { return deferredLocation; },
+        set location(value) { navigate(value); },
+        close() { closed = true; },
+        focus() {},
+      };
+    }
+    if (url && !allowed(url)) {
+      // DSH sidebar toolbar and no-sidebar fallback use window.open.
+      // Open validated web URLs via the OS, never navigate the Chat WebView.
+      const external = resolveExternal(url);
+      if (external) callDesktop("OpenExternalURL", external);
+      return null;
+    }
     if (typeof originalOpen === "function") return originalOpen.apply(this, arguments);
     return null;
   };
-  document.addEventListener("click", (event) => {
-    const link = event.target && event.target.closest && event.target.closest("a[href]");
+  // Let DSH handle preview/sidebar links before applying the navigation fallback.
+  // Capture + stopPropagation would prevent React MarkdownAnchor from opening tabs.
+  const routeLinkClick = (event) => {
+    if (event.defaultPrevented) return;
+    if (event.type === "auxclick" && event.button !== 1) return;
+    const target = event.target && (event.target.closest ? event.target : event.target.parentElement);
+    const link = target && target.closest && target.closest("a[href]");
     if (!link) return;
     const href = link.getAttribute("href");
     if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) return;
@@ -428,7 +457,9 @@ const desktopExternalJSTemplate = `
     event.stopPropagation();
     const external = resolveExternal(href);
     if (external) callDesktop("OpenExternalURL", external);
-  }, true);
+  };
+  document.addEventListener("click", routeLinkClick);
+  document.addEventListener("auxclick", routeLinkClick);
   document.addEventListener("contextmenu", (event) => {
     const payload = contextPayload(event);
     window.__DSH_CTX__ = payload;
@@ -442,6 +473,26 @@ const desktopExternalJSTemplate = `
     el.style.setProperty("--custom-contextmenu", id);
     el.style.setProperty("--custom-contextmenu-data", JSON.stringify(payload));
   }, true);
+  // Core-only Chat has no Wails contextmenu.ts listener. Let DSH handlers win,
+  // then ask the authenticated bridge to show only our fixed native menu.
+  document.addEventListener("contextmenu", (event) => {
+    if (!useCustomMenu || event.defaultPrevented) return;
+    const el = event.target?.nodeType === 3 ? event.target.parentElement : event.target;
+    if (!el || isEditable(el)) return;
+    const payload = contextPayload(event);
+    if (!payload.text && !payload.href) return;
+    const show = window.__DSH_DESKTOP_CONTEXT_MENU__;
+    if (typeof show !== "function") { reportOpenFailure(); return; }
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      Promise.resolve(show({
+        x: Math.max(0, Math.round(event.clientX || 0)),
+        y: Math.max(0, Math.round(event.clientY || 0)),
+        text: payload.text, href: payload.href,
+      })).catch(reportOpenFailure);
+    } catch (_) { reportOpenFailure(); }
+  });
 })();
 `
 
@@ -454,6 +505,10 @@ func desktopExternalJS(useCustomMenu bool) string {
 }
 
 func desktopChromeScript(nativeMac bool) string {
+	return desktopWindowActionJS + desktopChromeBodyScript(nativeMac)
+}
+
+func desktopChromeBodyScript(nativeMac bool) string {
 	external := desktopExternalJS(!nativeMac)
 	if nativeMac {
 		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + external

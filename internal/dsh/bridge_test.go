@@ -2,8 +2,10 @@ package dsh
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,11 +13,140 @@ import (
 	"time"
 )
 
+// Implement only the capabilities exercised here; embedding the interface keeps
+// the HTTP tests independent of platform-specific process-supervision fixtures.
+type routeTestBridgeHost struct{ BridgeHost }
+
+func (*routeTestBridgeHost) BridgeLocaleBundle() BridgeLocaleBundle {
+	return BridgeLocaleBundle{Locale: "en", Catalog: map[string]string{"bridge.card_status": "Status"}}
+}
+func (*routeTestBridgeHost) SetPromptOverlayMaxLines(n int) (BridgePrefs, error) {
+	return BridgePrefs{PromptOverlayMaxLines: n}, nil
+}
+func (*routeTestBridgeHost) ClaimOpenSession() string { return "legacy-session" }
+
+type sequencedBridgeHost struct{ routeTestBridgeHost }
+
+func (*sequencedBridgeHost) ClaimOpenSessionRequest() OpenSessionRequest {
+	return OpenSessionRequest{SessionID: "same-session", RequestID: 42}
+}
+
+type externalURLBridgeHost struct {
+	routeTestBridgeHost
+	urls []string
+	err  error
+}
+
+func (h *externalURLBridgeHost) OpenExternalURL(url string) error {
+	h.urls = append(h.urls, url)
+	return h.err
+}
+
+func TestDesktopBridgeOpenExternalURL(t *testing.T) {
+	host := &externalURLBridgeHost{}
+	owner := New()
+	owner.SetBridgeHost(host)
+	bridge := &desktopBridge{owner: owner, token: "test-token"}
+	req := httptest.NewRequest(http.MethodPost, "/v1/open-external-url", strings.NewReader(`{"url":"https://example.com/docs"}`))
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res := httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusOK || len(host.urls) != 1 || host.urls[0] != "https://example.com/docs" {
+		t.Fatalf("external URL: status=%d calls=%v body=%s", res.Code, host.urls, res.Body.String())
+	}
+}
+
+func TestDesktopBridgeOpenExternalURLRejections(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, token, body string
+		status                    int
+	}{
+		{"missing auth", "POST", "", `{"url":"https://example.com"}`, 401},
+		{"wrong auth", "POST", "wrong", `{"url":"https://example.com"}`, 401},
+		{"wrong method", "GET", "test-token", `{"url":"https://example.com"}`, 405},
+		{"malformed", "POST", "test-token", "{", 400},
+		{"missing", "POST", "test-token", "{}", 400},
+		{"empty body", "POST", "test-token", "", 400},
+		{"empty URL", "POST", "test-token", `{"url":"  "}`, 400},
+		{"number", "POST", "test-token", `{"url":12}`, 400},
+		{"null URL", "POST", "test-token", `{"url":null}`, 400},
+		{"boolean", "POST", "test-token", `{"url":true}`, 400},
+		{"object", "POST", "test-token", `{"url":{}}`, 400},
+		{"array", "POST", "test-token", `{"url":[]}`, 400},
+		{"null body", "POST", "test-token", "null", 400},
+		{"trailing JSON", "POST", "test-token", `{"url":"https://example.com"}{}`, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host := &externalURLBridgeHost{}
+			owner := New()
+			owner.SetBridgeHost(host)
+			bridge := &desktopBridge{owner: owner, token: "test-token"}
+			req := httptest.NewRequest(tc.method, "/v1/open-external-url", strings.NewReader(tc.body))
+			req.Header.Set(desktopBridgeTokenHeader, tc.token)
+			res := httptest.NewRecorder()
+			bridge.serveHTTP(res, req)
+			if res.Code != tc.status || len(host.urls) != 0 {
+				t.Fatalf("status=%d calls=%v body=%s", res.Code, host.urls, res.Body.String())
+			}
+		})
+	}
+}
+
+func TestDesktopBridgeOpenExternalURLFailureAndLegacyHost(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		host BridgeHost
+	}{
+		{"launcher failure", &externalURLBridgeHost{err: errors.New("launcher failed")}},
+		{"legacy host", &routeTestBridgeHost{}},
+		{"no host", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			owner := New()
+			owner.SetBridgeHost(tc.host)
+			bridge := &desktopBridge{owner: owner, token: "test-token"}
+			req := httptest.NewRequest("POST", "/v1/open-external-url", strings.NewReader(`{"url":"https://example.com"}`))
+			req.Header.Set(desktopBridgeTokenHeader, "test-token")
+			res := httptest.NewRecorder()
+			bridge.serveHTTP(res, req)
+			if res.Code != http.StatusConflict {
+				t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+			}
+			if host, ok := tc.host.(*externalURLBridgeHost); ok {
+				if len(host.urls) != 1 || !strings.Contains(res.Body.String(), "launcher failed") {
+					t.Fatalf("failure lost: calls=%v body=%s", host.urls, res.Body.String())
+				}
+			}
+			// Optional capability absence must not disable existing routes.
+			req = httptest.NewRequest("GET", "/v1/status", nil)
+			req.Header.Set(desktopBridgeTokenHeader, "test-token")
+			res = httptest.NewRecorder()
+			bridge.serveHTTP(res, req)
+			if res.Code != http.StatusOK {
+				t.Fatalf("legacy status failed: %d", res.Code)
+			}
+		})
+	}
+}
+
+func TestDesktopBridgeClaimCarriesRequestIdentity(t *testing.T) {
+	owner := New()
+	owner.SetBridgeHost(&sequencedBridgeHost{})
+	bridge := &desktopBridge{owner: owner, token: "test-token"}
+	req := httptest.NewRequest(http.MethodPost, "/v1/claim-open-session", nil)
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res := httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"requestId":42`) || !strings.Contains(res.Body.String(), `"sessionId":"same-session"`) {
+		t.Fatalf("claim lost request identity: %d %s", res.Code, res.Body.String())
+	}
+}
+
 func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 	owner := New()
 	// The locale bundle is a host capability, so inject a host before asserting
 	// that the endpoint serves the catalog.
-	owner.SetBridgeHost(&recordingBridgeHost{})
+	owner.SetBridgeHost(&routeTestBridgeHost{})
 	endpoint := filepath.Join(t.TempDir(), "desktop-bridge-endpoint.json")
 	bridge, err := newDesktopBridge(owner, endpoint)
 	if err != nil {

@@ -15,6 +15,13 @@ type bridgeHostAdapter struct {
 }
 
 var _ dsh.BridgeHost = bridgeHostAdapter{}
+var _ dsh.ExternalURLHost = bridgeHostAdapter{}
+var _ dsh.ChatWindowActionHost = bridgeHostAdapter{}
+var _ dsh.ChatContextMenuHost = bridgeHostAdapter{}
+
+func (a bridgeHostAdapter) OpenExternalURL(url string) error {
+	return openExternalURL(url)
+}
 
 func (a bridgeHostAdapter) OpenManagement() error {
 	return a.service.OpenManagement()
@@ -152,6 +159,10 @@ func (a bridgeHostAdapter) SetShortcuts(shortcuts map[string]string) (dsh.Bridge
 
 func (a bridgeHostAdapter) ReportSessions(sessions []dsh.BridgeSession) {
 	a.service.ReportSessions(sessions)
+}
+
+func (a bridgeHostAdapter) ClaimOpenSessionRequest() dsh.OpenSessionRequest {
+	return a.service.pendingOpen.claimRequest()
 }
 
 func (a bridgeHostAdapter) ClaimOpenSession() string {

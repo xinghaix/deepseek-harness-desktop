@@ -84,12 +84,16 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	// invisible native drag strip). Do NOT override Height to 0 — that kills
 	// native drag. Zoom uses JS click-timing → ToggleChatZoom (not AppleActionOnDoubleClick).
 	// Docs: https://v3.wails.io/features/windows/frameless/
-	return applyDesktopWindowChrome(options)
+	options = applyDesktopWindowChrome(options)
+	// Remote Chat has only Wails Core: install gesture callbacks before signalling
+	// native readiness so queued ExecJS and WindowRuntimeReady hooks can run.
+	options.JS += desktopChatDragJS + desktopChatRuntimeScript(url)
+	return options
 }
 
 const desktopModalChromeJS = "(function(){document.documentElement.classList.add('dsh-desktop-config','dsh-desktop-config-modal');var content=document.querySelector('body > .app-shell');if(content){content.classList.add('dsh-window-content','dsh-window-management');content.style.setProperty('--dsh-window-top-inset','0px');}})();"
 
-const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.getElementById(id);if(!el){el=document.createElement('div');el.id=id;el.style.cssText='position:fixed;inset:0;background:rgba(15,18,24,.42);z-index:2147483646;cursor:pointer';document.documentElement.appendChild(el);}el.onclick=function(){var call=window.wails&&window.wails.Call&&window.wails.Call.ByName;if(typeof call==='function')void call('main.DSH.TryDismissConfig');};})();"
+const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.getElementById(id);if(!el){el=document.createElement('div');el.id=id;el.style.cssText='position:fixed;inset:0;background:rgba(15,18,24,.42);z-index:2147483646;cursor:pointer';document.documentElement.appendChild(el);}el.onclick=function(){window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__('dismiss-config');};})();"
 const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 const showDiscardConfigJS = "var el=document.getElementById('discard-config');if(el)el.hidden=false;"
 

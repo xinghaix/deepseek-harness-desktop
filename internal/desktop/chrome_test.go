@@ -38,8 +38,8 @@ func TestDesktopChromeScriptEmbedsStylesBeforeMarkup(t *testing.T) {
 	if !strings.Contains(desktopChromeCSS, "--wails-draggable: no-drag") {
 		t.Fatal("非 macOS 窗控按钮必须标记 no-drag")
 	}
-	if !strings.Contains(script, "main.DSH.ToggleChatZoom") {
-		t.Fatal("非 macOS 最大化按钮仍应走 Go ToggleChatZoom")
+	if !strings.Contains(script, `runWindowAction("maximize")`) || !strings.Contains(script, "__DSH_DESKTOP_REQUEST_WINDOW_ACTION__") {
+		t.Fatal("非 macOS 最大化按钮必须走可用的窗口动作桥接，而不是远程页不存在的 Wails Call")
 	}
 	if !strings.Contains(script, "window.open") || !strings.Contains(script, "127.0.0.1") || !strings.Contains(script, "preventDefault") {
 		t.Fatal("非 macOS Chat 必须注入 loopback 导航防护")

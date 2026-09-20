@@ -3,6 +3,7 @@ package dsh
 import (
 	"deepseek-harness-desktop/internal/i18n"
 	"fmt"
+	"strings"
 )
 
 type CheckResult struct {
@@ -123,6 +124,10 @@ func NormalizeLocationOptions(o Options) (Options, error) {
 		return o, fmt.Errorf("DSH Home: %w", err)
 	}
 	o.DesktopDir = desktopDataDirPath(o.Home)
+	// Match launch defaults without creating any directories when merely opening paths.
+	if strings.TrimSpace(o.Workspace) == "" {
+		o.Workspace = defaultWorkspacePath(o.Home)
+	}
 	if o.Workspace, err = absolutePath(o.Workspace); err != nil {
 		return o, fmt.Errorf("%s: %w", i18n.TActive("err.workspace_path"), err)
 	}

@@ -23,6 +23,7 @@ import (
 
 type Service struct {
 	*dsh.Manager
+	nativeOpenPath     func(string) error // optional native-dispatch seam for tests
 	windowMu           sync.Mutex
 	updater            *update.Updater
 	stopAuto           context.CancelFunc
@@ -94,12 +95,13 @@ func (d *Service) ChooseExecutable() (string, error) {
 		return "", err
 	}
 	locale := d.resolvedLocale()
-	return app.Dialog.OpenFile().
+	path, err := app.Dialog.OpenFile().
 		CanChooseFiles(true).
 		CanChooseDirectories(false).
 		SetTitle(i18n.T(locale, "dialog.choose_executable_title")).
 		SetMessage(i18n.T(locale, "dialog.choose_executable_message")).
 		PromptForSingleSelection()
+	return normalizeFileDialogResult(runtime.GOOS, path, err)
 }
 
 func (d *Service) ChooseHome() (string, error) {
@@ -117,12 +119,13 @@ func (d *Service) chooseDirectory(title, message string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return app.Dialog.OpenFile().
+	path, err := app.Dialog.OpenFile().
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		SetTitle(title).
 		SetMessage(message).
 		PromptForSingleSelection()
+	return normalizeFileDialogResult(runtime.GOOS, path, err)
 }
 
 func (d *Service) ReloadChat(o dsh.Options) error {
@@ -186,7 +189,9 @@ func (d *Service) OpenDSH() error {
 	}
 	// Always (re)bind close hooks — Chat can be recreated after a real close.
 	d.hookChatWindow(app, chat)
-	d.dismissConfigModal(app, chat)
+	if !d.tryDismissConfigModal(app, chat) {
+		return nil
+	}
 	chat.Show()
 	chat.Focus()
 	return nil
@@ -295,6 +300,19 @@ func presentConfigModal(chat, config application.Window) {
 	config.Focus()
 }
 
+// Called with windowMu held. Implicit navigation must never clear dirty edits.
+func (d *Service) tryDismissConfigModal(app *application.App, chat application.Window) bool {
+	return dismissCleanConfig(d.configDirty, func() {
+		if config, ok := app.Window.GetByName(configWindowName); ok {
+			config.Show()
+			config.Focus()
+		} else if setup, ok := app.Window.GetByName(setupWindowName); ok {
+			setup.Show()
+			setup.Focus()
+		}
+	}, func() { d.dismissConfigModal(app, chat) })
+}
+
 func (d *Service) dismissConfigModal(app *application.App, chat application.Window) {
 	if chat != nil {
 		chat.ExecJS(undimChatJS)
@@ -351,14 +369,10 @@ func (d *Service) TryDismissConfig() error {
 	if err != nil {
 		return err
 	}
-	if d.configDirty {
-		if config, ok := app.Window.GetByName(configWindowName); ok {
-			config.Focus()
-		}
+	chat, _ := app.Window.GetByName(chatWindowName)
+	if !d.tryDismissConfigModal(app, chat) {
 		return nil
 	}
-	chat, _ := app.Window.GetByName(chatWindowName)
-	d.dismissConfigModal(app, chat)
 	if chat != nil {
 		chat.Show()
 		chat.Focus()
@@ -437,11 +451,7 @@ func (d *Service) OpenHome(o dsh.Options) error {
 	if err := requireDirectory(o.Home, "DSH Home"); err != nil {
 		return err
 	}
-	app, err := desktopApp()
-	if err != nil {
-		return err
-	}
-	return app.Env.OpenFileManager(o.Home, false)
+	return d.openLocalPath(o.Home)
 }
 
 func (d *Service) OpenWorkspace(o dsh.Options) error {
@@ -452,11 +462,7 @@ func (d *Service) OpenWorkspace(o dsh.Options) error {
 	if err := requireDirectory(o.Workspace, i18n.TActive("label.workspace")); err != nil {
 		return err
 	}
-	app, err := desktopApp()
-	if err != nil {
-		return err
-	}
-	return app.Env.OpenFileManager(o.Workspace, false)
+	return d.openLocalPath(o.Workspace)
 }
 
 func (d *Service) OpenSettings(o dsh.Options) error {
@@ -467,6 +473,16 @@ func (d *Service) OpenSettings(o dsh.Options) error {
 	path := filepath.Join(o.Home, "settings.yaml")
 	if err := requireFile(path, "settings.yaml"); err != nil {
 		return err
+	}
+	return d.openLocalPath(path)
+}
+
+// openLocalPath uses a single literal argument for both files and directories.
+// Wails OpenFileManager expands environment variables on all platforms and its
+// Linux desktop-entry parser splits space-containing paths into separate arguments.
+func (d *Service) openLocalPath(path string) error {
+	if d.nativeOpenPath != nil {
+		return d.nativeOpenPath(path)
 	}
 	app, err := desktopApp()
 	if err != nil {
