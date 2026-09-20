@@ -2,3 +2,6 @@ node_modules/
 # Keep lib/ in this repository so the migrated plugin can be loaded directly.
 *.tgz
 coverage/
+
+# Unrelated local artwork must not be committed.
+/pelican_bicycle_monkey_airplane_29.svg
