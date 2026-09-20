@@ -1,0 +1,8 @@
+# Wrap the native http fetch provider so allowlisted hosts can resolve
+# through Surge/Clash Fake-IP (198.18.0.0/15). Does not change fetchProvider.
+- insert:
+    - id: web-fetch-allowlist
+      name: dsh-web-fetch-allowlist
+      config:
+        # No bundled hosts: configure your own allowlist in Settings.
+        hosts: ""
