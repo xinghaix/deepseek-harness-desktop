@@ -18,22 +18,20 @@ bundle_name="Deepseek Harness Desktop"
 ldflags="-s -w -X deepseek-harness-desktop/internal/version.Version=$version"
 tags=${BUILD_TAGS:-wails,production}
 
-# Pin the publisher key in every production binary; never rely on runtime env.
-update_key=${DSH_UPDATE_MANIFEST_PUBLIC_KEY:-}
-if [ "${DSH_REQUIRE_SIGNED_UPDATES:-0}" = 1 ] && [ -z "$update_key" ]; then
-	echo "DSH_UPDATE_MANIFEST_PUBLIC_KEY is required for production updates" >&2
+# Immutable publisher identity for desktop Release manifest verification only.
+# Never rotate/replace this key or turn the CI variable into an override.
+expected_update_key=8c2659313bfe0ea8e05610ddcd88ba666697bec00ec3eb3eb669513fabe8c24f
+update_key=$(tr -d '\r\n' < "$root/assets/update/release-public-key.hex")
+if [ "$update_key" != "$expected_update_key" ]; then
+	echo "repository update public key must not be changed" >&2
 	exit 1
 fi
-if [ -n "$update_key" ]; then
-	case "$update_key" in
-		*[!0-9a-fA-F]*) echo "update public key must be 64 hex characters" >&2; exit 1 ;;
-	esac
-	if [ "${#update_key}" -ne 64 ]; then
-		echo "update public key must be 64 hex characters" >&2
-		exit 1
-	fi
-	ldflags="$ldflags -X deepseek-harness-desktop/internal/update.ManifestPublicKey=hex:$update_key"
+ci_update_key=${DSH_UPDATE_MANIFEST_PUBLIC_KEY:-}
+if [ -n "$ci_update_key" ] && [ "$ci_update_key" != "$update_key" ]; then
+	echo "DSH_UPDATE_MANIFEST_PUBLIC_KEY cannot override the pinned publisher key" >&2
+	exit 1
 fi
+ldflags="$ldflags -X deepseek-harness-desktop/internal/update.ManifestPublicKey=hex:$update_key"
 
 mkdir -p "$dist"
 echo "building $app $version ($goos/$goarch)"

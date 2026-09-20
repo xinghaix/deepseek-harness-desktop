@@ -129,7 +129,7 @@ Node 默认 16KiB header（HTTP 431）。
 - **Facade 是已实现的收口，但不是 origin ACL**：`main.go` 只绑定 `internal/desktop.WailsFacade`。Facade 方法接收 Wails renderer context，并按 `main`/`config`/`dsh` 窗口名收口；这是名称 gate，不是 renderer origin 身份证明。Wails 仍没有原生 per-window binding ACL；Chat 仍只保留少量标题栏/模态动作，其余桌面控制走认证 bridge。
 - **WebView 基线/缺口**：窗口选项已关闭 DevTools、检查器和文件拖放，并拒绝麦克风、摄像头、地理位置、通知、剪贴板读取权限；`assets/web/index.html` 的 CSP 只保护嵌入式管理页。Chat chrome 额外注入 `window.open`/外链 loopback 防护，并把 http(s) 外链点击转到系统默认浏览器（`Browser.OpenURL`）；这不是 Wails native NavigationStarting。Wails 当前没有跨平台可取消的 NavigationStarting/NewWindowRequested/DownloadStarting hooks；三端 WebView E2E 未验收。
 - **Chat 右键菜单**：要「用默认浏览器搜索 / 打开链接」，不要替换掉系统菜单。macOS 在 WKWebView `willOpenMenu:withEvent:` 里插入项，保留 Look Up、Translate、Speech、Services、Share。Windows/Linux 在选中文本或链接时用 Wails `--custom-contextmenu`（系统 WebView 不允许跨端统一往原生菜单加项）。「Search with DuckDuckGo」来自 Safari 默认搜索引擎，不是安装了 DuckDuckGo；Speech/Services/Share 是 AppKit 系统项，Services 随已安装 app 的 NSServices 变化。
-- **更新 manifest**：canonical JSON + Ed25519 是默认信任根。普通 `New()` 拒绝无 manifest 的 release（`allowLegacy` 只给测试）。`scripts/build.sh` 用 `-ldflags` 注入 `DSH_UPDATE_MANIFEST_PUBLIC_KEY`；release workflow 在 build job 设置该变量并要求 `DSH_REQUIRE_SIGNED_UPDATES=1`。未注入公钥的开发构建仍可读取 `DSH_DESKTOP_UPDATE_PUBLIC_KEY` 作为 bootstrap。
+- **更新 manifest 与固定公钥**：canonical JSON + Ed25519 是默认信任根。普通 `New()` 拒绝无 manifest 的 release（`allowLegacy` 只给测试）。`assets/update/release-public-key.hex` 仅用于本仓库桌面 Release manifest 验签；保持原值，**禁止二次更改、替换、重新生成、删除或绕过固定值保护**，不用于 CLI、登录、bridge 认证或平台代码签名。修改更新器、构建或发布配置前须读 [`assets/update/README.md`](assets/update/README.md)。`scripts/build.sh` 固定校验并注入该公钥；CI 的 `DSH_UPDATE_MANIFEST_PUBLIC_KEY` 非空时只能与之相同，不再允许覆盖。已注入公钥不受运行时环境变量替换；直接 `go build` 不走此打包保护。
 - **更新事务**：0600 的 `update-transaction.json` 记录 `applying → replaced → launched → healthy`。apply 失败用 quarantine restore，不先 `RemoveAll` 目标。管理窗 `WindowRuntimeReady` 之后才 `MarkHealthy` 并清理 `.old`。启动不会把 launched 事务自动 crash-rollback。平台签名校验仍由 `DSH_DESKTOP_REQUIRE_PLATFORM_SIGNATURE=1` opt-in。
 
 ## 版本与发版
@@ -155,7 +155,7 @@ Node 默认 16KiB header（HTTP 431）。
 3. `.github/workflows/release.yml` 校验 tag 祖先在 `origin/main`，用 `scripts/build.sh` 打 darwin-arm64 / darwin-amd64 / linux-amd64 / linux-arm64 /
    windows-amd64 / windows-arm64，上传制品，并用 `tools/update-manifest` 为每个可更新 artifact 生成 `manifest-<goos>-<goarch>.json` 与 `SHA256SUMS`。
    workflow 需要仓库 Secret `DSH_UPDATE_MANIFEST_PRIVATE_KEY`；没有该 secret 的 release 会失败，不发布未认证 manifest。
-   生产构建还需要 repository variable `DSH_UPDATE_MANIFEST_PUBLIC_KEY`（64 hex 字符）以 `-ldflags` 固定信任根；缺少该变量且 `DSH_REQUIRE_SIGNED_UPDATES=1` 时 release build 失败。
+   构建使用仓库固定公钥；repository variable `DSH_UPDATE_MANIFEST_PUBLIC_KEY` 非空时必须与仓库公钥完全相同，否则 build 失败。不得通过修改公钥或保护代码来消除签名/配置不匹配。
 4. **不必**为发版改 `internal/version.Version`；CI/脚本用 ldflags 写入。
 
 发布身份：`com.deepseek.harness.desktop` 同时是 Wails 单实例 ID、macOS bundle ID 和 manifest app ID。自签名仍可用于本地开发；生产发布应配置 Developer ID/hardened runtime/notarization 或受信 Authenticode，并在更新器中开启平台验证。
