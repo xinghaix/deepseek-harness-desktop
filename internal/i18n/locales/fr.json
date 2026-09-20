@@ -387,7 +387,7 @@
   "bridge.open": "Ouvrir",
   "bridge.apply_paths": "Appliquer les chemins et ouvrir le Chat",
   "bridge.apply_paths_hint": "Écrivez les chemins ci-dessus, redémarrez ou démarrez DSH, puis ouvrez le Chat.",
-  "bridge.restart_open_chat": "Redémarrer et ouvrir le Chat",
+  "bridge.restart_open_chat": "Rouvrir",
   "bridge.open_cold_start": "Ouvrir la configuration de démarrage à froid",
   "bridge.enhanced_hover_title": "Invite flottante",
   "bridge.enhanced_hover_hint": "Pendant la lecture d’une réponse, l’invite correspondante reste épinglée en haut de la conversation dès que sa bulle sort de l’écran ; une seule est affichée à la fois. La carte affiche les vignettes d’images, les puces de fichiers et le texte ; l’horodatage et les actions de copie se trouvent en bas à droite et apparaissent au survol.",

@@ -81,6 +81,10 @@ assert.match(source, /installChatContentVisibility/, "chat content-visibility in
 assert.match(source, /content-visibility:auto/, "chat content-visibility CSS missing");
 assert.match(source, /setChatContentVisibility/, "chat content-visibility setter missing");
 assert.match(source, /t\("field\.chat_content_visibility"\)/, "chat content-visibility settings label must resolve through the catalog");
+assert.match(source, /statusOpen/, "status card collapsible state missing");
+assert.match(source, /dshDesktopBridgeStatusHeader/, "collapsible status card header missing");
+assert.match(source, /dshDesktopBridgePill/, "status pill badge missing");
+assert.match(source, /dshDesktopBridgeHeaderAction/, "compact status header action missing");
 assert.doesNotMatch(source, /dsh-client-ui-workspace[\\/]lib/, "desktop bridge must not patch the official workspace bundle");
 
 const react = {

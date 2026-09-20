@@ -387,7 +387,7 @@
   "bridge.open": "打开",
   "bridge.apply_paths": "应用路径并打开 Chat",
   "bridge.apply_paths_hint": "将上方路径写入并重启 / 启动 DSH，然后打开 Chat。",
-  "bridge.restart_open_chat": "重启并打开 Chat",
+  "bridge.restart_open_chat": "重新打开",
   "bridge.open_cold_start": "打开冷启动配置",
   "bridge.enhanced_hover_title": "悬浮我方提示词",
   "bridge.enhanced_hover_hint": "阅读助手回复时，若对应我方气泡已滚出视口，则在对话顶部悬浮该提示词；同时只显示一条。悬浮卡片独立展示图片缩略图、文件卡片和文案；时间与复制等操作悬浮在卡片右下角，悬停时显示。",

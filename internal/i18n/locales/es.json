@@ -387,7 +387,7 @@
   "bridge.open": "Abrir",
   "bridge.apply_paths": "Aplicar rutas y abrir el Chat",
   "bridge.apply_paths_hint": "Escriba las rutas anteriores, reinicie o inicie DSH y luego abra el Chat.",
-  "bridge.restart_open_chat": "Reiniciar y abrir el Chat",
+  "bridge.restart_open_chat": "Volver a abrir",
   "bridge.open_cold_start": "Abrir la configuración de arranque en frío",
   "bridge.enhanced_hover_title": "Indicación flotante",
   "bridge.enhanced_hover_hint": "Al leer una respuesta, la indicación correspondiente permanece fijada en la parte superior de la conversación en cuanto su burbuja sale de la vista; solo se muestra una a la vez. La tarjeta muestra miniaturas de imágenes, chips de archivos y texto; la marca de tiempo y las acciones de copia están en la esquina inferior derecha y aparecen al pasar el cursor.",

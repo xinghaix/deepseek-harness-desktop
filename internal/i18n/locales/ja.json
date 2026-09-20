@@ -387,7 +387,7 @@
   "bridge.open": "開く",
   "bridge.apply_paths": "パスを適用して Chat を開く",
   "bridge.apply_paths_hint": "上記のパスを書き込み、DSH を再起動または起動してから Chat を開きます。",
-  "bridge.restart_open_chat": "再起動して Chat を開く",
+  "bridge.restart_open_chat": "再度開く",
   "bridge.open_cold_start": "コールドスタート設定を開く",
   "bridge.enhanced_hover_title": "プロンプトを固定表示",
   "bridge.enhanced_hover_hint": "返信を読むとき、対応するプロンプトの吹き出しが画面外にスクロールすると、会話の上部にそのプロンプトを固定表示します（同時に表示されるのは 1 件のみ）。カードには画像サムネイル、ファイルチップ、テキストが表示され、タイムスタンプとコピー操作はカード右下に配置され、マウスを重ねると表示されます。",

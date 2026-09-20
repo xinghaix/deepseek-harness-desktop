@@ -182,7 +182,9 @@ window.__ModuleLoader__.load({
 			"bridge.overlay_max_lines": "Max prompt lines",
 			// The settings nav resolves its label once, possibly before the catalog arrives.
 			"tray.open_settings": "Desktop settings",
-			"bridge.cli_version": "CLI Version: {0}"
+			"bridge.cli_version": "CLI Version: {0}",
+			"bridge.restart_open_chat": "Reopen",
+			"bridge.status_connected": "Connected to desktop"
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -2087,6 +2089,46 @@ window.__ModuleLoader__.load({
 				.dshDesktopBridgeCardBody[hidden] {
 					display: none !important;
 				}
+				.dshDesktopBridgeStatusHeader {
+					padding: 8px 0;
+					user-select: none;
+				}
+				.dshDesktopBridgeStatusHeader[aria-expanded="true"] {
+					padding: 14px 0 6px;
+				}
+				.dshDesktopBridgeStatusHeaderLeft {
+					display: flex;
+					align-items: center;
+					gap: 10px;
+					min-width: 0;
+					flex-wrap: wrap;
+				}
+				.dshDesktopBridgeStatusHeaderRight {
+					display: flex;
+					align-items: center;
+					gap: 10px;
+					flex: none;
+				}
+				.dshDesktopBridgePill {
+					display: inline-flex;
+					align-items: center;
+					gap: 6px;
+					padding: 2px 8px;
+					background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.04));
+					border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+					border-radius: 9999px;
+					font-size: 12px;
+					font-weight: 500;
+					line-height: 18px;
+					color: var(--dsw-alias-label-secondary);
+					white-space: nowrap;
+				}
+				.dshDesktopBridgeHeaderAction {
+					height: 28px !important;
+					padding: 0 12px !important;
+					font-size: 13px !important;
+					line-height: 26px !important;
+				}
 `;
 		}
 
@@ -2514,6 +2556,7 @@ window.__ModuleLoader__.load({
 			const [pending, setPending] = react.useState(false);
 			const [draft, setDraft] = react.useState({ executable: "", home: "", workspace: "" });
 			const [pathsOpen, setPathsOpen] = react.useState(false);
+			const [statusOpen, setStatusOpen] = react.useState(false);
 			const [recordingShortcutId, setRecordingShortcutId] = react.useState(null);
 			const [transport, setTransport] = react.useState(typeof window !== "undefined" ? window[TRANSPORT_STATE_GLOBAL] : undefined);
 			const backoffRef = react.useRef(1000);
@@ -2824,7 +2867,81 @@ window.__ModuleLoader__.load({
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("bridge.card_status") }),
+						jsxs("div", {
+							role: "button",
+							tabIndex: 0,
+							className: "dshDesktopBridgeCardTitleButton dshDesktopBridgeStatusHeader",
+							"aria-expanded": statusOpen,
+							onClick: () => setStatusOpen((prev) => !prev),
+							onKeyDown: (e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									setStatusOpen((prev) => !prev);
+								}
+							},
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeStatusHeaderLeft",
+									children: [
+										jsx("span", { children: t("bridge.card_status") }),
+										jsxs("span", {
+											className: "dshDesktopBridgePill",
+											children: [
+												jsx("span", { className: "dshDesktopBridgeDot", "data-link": link }),
+												jsx("span", { children: linkLabel(link) })
+											]
+										}),
+										jsxs("span", {
+											className: "dshDesktopBridgePill",
+											children: [
+												jsx("span", { className: "dshDesktopBridgeDot", "data-state": state }),
+												jsx("span", { children: "DSH " + stateLabel(state) })
+											]
+										})
+									]
+								}),
+								jsxs("div", {
+									className: "dshDesktopBridgeStatusHeaderRight",
+									children: [
+										!statusOpen ? jsx("button", {
+											className: "dshDesktopBridgeSelector dshDesktopBridgeHeaderAction",
+											type: "button",
+											disabled: !connected || busy,
+											onClick: (e) => {
+												e.stopPropagation();
+												void invoke("reloadChat", {
+													executable: draft.executable,
+													home: draft.home,
+													workspace: draft.workspace
+												}, state === "running" ? t("bridge.msg_requested_restart") : t("bridge.msg_requested_start"), { heavy: true });
+											},
+											onKeyDown: (e) => {
+												e.stopPropagation();
+											},
+											children: state === "running" ? t("bridge.restart_open_chat") : t("btn.start_open_chat")
+										}) : null,
+										jsx("svg", {
+											className: "dshDesktopBridgeCardChevron",
+											"data-open": statusOpen ? "true" : "false",
+											viewBox: "0 0 16 16",
+											fill: "none",
+											"aria-hidden": true,
+											children: jsx("path", {
+												d: "M4 6.5L8 10.5L12 6.5",
+												stroke: "currentColor",
+												strokeWidth: "1.5",
+												strokeLinecap: "round",
+												strokeLinejoin: "round"
+											})
+										})
+									]
+								})
+							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeCardBody",
+							hidden: !statusOpen,
+							children: [
 						jsxs("div", {
 							className: "dshDesktopBridgeRow",
 							children: [
@@ -2927,6 +3044,8 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
+						]
+						})
 						]
 					}),
 					jsxs("div", {

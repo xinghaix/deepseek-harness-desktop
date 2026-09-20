@@ -387,7 +387,7 @@
   "bridge.open": "Open",
   "bridge.apply_paths": "Apply paths and open Chat",
   "bridge.apply_paths_hint": "Write the paths above, restart or start DSH, then open Chat.",
-  "bridge.restart_open_chat": "Restart and open Chat",
+  "bridge.restart_open_chat": "Reopen",
   "bridge.open_cold_start": "Open cold-start configuration",
   "bridge.enhanced_hover_title": "Floating prompt",
   "bridge.enhanced_hover_hint": "While reading a reply, the matching prompt stays pinned at the top of the conversation once its bubble scrolls out of view; only one is shown at a time. The card renders image thumbnails, file chips, and text; timestamp and copy actions sit in the bottom-right corner and appear on hover.",

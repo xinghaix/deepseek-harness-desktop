@@ -387,7 +387,7 @@
   "bridge.open": "Öffnen",
   "bridge.apply_paths": "Pfade übernehmen und Chat öffnen",
   "bridge.apply_paths_hint": "Obige Pfade schreiben, DSH neu starten bzw. starten, dann Chat öffnen.",
-  "bridge.restart_open_chat": "Neu starten und Chat öffnen",
+  "bridge.restart_open_chat": "Erneut öffnen",
   "bridge.open_cold_start": "Kaltstart-Konfiguration öffnen",
   "bridge.enhanced_hover_title": "Schwebende Eingabe",
   "bridge.enhanced_hover_hint": "Beim Lesen einer Antwort bleibt die zugehörige Eingabe oben im Verlauf fixiert, sobald ihre Blase aus dem Sichtbereich scrollt; angezeigt wird immer nur eine. Die Karte zeigt Bildvorschauen, Datei-Chips und Text; Zeitstempel und Kopieraktionen sitzen unten rechts und erscheinen beim Überfahren.",

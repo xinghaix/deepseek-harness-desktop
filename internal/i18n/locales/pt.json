@@ -387,7 +387,7 @@
   "bridge.open": "Abrir",
   "bridge.apply_paths": "Aplicar caminhos e abrir o Chat",
   "bridge.apply_paths_hint": "Escreva os caminhos acima, reinicie ou inicie o DSH e abra o Chat.",
-  "bridge.restart_open_chat": "Reiniciar e abrir o Chat",
+  "bridge.restart_open_chat": "Reabrir",
   "bridge.open_cold_start": "Abrir a configuração de arranque a frio",
   "bridge.enhanced_hover_title": "Prompt flutuante",
   "bridge.enhanced_hover_hint": "Ao ler uma resposta, o prompt correspondente fica fixado no topo da conversa assim que o respetivo balão sai do ecrã; só é mostrado um de cada vez. O cartão mostra miniaturas de imagens, chips de ficheiros e texto; o carimbo de data/hora e as ações de copiar ficam no canto inferior direito e aparecem ao passar o cursor.",
