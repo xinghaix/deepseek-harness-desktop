@@ -47,19 +47,15 @@ Error: invalid escalation: justification is only valid together with sandbox_per
 
 ## 安装或更新
 
-安装本仓库的二次修改版本时，请传入本仓库内的插件路径，而不是 npm 包名；npm 发布版本不保证包含这里的修改。
+安装本仓库的二次修改版本请使用以下 GitHub 地址，而不是 npm 包名；npm 发布版本不保证包含这里的修改。
 
-以下命令从 **deepseek-harness-desktop 仓库根目录**执行。macOS / Linux：
+直接从 GitHub 安装，无需先克隆仓库或发布到 npm。以下命令可在任意目录执行，适用于 macOS / Linux 和 Windows PowerShell（需已安装 pnpm 和 Git）：
 
 ```sh
-dsh plugin --profile web add "$PWD/plugins/dsh-sandbox-escalation-fix"
+dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#path:/plugins/dsh-sandbox-escalation-fix"
 ```
 
-Windows PowerShell：
-
-```powershell
-dsh plugin --profile web add (Join-Path $PWD.Path "plugins/dsh-sandbox-escalation-fix")
-```
+该命令安装仓库默认分支中的插件，不固定到某个版本；请保留完整地址和引号。需要固定版本时，可使用 `#<tag 或 commit>&path:/plugins/dsh-sandbox-escalation-fix`。
 
 示例安装到 `web` profile；如使用其他 profile，请替换为实际名称，并使用与目标 DSH 相同的 `DSH_HOME`。仓库保留了可加载的构建产物，无需先构建桌面端。
 
