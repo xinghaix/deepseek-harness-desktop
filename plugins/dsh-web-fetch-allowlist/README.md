@@ -9,10 +9,12 @@
 直接从 GitHub 安装，无需先克隆仓库或发布到 npm。以下命令可在任意目录执行，适用于 macOS / Linux 和 Windows PowerShell（需已安装 pnpm 和 Git）：
 
 ```sh
-dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#path:/plugins/dsh-web-fetch-allowlist"
+dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#main&path:/plugins/dsh-web-fetch-allowlist"
 ```
 
-该命令安装仓库默认分支中的插件，不固定到某个版本；请保留完整地址和引号。需要固定版本时，可使用 `#<tag 或 commit>&path:/plugins/dsh-web-fetch-allowlist`。
+该命令显式指定仓库的 `main` 分支和插件子目录，不固定到某个版本；请保留完整地址和引号，避免 shell 将 `&` 当作命令分隔符。需要固定版本时，可将 `main` 替换为 tag 或 commit，即 `#<tag 或 commit>&path:/plugins/dsh-web-fetch-allowlist`。
+
+如果之前使用的是省略分支的 `#path:/plugins/dsh-web-fetch-allowlist` 地址，更新时请改用上述 `#main&path:…` 形式，避免继续沿用旧安装 spec 的锁定提交。指定分支不代表自动更新；重新安装后仍应核对已安装版本。
 
 示例安装到 `web` profile；如使用其他 profile，请替换为实际名称，并使用与目标 DSH 相同的 `DSH_HOME`。本插件已包含可加载的 JavaScript，无需先构建桌面端。
 
