@@ -1,0 +1,4 @@
+node_modules/
+# Keep lib/ in this repository so the migrated plugin can be loaded directly.
+*.tgz
+coverage/
