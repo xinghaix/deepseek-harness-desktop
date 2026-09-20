@@ -6,17 +6,13 @@
 
 需要已安装的 DSH（`>=0.1.1-rc.1`）和 Node.js 20 或更高版本，以及 DSH Host 提供的 settings / web 插件。
 
-以下命令从 **deepseek-harness-desktop 仓库根目录**执行。macOS / Linux：
+直接从 GitHub 安装，无需先克隆仓库或发布到 npm。以下命令可在任意目录执行，适用于 macOS / Linux 和 Windows PowerShell（需已安装 pnpm 和 Git）：
 
 ```sh
-dsh plugin --profile web add "$PWD/plugins/dsh-web-fetch-allowlist"
+dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#path:/plugins/dsh-web-fetch-allowlist"
 ```
 
-Windows PowerShell：
-
-```powershell
-dsh plugin --profile web add (Join-Path $PWD.Path "plugins/dsh-web-fetch-allowlist")
-```
+该命令安装仓库默认分支中的插件，不固定到某个版本；请保留完整地址和引号。需要固定版本时，可使用 `#<tag 或 commit>&path:/plugins/dsh-web-fetch-allowlist`。
 
 示例安装到 `web` profile；如使用其他 profile，请替换为实际名称，并使用与目标 DSH 相同的 `DSH_HOME`。本插件已包含可加载的 JavaScript，无需先构建桌面端。
 
