@@ -26,7 +26,9 @@ dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#path:/plugins/ds
 
 白名单主机可以解析为公网单播地址或 Fake-IP `198.18.0.0/15`；loopback、RFC1918 私网、link-local 和元数据地址仍被阻止。裸域名及通配域名的匹配规则见 [测试](lib/hosts.test.js)。
 
-初始白名单保留在 [插件配置](cordis.patch.yml)，安装后请在设置卡片中审阅并按需调整。此插件并非任意内网访问开关。
+[插件配置](cordis.patch.yml) 中的默认白名单为空，不预置任何个人或组织域名。安装后请在设置卡片中添加自己需要的域名；留空时沿用原生抓取行为。个人配置应只保存在本机 DSH 设置中，不要提交到仓库。此插件并非任意内网访问开关。
+
+如果曾安装带有预置白名单的旧版本，更新插件不会自动删除已保存的用户设置，请在设置卡片中审阅并移除不需要的条目。
 
 ## 卸载
 
@@ -42,7 +44,7 @@ dsh plugin --profile web remove dsh-web-fetch-allowlist
 
 ```sh
 cd plugins/dsh-web-fetch-allowlist
-node --test lib/hosts.test.js
+node --test lib/hosts.test.js test/*.test.mjs
 npm pack --dry-run --ignore-scripts
 ```
 
