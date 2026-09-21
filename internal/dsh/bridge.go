@@ -90,6 +90,8 @@ type PrefsHost interface {
 	SetHoverMessageActions(enabled bool) (BridgePrefs, error)
 	SetChatContentVisibility(enabled bool) (BridgePrefs, error)
 	SetPromptOverlayMaxLines(n int) (BridgePrefs, error)
+	SetRestoreLastSession(enabled bool) (BridgePrefs, error)
+	SetRememberWindowSize(enabled bool) (BridgePrefs, error)
 	SetShortcuts(shortcuts map[string]string) (BridgePrefs, error)
 }
 
@@ -103,6 +105,11 @@ type OpenSessionRequest struct {
 // SessionRequestHost adds sequenced claims without widening the legacy host contract.
 type SessionRequestHost interface {
 	ClaimOpenSessionRequest() OpenSessionRequest
+}
+
+// SessionCurrentHost allows bridge clients to report the current active session ID.
+type SessionCurrentHost interface {
+	ReportCurrentSession(sessionID string)
 }
 
 type SessionHost interface {
@@ -146,6 +153,8 @@ type BridgePrefs struct {
 	HoverMessageActions   bool                 `json:"hoverMessageActions"`
 	ChatContentVisibility bool                 `json:"chatContentVisibility"`
 	PromptOverlayMaxLines int                  `json:"promptOverlayMaxLines"`
+	RestoreLastSession    bool                 `json:"restoreLastSession"`
+	RememberWindowSize    bool                 `json:"rememberWindowSize"`
 	Language              string               `json:"language"`
 	ResolvedLocale        string               `json:"resolvedLocale"`
 	SystemLocale          string               `json:"systemLocale"`
@@ -818,6 +827,52 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-restore-last-session":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetRestoreLastSession(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-remember-window-size":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		prefs, err := host.SetRememberWindowSize(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
 	case "/v1/report-chat-busy":
 		// Official SessionSummary.running feed from the Chat bridge client.
 		if r.Method != http.MethodPost {
@@ -844,7 +899,9 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var body struct {
-			Sessions []BridgeSession `json:"sessions"`
+			Sessions         []BridgeSession `json:"sessions"`
+			ClearErrors      []string        `json:"clearErrors,omitempty"`
+			CurrentSessionID string          `json:"currentSessionId,omitempty"`
 		}
 		if err := decodeBridgeJSON(r, &body); err != nil {
 			writeBridgeError(w, http.StatusBadRequest, err.Error())
@@ -858,8 +915,46 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		if body.Sessions == nil {
 			body.Sessions = []BridgeSession{}
 		}
+		if currentHost, ok := host.(SessionCurrentHost); ok && body.CurrentSessionID != "" {
+			currentHost.ReportCurrentSession(body.CurrentSessionID)
+		}
 		host.ReportSessions(body.Sessions)
 		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true, "count": len(body.Sessions)})
+	case "/v1/report-current-session":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if currentHost, ok := host.(SessionCurrentHost); ok {
+			currentHost.ReportCurrentSession(body.SessionID)
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case "/v1/clear-last-session":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if currentHost, ok := host.(SessionCurrentHost); ok {
+			currentHost.ReportCurrentSession("")
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	case "/v1/claim-open-session":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

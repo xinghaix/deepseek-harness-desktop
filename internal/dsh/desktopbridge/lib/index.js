@@ -42,6 +42,8 @@ const routes = Object.freeze({
 	setHoverMessageActions: Object.freeze({ method: "POST", path: "/v1/set-hover-message-actions" }),
 	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
 	setPromptOverlayMaxLines: Object.freeze({ method: "POST", path: "/v1/set-prompt-overlay-max-lines" }),
+	setRestoreLastSession: Object.freeze({ method: "POST", path: "/v1/set-restore-last-session" }),
+	setRememberWindowSize: Object.freeze({ method: "POST", path: "/v1/set-remember-window-size" }),
 	setShortcuts: Object.freeze({ method: "POST", path: "/v1/set-shortcuts" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),
@@ -51,6 +53,7 @@ const routes = Object.freeze({
 	appVersion: Object.freeze({ method: "GET", path: "/v1/app-version" }),
 	reportChatBusy: Object.freeze({ method: "POST", path: "/v1/report-chat-busy" }),
 	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" }),
+	clearLastSession: Object.freeze({ method: "POST", path: "/v1/clear-last-session" }),
 	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" })
 });
 
@@ -173,7 +176,11 @@ async function invoke(config, endpoint, payload, signal) {
 		const sessions = mergeTraySessionErrors(payload.sessions, payload.clearErrors);
 		lastTraySessions = sessions.map((s) => ({ ...s }));
 		lastClearErrors = Array.isArray(payload.clearErrors) ? [...payload.clearErrors] : [];
-		payload = { sessions };
+		payload = {
+			sessions,
+			clearErrors: lastClearErrors,
+			currentSessionId: typeof payload.currentSessionId === "string" ? payload.currentSessionId : ""
+		};
 	}
 	const route = routes[endpoint];
 	if (route === undefined) {

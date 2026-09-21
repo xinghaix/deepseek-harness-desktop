@@ -25,10 +25,22 @@ const (
 
 // File is the on-disk schema (versioned).
 type File struct {
-	Version int         `json:"version"`
-	Prefs   Prefs       `json:"prefs"`
-	Launch  Launch      `json:"launch"`
-	Update  UpdatePrefs `json:"update"`
+	Version       int          `json:"version"`
+	Prefs         Prefs        `json:"prefs"`
+	Launch        Launch       `json:"launch"`
+	Update        UpdatePrefs  `json:"update"`
+	WindowState   *WindowState `json:"windowState,omitempty"`
+	LastSessionID string       `json:"lastSessionId,omitempty"`
+}
+
+type WindowState struct {
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	X           int    `json:"x,omitempty"`
+	Y           int    `json:"y,omitempty"`
+	Maximised   bool   `json:"maximised,omitempty"`
+	DisplayID   string `json:"displayId,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 type Prefs struct {
@@ -40,6 +52,8 @@ type Prefs struct {
 	HoverMessageActions   *bool             `json:"hoverMessageActions,omitempty"`
 	ChatContentVisibility *bool             `json:"chatContentVisibility,omitempty"`
 	PromptOverlayMaxLines *int              `json:"promptOverlayMaxLines,omitempty"`
+	RestoreLastSession    *bool             `json:"restoreLastSession,omitempty"`
+	RememberWindowSize    *bool             `json:"rememberWindowSize,omitempty"`
 	Language              *string           `json:"language,omitempty"`
 	Shortcuts             map[string]string `json:"shortcuts,omitempty"`
 }
@@ -155,6 +169,7 @@ func loadUnlocked() (File, error) {
 		if f.Version == 0 {
 			f.Version = 1
 		}
+		ValidateFile(&f)
 		return f, nil
 	}
 	if !os.IsNotExist(err) {
@@ -163,6 +178,7 @@ func loadUnlocked() (File, error) {
 	// Migrate legacy split files once.
 	f := migrateLegacyUnlocked()
 	if hasAny(f) {
+		ValidateFile(&f)
 		if serr := writeUnlocked(f); serr != nil {
 			return f, serr
 		}
@@ -172,10 +188,13 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
-	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
+	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}
 	if f.Update.AutoCheck != nil {
+		return true
+	}
+	if f.WindowState != nil || strings.TrimSpace(f.LastSessionID) != "" {
 		return true
 	}
 	o := f.Launch.Options
@@ -239,6 +258,7 @@ func writeUnlocked(f File) error {
 	if f.Version == 0 {
 		f.Version = 1
 	}
+	ValidateFile(&f)
 	path, err := pathUnlocked()
 	if err != nil {
 		return err
@@ -292,4 +312,212 @@ func ResetCacheForTest() {
 	defer mu.Unlock()
 	cacheOK = false
 	cached = File{}
+}
+
+const (
+	MinSavedChatWidth  = 900
+	MinSavedChatHeight = 640
+	MaxSavedChatWidth  = 16384
+	MaxSavedChatHeight = 16384
+	MaxCoordinateBound = 32768
+)
+
+// ValidateSessionID checks if a session ID contains only safe alphanumeric/hyphen/underscore/dot characters
+// and is within a bounded length (1 to 128 bytes).
+func ValidateSessionID(id string) bool {
+	id = strings.TrimSpace(id)
+	if len(id) == 0 || len(id) > 128 {
+		return false
+	}
+	first := id[0]
+	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || (first >= '0' && first <= '9')) {
+		return false
+	}
+	for i := 1; i < len(id); i++ {
+		c := id[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// SanitizeSessionID returns the session ID if valid, or empty string if invalid or tampered.
+func SanitizeSessionID(id string) string {
+	id = strings.TrimSpace(id)
+	if !ValidateSessionID(id) {
+		return ""
+	}
+	return id
+}
+
+// ValidateWindowState ensures window dimensions, coordinates, and strings are safely bounded.
+func ValidateWindowState(ws *WindowState) *WindowState {
+	if ws == nil {
+		return nil
+	}
+	res := *ws
+	if res.Width <= 0 {
+		res.Width = 1280
+	} else if res.Width < MinSavedChatWidth {
+		res.Width = MinSavedChatWidth
+	} else if res.Width > MaxSavedChatWidth {
+		res.Width = MaxSavedChatWidth
+	}
+
+	if res.Height <= 0 {
+		res.Height = 860
+	} else if res.Height < MinSavedChatHeight {
+		res.Height = MinSavedChatHeight
+	} else if res.Height > MaxSavedChatHeight {
+		res.Height = MaxSavedChatHeight
+	}
+
+	if res.X < -MaxCoordinateBound || res.X > MaxCoordinateBound {
+		res.X = 0
+	}
+	if res.Y < -MaxCoordinateBound || res.Y > MaxCoordinateBound {
+		res.Y = 0
+	}
+
+	res.DisplayID = sanitizeString(res.DisplayID, 256)
+	res.DisplayName = sanitizeString(res.DisplayName, 256)
+	return &res
+}
+
+// ValidateFile validates and sanitizes all fields of a File loaded from or written to disk,
+// guarding against maliciously tampered configuration parameters and values.
+func ValidateFile(f *File) {
+	if f == nil {
+		return
+	}
+	if f.Version <= 0 {
+		f.Version = 1
+	}
+
+	// 1. Validate LastSessionID
+	f.LastSessionID = SanitizeSessionID(f.LastSessionID)
+
+	// 2. Validate WindowState
+	f.WindowState = ValidateWindowState(f.WindowState)
+
+	// 3. Validate Prefs
+	if f.Prefs.TraySessionLimit != nil {
+		lim := *f.Prefs.TraySessionLimit
+		if lim < 0 {
+			lim = 0
+		} else if lim > 20 {
+			lim = 20
+		}
+		f.Prefs.TraySessionLimit = &lim
+	}
+	if f.Prefs.PromptOverlayMaxLines != nil {
+		lines := *f.Prefs.PromptOverlayMaxLines
+		if lines < 2 {
+			lines = 2
+		} else if lines > 21 {
+			lines = 21
+		}
+		f.Prefs.PromptOverlayMaxLines = &lines
+	}
+	if f.Prefs.Language != nil {
+		lang := sanitizeString(*f.Prefs.Language, 32)
+		if lang == "" {
+			f.Prefs.Language = nil
+		} else {
+			f.Prefs.Language = &lang
+		}
+	}
+	if f.Prefs.CloseToTray != nil && *f.Prefs.CloseToTray {
+		if f.Prefs.TrayEnabled == nil || !*f.Prefs.TrayEnabled {
+			f.Prefs.CloseToTray = nil
+		}
+	}
+	if f.Prefs.Shortcuts != nil {
+		cleanShortcuts := make(map[string]string)
+		for k, v := range f.Prefs.Shortcuts {
+			kClean := sanitizeString(k, 64)
+			vClean := sanitizeString(v, 64)
+			if kClean != "" {
+				cleanShortcuts[kClean] = vClean
+			}
+		}
+		f.Prefs.Shortcuts = cleanShortcuts
+	}
+
+	// 4. Validate Launch Options
+	if f.Launch.Options.Port < 0 || f.Launch.Options.Port > 65535 {
+		f.Launch.Options.Port = 0
+	}
+	f.Launch.Options.Executable = sanitizePath(f.Launch.Options.Executable)
+	f.Launch.Options.Home = sanitizePath(f.Launch.Options.Home)
+	f.Launch.Options.Workspace = sanitizePath(f.Launch.Options.Workspace)
+	f.Launch.Options.DesktopDir = sanitizePath(f.Launch.Options.DesktopDir)
+}
+
+func sanitizeString(s string, maxRunes int) string {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	count := 0
+	for _, r := range s {
+		if r < 32 || r == 127 {
+			continue
+		}
+		b.WriteRune(r)
+		count++
+		if count >= maxRunes {
+			break
+		}
+	}
+	return b.String()
+}
+
+func sanitizePath(p string) string {
+	p = strings.TrimSpace(p)
+	if strings.IndexByte(p, 0) >= 0 {
+		return ""
+	}
+	if len(p) > 4096 {
+		return ""
+	}
+	return p
+}
+
+// SaveWindowState updates the persistent chat window geometry and display metadata.
+func SaveWindowState(ws WindowState) error {
+	validated := ValidateWindowState(&ws)
+	return Update(func(f *File) {
+		f.WindowState = validated
+	})
+}
+
+// LoadWindowState returns the persistent chat window geometry if present.
+func LoadWindowState() (*WindowState, error) {
+	f, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	return ValidateWindowState(f.WindowState), nil
+}
+
+// SaveLastSessionID updates the persistent ID of the last active chat session.
+func SaveLastSessionID(id string) error {
+	cleanID := SanitizeSessionID(id)
+	return Update(func(f *File) {
+		f.LastSessionID = cleanID
+	})
+}
+
+// LoadLastSessionID returns the persistent ID of the last active chat session.
+func LoadLastSessionID() (string, error) {
+	f, err := Load()
+	if err != nil {
+		return "", err
+	}
+	return SanitizeSessionID(f.LastSessionID), nil
 }

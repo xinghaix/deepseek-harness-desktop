@@ -375,6 +375,12 @@ $("discard-cancel").onclick = () => hideDiscardDialog();
 $("discard-confirm").onclick = () => run(async () => { if (baselineOptions) fillOptions(baselineOptions); markBaseline(); hideDiscardDialog(); await api("DismissConfig"); });
 $("check-update").onclick = () => run(() => api("CheckUpdate"));
 $("auto-check-update").onchange = () => run(() => api("SetAutoCheckUpdate", $("auto-check-update").checked));
+function applyRestoreLastSessionPref(enabled) {
+  ["restore-last-session", "restore-last-session-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
+}
+function applyRememberWindowSizePref(enabled) {
+  ["remember-window-size", "remember-window-size-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
+}
 function applyConfirmQuitPref(enabled) {
   ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => { const el = $(id); if (el) el.checked = enabled; });
 }
@@ -643,11 +649,29 @@ function applyShortcutsPrefs(prefs) {
 async function loadDesktopPrefs() {
   try {
     const prefs = await api("DesktopPrefs");
+    if (prefs && typeof prefs.restoreLastSession === "boolean") applyRestoreLastSessionPref(prefs.restoreLastSession);
+    if (prefs && typeof prefs.rememberWindowSize === "boolean") applyRememberWindowSizePref(prefs.rememberWindowSize);
     if (prefs && typeof prefs.confirmQuitWhenBusy === "boolean") applyConfirmQuitPref(prefs.confirmQuitWhenBusy);
     applyDesktopTrayPrefs(prefs);
     applyShortcutsPrefs(prefs);
   } catch (_) {}
 }
+["restore-last-session", "restore-last-session-setup"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.onchange = () => run(async () => {
+    const prefs = await api("SetRestoreLastSession", el.checked);
+    applyRestoreLastSessionPref(prefs.restoreLastSession);
+  });
+});
+["remember-window-size", "remember-window-size-setup"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.onchange = () => run(async () => {
+    const prefs = await api("SetRememberWindowSize", el.checked);
+    applyRememberWindowSizePref(prefs.rememberWindowSize);
+  });
+});
 ["confirm-quit-busy", "confirm-quit-busy-setup"].forEach((id) => {
   const el = $(id);
   if (!el) return;

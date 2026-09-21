@@ -9,10 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"deepseek-harness-desktop/internal/desktopstate"
 	"deepseek-harness-desktop/internal/dsh"
 	"deepseek-harness-desktop/internal/i18n"
 	"deepseek-harness-desktop/internal/update"
@@ -48,18 +50,30 @@ type Service struct {
 	trayAnimStop       chan struct{}
 	trayAnimFrame      int
 	trayIconRunning    bool
-	sessionsMu         sync.Mutex
-	sessions           []dsh.BridgeSession
-	trayErrorAcks      map[string]struct{} // local ack after tray click
-	pendingOpen        pendingOpenSession
-	statusEmitMu       sync.Mutex
-	statusEmitTimer    *time.Timer
+	sessionsMu          sync.Mutex
+	sessions            []dsh.BridgeSession
+	trayErrorAcks       map[string]struct{} // local ack after tray click
+	pendingOpen         pendingOpenSession
+	statusEmitMu        sync.Mutex
+	statusEmitTimer     *time.Timer
+	windowStateMu       sync.Mutex
+	windowStateTimer    *time.Timer
+	cachedWindowState   *desktopstate.WindowState
+	lastSessionMu       sync.Mutex
+	lastSessionTimer    *time.Timer
+	cachedLastSessionID string
 }
 
 func New(icon []byte) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel, icon: icon}
 	s.prefs.load()
+	if ws, err := desktopstate.LoadWindowState(); err == nil && ws != nil {
+		s.cachedWindowState = ws
+	}
+	if lastID, err := desktopstate.LoadLastSessionID(); err == nil && lastID != "" {
+		s.cachedLastSessionID = lastID
+	}
 	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
 	s.SetBridgeHost(bridgeHostAdapter{service: s})
 	s.SetStatusListener(s.emitStatusChanged)
@@ -175,6 +189,11 @@ func (d *Service) OpenDSH() error {
 	// must be a separate WebView whose first load is the printed token URL.
 	chat, ok := app.Window.GetByName(chatWindowName)
 	if !ok {
+		if d.prefs.getRestoreLastSession() && d.pendingOpen.peek() == "" {
+			if lastID, err := desktopstate.LoadLastSessionID(); err == nil && lastID != "" {
+				d.pendingOpen.set(lastID)
+			}
+		}
 		chat = app.Window.NewWithOptions(ChatWindowOptions(chatURL))
 		d.MarkBrowserOpened()
 		d.openedChatURL = chatURL
@@ -408,7 +427,21 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	}
 	d.chatHookedID = wid
 
+	onResizeOrMove := func(event *application.WindowEvent) {
+		if !d.prefs.getRememberWindowSize() {
+			return
+		}
+		d.recordChatWindowState(window)
+	}
+	window.RegisterHook(events.Common.WindowDidResize, onResizeOrMove)
+	window.RegisterHook(events.Common.WindowDidMove, onResizeOrMove)
+	window.RegisterHook(events.Common.WindowMaximise, onResizeOrMove)
+	window.RegisterHook(events.Common.WindowUnMaximise, onResizeOrMove)
+	window.RegisterHook(events.Common.WindowRestore, onResizeOrMove)
+
 	onClosing := func(event *application.WindowEvent) {
+		d.flushPendingWindowState()
+		d.flushPendingLastSession()
 		if d.allowQuit.Load() {
 			d.configDirty = false
 			d.chatHookedID = 0
@@ -441,6 +474,112 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	case "linux":
 		window.RegisterHook(events.Linux.WindowDeleteEvent, onClosing)
 	}
+}
+
+func (d *Service) recordChatWindowState(window application.Window) {
+	if window == nil {
+		return
+	}
+	d.windowStateMu.Lock()
+	defer d.windowStateMu.Unlock()
+
+	if window.IsMinimised() || window.IsFullscreen() {
+		return
+	}
+
+	screen, _ := window.GetScreen()
+	var dispID, dispName string
+	if screen != nil {
+		dispID = screen.ID
+		dispName = screen.Name
+	}
+
+	if window.IsMaximised() {
+		if d.cachedWindowState == nil {
+			d.cachedWindowState = &desktopstate.WindowState{
+				Width:  DefaultChatWidth,
+				Height: DefaultChatHeight,
+			}
+		}
+		d.cachedWindowState.Maximised = true
+		if dispID != "" {
+			d.cachedWindowState.DisplayID = dispID
+			d.cachedWindowState.DisplayName = dispName
+		}
+	} else {
+		w, h := window.Size()
+		if w < MinChatWidth {
+			w = MinChatWidth
+		}
+		if h < MinChatHeight {
+			h = MinChatHeight
+		}
+		rx, ry := window.RelativePosition()
+		d.cachedWindowState = &desktopstate.WindowState{
+			Width:       w,
+			Height:      h,
+			X:           rx,
+			Y:           ry,
+			Maximised:   false,
+			DisplayID:   dispID,
+			DisplayName: dispName,
+		}
+	}
+
+	if d.windowStateTimer != nil {
+		d.windowStateTimer.Stop()
+	}
+	stateToSave := *d.cachedWindowState
+	d.windowStateTimer = time.AfterFunc(500*time.Millisecond, func() {
+		_ = desktopstate.SaveWindowState(stateToSave)
+	})
+}
+
+func (d *Service) flushPendingWindowState() {
+	d.windowStateMu.Lock()
+	if d.windowStateTimer != nil {
+		d.windowStateTimer.Stop()
+		d.windowStateTimer = nil
+	}
+	state := d.cachedWindowState
+	d.windowStateMu.Unlock()
+	if state != nil {
+		_ = desktopstate.SaveWindowState(*state)
+	}
+}
+
+func (d *Service) ReportCurrentSession(sessionID string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if !d.prefs.getRestoreLastSession() {
+		return
+	}
+	if sessionID != "" && !desktopstate.ValidateSessionID(sessionID) {
+		return
+	}
+	d.lastSessionMu.Lock()
+	if d.cachedLastSessionID == sessionID {
+		d.lastSessionMu.Unlock()
+		return
+	}
+	d.cachedLastSessionID = sessionID
+	if d.lastSessionTimer != nil {
+		d.lastSessionTimer.Stop()
+		d.lastSessionTimer = nil
+	}
+	d.lastSessionMu.Unlock()
+
+	_ = desktopstate.SaveLastSessionID(sessionID)
+}
+
+func (d *Service) flushPendingLastSession() {
+	d.lastSessionMu.Lock()
+	if d.lastSessionTimer != nil {
+		d.lastSessionTimer.Stop()
+		d.lastSessionTimer = nil
+	}
+	id := d.cachedLastSessionID
+	d.lastSessionMu.Unlock()
+	_ = desktopstate.SaveLastSessionID(id)
 }
 
 func (d *Service) OpenHome(o dsh.Options) error {

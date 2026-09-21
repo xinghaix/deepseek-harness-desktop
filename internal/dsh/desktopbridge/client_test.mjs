@@ -81,6 +81,10 @@ assert.match(source, /installChatContentVisibility/, "chat content-visibility in
 assert.match(source, /content-visibility:auto/, "chat content-visibility CSS missing");
 assert.match(source, /setChatContentVisibility/, "chat content-visibility setter missing");
 assert.match(source, /t\("field\.chat_content_visibility"\)/, "chat content-visibility settings label must resolve through the catalog");
+assert.match(source, /setRestoreLastSession/, "setRestoreLastSession setter missing");
+assert.match(source, /setRememberWindowSize/, "setRememberWindowSize setter missing");
+assert.match(source, /t\("field\.restore_last_session"\)/, "restore_last_session label missing");
+assert.match(source, /t\("field\.remember_window_size"\)/, "remember_window_size label missing");
 assert.match(source, /statusOpen/, "status card collapsible state missing");
 assert.match(source, /dshDesktopBridgeStatusHeader/, "collapsible status card header missing");
 assert.match(source, /dshDesktopBridgePill/, "status pill badge missing");
@@ -482,3 +486,60 @@ assert.equal(windowCalls[4].payload.action,"dismiss-config");
 assert.equal(windowCalls[5].payload.x,10);
 assert.ok(windowCalls.every(c=>c.channel==="/desktop-bridge"));
 console.log("ok - remote controls and context menu use authenticated client transport");
+
+// Test currentSessionId reporting and fallback
+const directSessionReports = [];
+const directClears = [];
+ctx.connection.rpc.call = (_channel, method, payload) => {
+  if (method === "claimOpenSession") {
+    claimCalls += 1;
+    return Promise.resolve({ ok: true, value: { sessionId: claimResult, requestId: claimRequestId } });
+  }
+  if (method === "reportSessions") reportedSessions.push(payload);
+  if (method === "reportCurrentSession") directSessionReports.push(payload);
+  if (method === "clearLastSession") directClears.push(payload);
+  if (method === "prefs") {
+    return Promise.resolve({ ok: true, value: { trayEnabled: true, traySessionLimit: 5 } });
+  }
+  return Promise.resolve({ ok: true, value: {} });
+};
+reportedSessions.length = 0;
+snapshot = {
+  phase: "ready",
+  byId: {
+    "session-valid": { id: "session-valid", blank: false, running: false },
+    "session-blank": { id: "session-blank", blank: true, running: false },
+    "session-archived": { id: "session-archived", blank: false, running: false }
+  },
+  ids: ["session-valid", "session-blank", "session-archived"],
+  current: "session-valid"
+};
+workspaceSnapshot.archivedSessionIds = ["session-archived"];
+listListener();
+await flushMicrotasks();
+const lastReport = reportedSessions[reportedSessions.length - 1];
+assert.equal(lastReport.currentSessionId, "session-valid", "valid active session must be reported as currentSessionId");
+assert.ok(directSessionReports.some((r) => r.sessionId === "session-valid"), "reportCurrentSession must receive valid active session");
+
+snapshot.current = "session-blank";
+listListener();
+await flushMicrotasks();
+const blankReport = reportedSessions[reportedSessions.length - 1];
+assert.equal(blankReport.currentSessionId, "", "blank active session must report empty currentSessionId");
+
+snapshot.current = "session-archived";
+listListener();
+await flushMicrotasks();
+const archivedReport = reportedSessions[reportedSessions.length - 1];
+assert.equal(archivedReport.currentSessionId, "", "archived active session must report empty currentSessionId");
+
+// Test fallback for deleted and archived sessions in openSession
+const openedCountBefore = opened.length;
+window.__DSH_DESKTOP_OPEN_SESSION__("session-deleted", 88);
+await flushMicrotasks();
+assert.equal(opened.length, openedCountBefore, "non-existent session must not be opened and must fall back");
+
+window.__DSH_DESKTOP_OPEN_SESSION__("session-archived", 89);
+await flushMicrotasks();
+assert.equal(opened.length, openedCountBefore, "archived session must not be opened and must fall back");
+console.log("ok - current session reporting and deleted/archived fallback verified");

@@ -76,9 +76,16 @@ func (h *recordingBridgeHost) SetPromptOverlayMaxLines(n int) (BridgePrefs, erro
 	// Echo the value so route tests can observe the write.
 	return BridgePrefs{PromptOverlayMaxLines: n}, nil
 }
+func (h *recordingBridgeHost) SetRestoreLastSession(b bool) (BridgePrefs, error) {
+	return BridgePrefs{RestoreLastSession: b}, nil
+}
+func (h *recordingBridgeHost) SetRememberWindowSize(b bool) (BridgePrefs, error) {
+	return BridgePrefs{RememberWindowSize: b}, nil
+}
 func (h *recordingBridgeHost) SetShortcuts(map[string]string) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) ReportCurrentSession(string)       {}
 func (h *recordingBridgeHost) ReportSessions([]BridgeSession)   {}
 func (h *recordingBridgeHost) ClaimOpenSession() string         { return "" }
 func (h *recordingBridgeHost) BridgeUpdateStatus() BridgeUpdate { return BridgeUpdate{} }

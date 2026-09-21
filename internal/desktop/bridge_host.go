@@ -78,6 +78,8 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		HoverMessageActions:   prefs.HoverMessageActions,
 		ChatContentVisibility: prefs.ChatContentVisibility,
 		PromptOverlayMaxLines: prefs.PromptOverlayMaxLines,
+		RestoreLastSession:    prefs.RestoreLastSession,
+		RememberWindowSize:    prefs.RememberWindowSize,
 		Language:              prefs.Language,
 		ResolvedLocale:        prefs.ResolvedLocale,
 		SystemLocale:          prefs.SystemLocale,
@@ -85,6 +87,20 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		Supported:             supported,
 		Shortcuts:             prefs.Shortcuts,
 	}
+}
+
+func (a bridgeHostAdapter) SetRestoreLastSession(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetRestoreLastSession(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetRememberWindowSize(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetRememberWindowSize(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
 }
 
 func (a bridgeHostAdapter) SetLanguage(code string) (dsh.BridgePrefs, error) {
@@ -159,6 +175,10 @@ func (a bridgeHostAdapter) SetShortcuts(shortcuts map[string]string) (dsh.Bridge
 
 func (a bridgeHostAdapter) ReportSessions(sessions []dsh.BridgeSession) {
 	a.service.ReportSessions(sessions)
+}
+
+func (a bridgeHostAdapter) ReportCurrentSession(sessionID string) {
+	a.service.ReportCurrentSession(sessionID)
 }
 
 func (a bridgeHostAdapter) ClaimOpenSessionRequest() dsh.OpenSessionRequest {

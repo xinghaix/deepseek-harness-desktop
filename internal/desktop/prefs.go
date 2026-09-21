@@ -35,6 +35,8 @@ type desktopPrefs struct {
 	hoverMessageActions   atomic.Bool
 	chatContentVisibility atomic.Bool
 	promptOverlayMaxLines atomic.Int32
+	restoreLastSession    atomic.Bool
+	rememberWindowSize    atomic.Bool
 	language              atomic.Value // string; "" / "system" = follow system
 	shortcuts             atomic.Value // map[string]string overrides; nil/empty = all defaults
 }
@@ -48,6 +50,8 @@ func (p *desktopPrefs) load() {
 	p.hoverMessageActions.Store(true)
 	p.chatContentVisibility.Store(true)
 	p.promptOverlayMaxLines.Store(defaultPromptOverlayMaxLines)
+	p.restoreLastSession.Store(true)
+	p.rememberWindowSize.Store(true)
 	p.language.Store("")
 	p.shortcuts.Store(map[string]string(nil))
 	file, err := desktopstate.Load()
@@ -86,6 +90,12 @@ func (p *desktopPrefs) load() {
 	if prefs.PromptOverlayMaxLines != nil {
 		p.promptOverlayMaxLines.Store(int32(clampPromptOverlayMaxLines(*prefs.PromptOverlayMaxLines)))
 	}
+	if prefs.RestoreLastSession != nil {
+		p.restoreLastSession.Store(*prefs.RestoreLastSession)
+	}
+	if prefs.RememberWindowSize != nil {
+		p.rememberWindowSize.Store(*prefs.RememberWindowSize)
+	}
 	if prefs.Language != nil {
 		p.language.Store(*prefs.Language)
 	}
@@ -101,6 +111,8 @@ func (p *desktopPrefs) save() error {
 	hoverMessageActions := p.hoverMessageActions.Load()
 	chatContentVisibility := p.chatContentVisibility.Load()
 	promptOverlayMaxLines := int(p.promptOverlayMaxLines.Load())
+	restoreLastSession := p.restoreLastSession.Load()
+	rememberWindowSize := p.rememberWindowSize.Load()
 	shortcuts := NormalizeShortcutOverrides(p.getShortcutOverrides())
 	return desktopstate.Update(func(f *desktopstate.File) {
 		f.Prefs.ConfirmQuitWhenBusy = &confirm
@@ -111,6 +123,8 @@ func (p *desktopPrefs) save() error {
 		f.Prefs.HoverMessageActions = &hoverMessageActions
 		f.Prefs.ChatContentVisibility = &chatContentVisibility
 		f.Prefs.PromptOverlayMaxLines = &promptOverlayMaxLines
+		f.Prefs.RestoreLastSession = &restoreLastSession
+		f.Prefs.RememberWindowSize = &rememberWindowSize
 		if lang := p.getLanguage(); lang != "" {
 			langCopy := lang
 			f.Prefs.Language = &langCopy
@@ -141,4 +155,20 @@ func (p *desktopPrefs) setShortcutOverrides(overrides map[string]string) {
 
 func (p *desktopPrefs) effectiveShortcuts() map[string]string {
 	return EffectiveShortcuts(p.getShortcutOverrides())
+}
+
+func (p *desktopPrefs) getRestoreLastSession() bool {
+	return p.restoreLastSession.Load()
+}
+
+func (p *desktopPrefs) setRestoreLastSession(val bool) {
+	p.restoreLastSession.Store(val)
+}
+
+func (p *desktopPrefs) getRememberWindowSize() bool {
+	return p.rememberWindowSize.Load()
+}
+
+func (p *desktopPrefs) setRememberWindowSize(val bool) {
+	p.rememberWindowSize.Store(val)
 }

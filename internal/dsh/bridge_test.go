@@ -23,6 +23,12 @@ func (*routeTestBridgeHost) BridgeLocaleBundle() BridgeLocaleBundle {
 func (*routeTestBridgeHost) SetPromptOverlayMaxLines(n int) (BridgePrefs, error) {
 	return BridgePrefs{PromptOverlayMaxLines: n}, nil
 }
+func (*routeTestBridgeHost) SetRestoreLastSession(b bool) (BridgePrefs, error) {
+	return BridgePrefs{RestoreLastSession: b}, nil
+}
+func (*routeTestBridgeHost) SetRememberWindowSize(b bool) (BridgePrefs, error) {
+	return BridgePrefs{RememberWindowSize: b}, nil
+}
 func (*routeTestBridgeHost) ClaimOpenSession() string { return "legacy-session" }
 
 type sequencedBridgeHost struct{ routeTestBridgeHost }
@@ -255,6 +261,44 @@ func TestDesktopBridgeAuthenticationAndScope(t *testing.T) {
 		t.Fatalf("max-lines accepted GET with status %d", response.StatusCode)
 	}
 
+	restoreRequest, err := http.NewRequest(http.MethodPost, bridge.url+"/v1/set-restore-last-session", bytes.NewReader([]byte(`{"enabled":true}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreRequest.Header.Set(desktopBridgeTokenHeader, bridge.token)
+	restoreRequest.Header.Set("Content-Type", "application/json")
+	restoreResponse, err := client.Do(restoreRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreBody, err := io.ReadAll(restoreResponse.Body)
+	_ = restoreResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoreResponse.StatusCode != http.StatusOK || !strings.Contains(string(restoreBody), `"restoreLastSession":true`) {
+		t.Fatalf("set restore last session response: %d %s", restoreResponse.StatusCode, restoreBody)
+	}
+
+	windowSizeRequest, err := http.NewRequest(http.MethodPost, bridge.url+"/v1/set-remember-window-size", bytes.NewReader([]byte(`{"enabled":false}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	windowSizeRequest.Header.Set(desktopBridgeTokenHeader, bridge.token)
+	windowSizeRequest.Header.Set("Content-Type", "application/json")
+	windowSizeResponse, err := client.Do(windowSizeRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	windowSizeBody, err := io.ReadAll(windowSizeResponse.Body)
+	_ = windowSizeResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if windowSizeResponse.StatusCode != http.StatusOK || !strings.Contains(string(windowSizeBody), `"rememberWindowSize":false`) {
+		t.Fatalf("set remember window size response: %d %s", windowSizeResponse.StatusCode, windowSizeBody)
+	}
+
 	// The Chat webview loads the shared UI catalog through the same token-fenced plane.
 	response, body = get("/v1/locale-bundle", bridge.token)
 	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "\"locale\":\"en\"") || !strings.Contains(string(body), "\"bridge.card_status\":\"Status\"") {
@@ -312,7 +356,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := string(clientBytes)
-	for _, fragment := range []string{"settings.section", `t("tray.open_settings")`, `t("bridge.card_enhancements")`, "showCopySessionId", "setShowCopySessionId", "hoverMessageActions", "setHoverMessageActions", "chatContentVisibility", `t("field.chat_content_visibility")`, `t("dashboard.shortcuts_title")`, "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
+	for _, fragment := range []string{"settings.section", `t("tray.open_settings")`, `t("bridge.card_enhancements")`, "showCopySessionId", "setShowCopySessionId", "hoverMessageActions", "setHoverMessageActions", "chatContentVisibility", `t("field.chat_content_visibility")`, "setRestoreLastSession", "setRememberWindowSize", `t("field.restore_last_session")`, `t("field.remember_window_size")`, `t("dashboard.shortcuts_title")`, "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client overlay missing %q", fragment)
 		}
@@ -335,7 +379,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := string(hostBytes)
-	for _, fragment := range []string{`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", "kind: \"prefix\"", "configFromEndpointFile"} {
+	for _, fragment := range []string{`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", "kind: \"prefix\"", "configFromEndpointFile", "setRestoreLastSession", "setRememberWindowSize"} {
 		if !strings.Contains(host, fragment) {
 			t.Fatalf("host overlay missing %q", fragment)
 		}

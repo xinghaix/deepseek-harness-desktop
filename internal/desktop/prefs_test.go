@@ -249,3 +249,59 @@ func TestChatContentVisibilityDefaultsOnAndPersists(t *testing.T) {
 		t.Fatal("disabled chatContentVisibility was not reloaded")
 	}
 }
+
+func TestRestoreLastSessionDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.getRestoreLastSession() {
+		t.Fatal("restoreLastSession must default to on")
+	}
+	p.setRestoreLastSession(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.RestoreLastSession == nil || *file.Prefs.RestoreLastSession {
+		t.Fatalf("restoreLastSession persisted = %v, want false", file.Prefs.RestoreLastSession)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.getRestoreLastSession() {
+		t.Fatal("disabled restoreLastSession was not reloaded")
+	}
+}
+
+func TestRememberWindowSizeDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.getRememberWindowSize() {
+		t.Fatal("rememberWindowSize must default to on")
+	}
+	p.setRememberWindowSize(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.RememberWindowSize == nil || *file.Prefs.RememberWindowSize {
+		t.Fatalf("rememberWindowSize persisted = %v, want false", file.Prefs.RememberWindowSize)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.getRememberWindowSize() {
+		t.Fatal("disabled rememberWindowSize was not reloaded")
+	}
+}

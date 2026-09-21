@@ -2642,7 +2642,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -2665,7 +2665,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -3241,6 +3241,54 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.restore_last_session") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.restore_last_session_hint") })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.restoreLastSession !== false,
+										checked: prefs?.restoreLastSession !== false,
+										disabled: !connected || pending || !prefs,
+										onChange: (event) => void invoke("setRestoreLastSession", { enabled: event.target.checked })
+									})
+								})
+							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.remember_window_size") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.remember_window_size_hint") })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.rememberWindowSize !== false,
+										checked: prefs?.rememberWindowSize !== false,
+										disabled: !connected || pending || !prefs,
+										onChange: (event) => void invoke("setRememberWindowSize", { enabled: event.target.checked })
+									})
+								})
+							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
 										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.confirm_quit") }),
 										jsxs("div", { className: "dshDesktopBridgeDesc", children: quitShortcutLabel
 											? hintWithShortcut("field.confirm_quit_hint_dashboard", "quit", quitShortcutLabel)
@@ -3781,10 +3829,74 @@ window.__ModuleLoader__.load({
 					if (session && typeof session.open === "function") void session.open();
 				} catch (_) { /* warming is best-effort; navigation still proceeds */ }
 			};
+			let lastReportedActiveSessionId = "";
+			const resolveCurrentSessionId = () => {
+				// 1. Try localStorage "dsh.sessions.current" (DSH persistent selection store)
+				try {
+					if (typeof localStorage !== "undefined") {
+						const raw = localStorage.getItem("dsh.sessions.current");
+						if (raw) {
+							const parsed = JSON.parse(raw);
+							const sid = String(parsed?.sessionId || "").trim();
+							if (sid) return sid;
+						}
+					}
+				} catch (_) {}
+
+				// 2. Try uiWorkspace mainReference / selection
+				try {
+					const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
+					const fromMain = uiWorkspace?.mainReference?.sessionId;
+					if (fromMain) return String(fromMain).trim();
+					const fromSel = uiWorkspace?.selection?.getSnapshot?.()?.sessionId;
+					if (fromSel) return String(fromSel).trim();
+				} catch (_) {}
+
+				// 3. Try sessions list snapshot mainView retention
+				try {
+					const snap = typeof ctx.sessions?.list?.getSnapshot === "function" ? ctx.sessions.list.getSnapshot() : null;
+					if (snap?.byId) {
+						for (const s of Object.values(snap.byId)) {
+							if (s && (s.retainedBy?.mainView ?? 0) > 0) {
+								const sid = String(s.id || s.sessionId || "").trim();
+								if (sid) return sid;
+							}
+						}
+					}
+					if (snap?.current) return String(snap.current).trim();
+				} catch (_) {}
+
+				return "";
+			};
+
+			const isSessionValidForRestore = (sessionId) => {
+				if (!sessionId) return false;
+				try {
+					const snap = typeof ctx.sessions?.list?.getSnapshot === "function" ? ctx.sessions.list.getSnapshot() : null;
+					if (snap?.byId && snap.byId[sessionId]) {
+						const s = snap.byId[sessionId];
+						if (s.blank || s.archived || s.isArchived || s.origin === "subagent") return false;
+					}
+					const archived = archivedSessionIds();
+					if (archived.includes(sessionId)) return false;
+				} catch (_) {}
+				return true;
+			};
+
+			const checkAndReportActiveSession = () => {
+				const sid = resolveCurrentSessionId();
+				if (!sid) return;
+				if (sid === lastReportedActiveSessionId) return;
+				if (!isSessionValidForRestore(sid)) return;
+				lastReportedActiveSessionId = sid;
+				void callDesktopRPC(ctx.connection, "reportCurrentSession", { sessionId: sid }).catch(() => {});
+			};
+
 			const markOpened = (id) => {
 				if (pendingOpenSessionId === id) pendingOpenSessionId = "";
 				lastOpenedSessionId = id;
 				lastOpenedSessionAt = Date.now();
+				checkAndReportActiveSession();
 			};
 			const cancelWarm = () => {
 				if (warmTimer !== null && typeof clearTimeout === "function") clearTimeout(warmTimer);
@@ -3849,20 +3961,42 @@ window.__ModuleLoader__.load({
 				const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
 					? ctx.sessions.list.getSnapshot()
 					: null;
-				if (!snap?.byId || !snap.byId[id]) return;
-				try {
-					// Already on this session: skip select/history (idempotent but not free)
-					// and only dismiss Settings / Escape-closable overlays.
-					if (snap.current === id) {
-						dismissChrome();
+				if (!snap) return;
+
+				const exists = Boolean(snap.byId && snap.byId[id]);
+				const isArchived = exists && (
+					archivedSessionIds().includes(id) ||
+					Boolean(snap.byId[id]?.archived) ||
+					Boolean(snap.byId[id]?.isArchived)
+				);
+
+				if (exists && !isArchived) {
+					try {
+						const current = resolveCurrentSessionId();
+						// Already on this session: skip select/history (idempotent but not free)
+						// and only dismiss Settings / Escape-closable overlays.
+						if (current === id || snap.current === id) {
+							dismissChrome();
+							markOpened(id);
+							pendingOpenSessionId = "";
+							return;
+						}
+						const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
+						if (!uiWorkspace || typeof uiWorkspace.openSession !== "function") return;
+						uiWorkspace.openSession(id);
 						markOpened(id);
-						return;
-					}
-					const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
-					if (!uiWorkspace || typeof uiWorkspace.openSession !== "function") return;
-					uiWorkspace.openSession(id);
-					markOpened(id);
-				} catch (_) { /* list/service may still be settling; retry on next snapshot */ }
+						pendingOpenSessionId = "";
+					} catch (_) { /* list/service may still be settling; retry on next snapshot */ }
+					return;
+				}
+
+				// Fallback: only drop when the session list is fully settled (phase === "ready")
+				// Never drop while phase is "pending"!
+				const isSettled = snap.phase === "ready" || (snap.phase === undefined && snap.byId && Object.keys(snap.byId).length > 0);
+				if (isSettled && snap.phase !== "pending" && (!exists || isArchived)) {
+					pendingOpenSessionId = "";
+					void callDesktopRPC(ctx.connection, "clearLastSession", {}).catch(() => {});
+				}
 			};
 			const queueOpenSession = (sessionId, fromEvent = false, requestId = 0) => {
 				const id = String(sessionId || "").trim();
@@ -3902,8 +4036,17 @@ window.__ModuleLoader__.load({
 					const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
 						? ctx.sessions.list.getSnapshot()
 						: null;
+					const current = resolveCurrentSessionId();
+					const isCurrentValid = isSessionValidForRestore(current);
+
 					pushBusy(anySessionRunning(snap));
-					pushSessions(sessionsFromSnapshot(snap, archivedSessionIds()));
+					const sessionData = sessionsFromSnapshot(snap, archivedSessionIds());
+					pushSessions({
+						sessions: sessionData.sessions,
+						clearErrors: sessionData.clearErrors,
+						currentSessionId: isCurrentValid ? current : ""
+					});
+					checkAndReportActiveSession();
 					flushPendingOpenSession();
 					scheduleWarm(snap);
 				} catch (_) { /* keep last */ }
@@ -3922,6 +4065,13 @@ window.__ModuleLoader__.load({
 			const workspaces = typeof ctx.get === "function" ? ctx.get("workspaces") : ctx.workspaces;
 			if (workspaces?.list && typeof workspaces.list.subscribe === "function") {
 				ctx.effect(() => workspaces.list.subscribe(syncBusy));
+			}
+			const uiWorkspace = typeof ctx.get === "function" ? ctx.get("uiWorkspace") : ctx.uiWorkspace;
+			if (uiWorkspace?.selection && typeof uiWorkspace.selection.subscribe === "function") {
+				ctx.effect(() => uiWorkspace.selection.subscribe(() => {
+					syncBusy();
+					checkAndReportActiveSession();
+				}));
 			}
 
 			const handleClaimedOpenSession = (result) => {
@@ -3960,14 +4110,25 @@ window.__ModuleLoader__.load({
 					consumeQueuedOpenSession(sessionId);
 					queueOpenSession(sessionId, true, requestId);
 				};
+				const onStorage = (event) => {
+					if (event && event.key === "dsh.sessions.current") checkAndReportActiveSession();
+				};
+				window.addEventListener("storage", onStorage);
+				let monitorTimer = null;
+				if (typeof setInterval === "function") {
+					monitorTimer = setInterval(checkAndReportActiveSession, 1000);
+				}
 				if (typeof ctx.effect === "function") {
 					ctx.effect(() => () => {
 						window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession);
+						window.removeEventListener("storage", onStorage);
 						if (window[OPEN_SESSION_FAST_GLOBAL]) window[OPEN_SESSION_FAST_GLOBAL] = undefined;
+						if (monitorTimer !== null) clearInterval(monitorTimer);
 						cancelWarm();
 					});
 				}
 				drainQueuedOpenSession();
+				checkAndReportActiveSession();
 			}
 			if (typeof setTimeout === "function") {
 				ctx.effect(() => {

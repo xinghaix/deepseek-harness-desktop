@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"deepseek-harness-desktop/internal/desktopstate"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -145,3 +147,48 @@ func TestCloseChatToTrayHidesWithoutQuit(t *testing.T) {
 		t.Fatal("quit must keep ShortcutQuit (default CmdOrCtrl+q)")
 	}
 }
+
+func TestRestoreLastSessionPersistenceAndLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+
+	s := New(nil)
+	defer func() { _ = s.Close() }()
+
+	// Report active session
+	s.ReportCurrentSession("session-test-active")
+	s.flushPendingLastSession()
+
+	// Verify it was saved to desktop-state.json
+	savedID, err := desktopstate.LoadLastSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedID != "session-test-active" {
+		t.Fatalf("expected session-test-active, got %q", savedID)
+	}
+
+	// Verify that cold start / OpenDSH primes pendingOpen with the saved session
+	desktopstate.ResetCacheForTest()
+	s2 := New(nil)
+	defer func() { _ = s2.Close() }()
+
+	// Check that New loaded cachedLastSessionID
+	if s2.cachedLastSessionID != "session-test-active" {
+		t.Fatalf("expected s2 to load cachedLastSessionID, got %q", s2.cachedLastSessionID)
+	}
+
+	// Simulate clear-last-session via ReportCurrentSession("")
+	s2.ReportCurrentSession("")
+	s2.flushPendingLastSession()
+
+	clearedID, err := desktopstate.LoadLastSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clearedID != "" {
+		t.Fatalf("expected cleared ID, got %q", clearedID)
+	}
+}
+

@@ -34,6 +34,8 @@ func (s *Service) SetAutoCheckUpdate(enabled bool) (update.Snapshot, error) {
 }
 
 func (s *Service) Close() error {
+	s.flushPendingWindowState()
+	s.flushPendingLastSession()
 	if s.stopAuto != nil {
 		s.stopAuto()
 	}

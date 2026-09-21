@@ -212,3 +212,4 @@ func TestTraySessionTitleFallback(t *testing.T) {
 		t.Fatalf("full title must not truncate")
 	}
 }
+

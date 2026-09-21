@@ -32,6 +32,12 @@ func (p *pendingOpenSession) set(id string) uint64 {
 	return p.sequence
 }
 
+func (p *pendingOpenSession) peek() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.id
+}
+
 func (p *pendingOpenSession) claim() string {
 	return p.claimRequest().SessionID
 }

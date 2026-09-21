@@ -5,6 +5,7 @@ package desktop
 import (
 	"runtime"
 
+	"deepseek-harness-desktop/internal/desktopstate"
 	"deepseek-harness-desktop/internal/i18n"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -70,10 +71,10 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
 		Name:               chatWindowName,
 		Title:              "Deepseek Harness Desktop",
-		Width:              1280,
-		Height:             860,
-		MinWidth:           900,
-		MinHeight:          640,
+		Width:              DefaultChatWidth,
+		Height:             DefaultChatHeight,
+		MinWidth:           MinChatWidth,
+		MinHeight:          MinChatHeight,
 		URL:                url,
 		UseApplicationMenu: true,
 		DevToolsEnabled:    false,
@@ -88,7 +89,14 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	// Remote Chat has only Wails Core: install gesture callbacks before signalling
 	// native readiness so queued ExecJS and WindowRuntimeReady hooks can run.
 	options.JS += desktopChatDragJS + desktopChatRuntimeScript(url)
-	return options
+	if file, err := desktopstate.Load(); err == nil {
+		if file.Prefs.RestoreLastSession == nil || *file.Prefs.RestoreLastSession {
+			if id := desktopstate.SanitizeSessionID(file.LastSessionID); id != "" {
+				options.JS += openChatSessionJS(id)
+			}
+		}
+	}
+	return ApplySavedChatWindowGeometry(options)
 }
 
 const desktopModalChromeJS = "(function(){document.documentElement.classList.add('dsh-desktop-config','dsh-desktop-config-modal');var content=document.querySelector('body > .app-shell');if(content){content.classList.add('dsh-window-content','dsh-window-management');content.style.setProperty('--dsh-window-top-inset','0px');}})();"

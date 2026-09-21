@@ -252,6 +252,20 @@ func (f *WailsFacade) SetPromptOverlayMaxLines(ctx context.Context, n int) (Desk
 	}
 	return f.service.SetPromptOverlayMaxLines(n)
 }
+
+func (f *WailsFacade) SetRestoreLastSession(ctx context.Context, enabled bool) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetRestoreLastSession"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetRestoreLastSession(enabled)
+}
+
+func (f *WailsFacade) SetRememberWindowSize(ctx context.Context, enabled bool) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetRememberWindowSize"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetRememberWindowSize(enabled)
+}
 func (f *WailsFacade) LocaleBundle(ctx context.Context) LocaleBundle {
 	if f.management(ctx, "LocaleBundle") != nil {
 		return LocaleBundle{}

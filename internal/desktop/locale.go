@@ -20,6 +20,8 @@ type DesktopPrefs struct {
 	HoverMessageActions   bool              `json:"hoverMessageActions"`
 	ChatContentVisibility bool              `json:"chatContentVisibility"`
 	PromptOverlayMaxLines int               `json:"promptOverlayMaxLines"`
+	RestoreLastSession    bool              `json:"restoreLastSession"`
+	RememberWindowSize    bool              `json:"rememberWindowSize"`
 	Language              string            `json:"language"`
 	ResolvedLocale        string            `json:"resolvedLocale"`
 	SystemLocale          string            `json:"systemLocale"`
@@ -56,6 +58,8 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		HoverMessageActions:   d.prefs.hoverMessageActions.Load(),
 		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
 		PromptOverlayMaxLines: int(d.prefs.promptOverlayMaxLines.Load()),
+		RestoreLastSession:    d.prefs.getRestoreLastSession(),
+		RememberWindowSize:    d.prefs.getRememberWindowSize(),
 		Language:              pref,
 		ResolvedLocale:        resolved,
 		SystemLocale:          i18n.Normalize(system),
@@ -134,6 +138,22 @@ func (d *Service) SetHoverMessageActions(enabled bool) (DesktopPrefs, error) {
 
 func (d *Service) SetChatContentVisibility(enabled bool) (DesktopPrefs, error) {
 	d.prefs.chatContentVisibility.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetRestoreLastSession(enabled bool) (DesktopPrefs, error) {
+	d.prefs.setRestoreLastSession(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetRememberWindowSize(enabled bool) (DesktopPrefs, error) {
+	d.prefs.setRememberWindowSize(enabled)
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
