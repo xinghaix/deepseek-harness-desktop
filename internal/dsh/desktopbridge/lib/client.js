@@ -228,6 +228,19 @@ window.__ModuleLoader__.load({
 			"bridge.session_delete_title": "Delete session?",
 			"bridge.session_delete_cancel": "Cancel",
 			"bridge.session_delete_action": "Delete",
+			"bridge.archived_batch_select_all": "Select all",
+			"bridge.archived_batch_selected": "Selected {0}",
+			"bridge.archived_batch_unarchive": "Unarchive selected",
+			"bridge.archived_batch_delete": "Delete selected",
+			"bridge.archived_batch_unarchive_title": "Unarchive selected sessions?",
+			"bridge.archived_batch_unarchive_confirm": "Unarchive {0} selected sessions?",
+			"bridge.archived_batch_delete_title": "Delete selected sessions?",
+			"bridge.archived_batch_delete_confirm": "Permanently delete {0} selected sessions from disk? This action cannot be undone.",
+			"bridge.archived_batch_progress_title": "Processing sessions",
+			"bridge.archived_batch_progress": "Processing {0} of {1}: {2}",
+			"bridge.archived_batch_done": "Completed {0} of {1}",
+			"bridge.archived_batch_partial": "Completed {0} of {1}; {2} failed.",
+			"bridge.archived_batch_close": "Close",
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -2768,6 +2781,48 @@ window.__ModuleLoader__.load({
 					font-size: 13px !important;
 					line-height: 26px !important;
 				}
+				[data-dsh-archived-batch] {
+					display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+					min-height: 36px; margin: 2px 0 8px; padding: 6px 8px;
+					border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .08));
+					border-radius: 8px; background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, .025));
+					color: var(--dsw-alias-label-secondary, #5f6368); font-size: 12px;
+				}
+				[data-dsh-archived-batch] > label {
+					display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+					color: var(--dsw-alias-label-primary, #1f2329); white-space: nowrap;
+				}
+				[data-dsh-archived-batch] input[type="checkbox"] {
+					width: 15px; height: 15px; margin: 0; accent-color: var(--dsw-alias-brand-primary, #3370ff);
+				}
+				[data-dsh-archived-batch-count] { white-space: nowrap; }
+				[data-dsh-archived-batch-actions] { display: inline-flex; gap: 6px; margin-left: auto; }
+				[data-dsh-archived-batch] button {
+					height: 28px; padding: 0 10px; border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .1));
+					border-radius: 7px; background: var(--dsw-alias-bg-base, #fff); color: var(--dsw-alias-label-primary, #1f2329);
+					font: inherit; font-size: 12px; cursor: pointer;
+				}
+				[data-dsh-archived-batch] button:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .06)); }
+				[data-dsh-archived-batch] button:disabled { cursor: default; opacity: .45; }
+				[data-dsh-archived-batch-delete] { color: var(--dsw-alias-state-error-primary, #c93c42) !important; }
+				[data-dsh-archived-session-select] { flex: none; }
+				[data-dsh-archived-batch-progress] {
+					position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center;
+					padding: 24px; background: rgba(0, 0, 0, .38);
+				}
+				[data-dsh-archived-batch-progress-panel] {
+					box-sizing: border-box; width: min(460px, 100%); padding: 22px 24px 20px; border-radius: 16px;
+					background: var(--dsw-alias-bg-layer-3, #fff); color: var(--dsw-alias-label-primary, #1f2329);
+					box-shadow: 0 18px 60px rgba(0, 0, 0, .24);
+				}
+				[data-dsh-archived-batch-progress-title] { font-size: 16px; font-weight: 650; line-height: 24px; }
+				[data-dsh-archived-batch-progress-detail] { margin-top: 10px; color: var(--dsw-alias-label-secondary, #5f6368); font-size: 13px; line-height: 20px; }
+				[data-dsh-archived-batch-progress-track] { height: 6px; margin-top: 16px; overflow: hidden; border-radius: 999px; background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .08)); }
+				[data-dsh-archived-batch-progress-bar] { width: 0; height: 100%; border-radius: inherit; background: var(--dsw-alias-brand-primary, #3370ff); transition: width .18s ease; }
+				[data-dsh-archived-batch-progress-result] { margin-top: 12px; color: var(--dsw-alias-label-secondary, #5f6368); font-size: 13px; line-height: 20px; white-space: pre-wrap; }
+				[data-dsh-archived-batch-progress-close] { display: none; min-width: 72px; height: 34px; margin-top: 18px; padding: 0 14px; border: 0; border-radius: 9px; background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .06)); color: var(--dsw-alias-label-primary, #1f2329); font: inherit; font-size: 13px; cursor: pointer; }
+				[data-dsh-archived-batch-progress][data-dsh-archived-batch-progress-done] [data-dsh-archived-batch-progress-close] { display: block; margin-left: auto; }
+				[data-dsh-batch-confirm-neutral] { background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .06)) !important; color: var(--dsw-alias-label-primary, #1f2329) !important; }
 				[data-dsh-delete-session-confirm] {
 					position: fixed; inset: 0; z-index: 2147483647;
 					display: flex; align-items: center; justify-content: center;
@@ -3217,7 +3272,7 @@ window.__ModuleLoader__.load({
 			const close = deleteSessionConfirmCloser;
 			if (typeof close === "function") close();
 		}
-		function requestDeleteSessionConfirmation(message) {
+		function requestDeleteSessionConfirmation(message, options = {}) {
 			if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.documentElement) return Promise.resolve(false);
 			closeDeleteSessionConfirmation();
 			return new Promise((resolve) => {
@@ -3231,7 +3286,7 @@ window.__ModuleLoader__.load({
 				panel.setAttribute("aria-modal", "true");
 				const title = document.createElement("div");
 				title.setAttribute(DELETE_SESSION_CONFIRM_TITLE_ATTRIBUTE, "");
-				title.textContent = t("bridge.session_delete_title");
+				title.textContent = options.title || t("bridge.session_delete_title");
 				const body = document.createElement("div");
 				body.setAttribute(DELETE_SESSION_CONFIRM_MESSAGE_ATTRIBUTE, "");
 				body.textContent = message;
@@ -3240,11 +3295,12 @@ window.__ModuleLoader__.load({
 				const cancel = document.createElement("button");
 				cancel.setAttribute("type", "button");
 				cancel.setAttribute(DELETE_SESSION_CONFIRM_CANCEL_ATTRIBUTE, "");
-				cancel.textContent = t("bridge.session_delete_cancel");
+				cancel.textContent = options.cancel || t("bridge.session_delete_cancel");
 				const submit = document.createElement("button");
 				submit.setAttribute("type", "button");
 				submit.setAttribute(DELETE_SESSION_CONFIRM_SUBMIT_ATTRIBUTE, "");
-				submit.textContent = t("bridge.session_delete_action");
+				if (options.danger === false) submit.setAttribute("data-dsh-batch-confirm-neutral", "");
+				submit.textContent = options.action || t("bridge.session_delete_action");
 				let settled = false;
 				const finish = (accepted) => {
 					if (settled) return;
@@ -3355,6 +3411,295 @@ window.__ModuleLoader__.load({
 			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
 			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); }; window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
 			return () => { window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const button of document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) button.remove(); };
+		}
+
+		const ARCHIVED_BATCH_ATTRIBUTE = "data-dsh-archived-batch";
+		const ARCHIVED_BATCH_SELECT_ALL_ATTRIBUTE = "data-dsh-archived-batch-select-all";
+		const ARCHIVED_BATCH_COUNT_ATTRIBUTE = "data-dsh-archived-batch-count";
+		const ARCHIVED_BATCH_UNARCHIVE_ATTRIBUTE = "data-dsh-archived-batch-unarchive";
+		const ARCHIVED_BATCH_DELETE_ATTRIBUTE = "data-dsh-archived-batch-delete";
+		const ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE = "data-dsh-archived-session-select";
+		const ARCHIVED_BATCH_ROW_SELECT_ID_ATTRIBUTE = "data-dsh-archived-session-select-id";
+		const ARCHIVED_BATCH_PROGRESS_ATTRIBUTE = "data-dsh-archived-batch-progress";
+		const ARCHIVED_BATCH_PROGRESS_PANEL_ATTRIBUTE = "data-dsh-archived-batch-progress-panel";
+		const ARCHIVED_BATCH_PROGRESS_TITLE_ATTRIBUTE = "data-dsh-archived-batch-progress-title";
+		const ARCHIVED_BATCH_PROGRESS_DETAIL_ATTRIBUTE = "data-dsh-archived-batch-progress-detail";
+		const ARCHIVED_BATCH_PROGRESS_TRACK_ATTRIBUTE = "data-dsh-archived-batch-progress-track";
+		const ARCHIVED_BATCH_PROGRESS_BAR_ATTRIBUTE = "data-dsh-archived-batch-progress-bar";
+		const ARCHIVED_BATCH_PROGRESS_RESULT_ATTRIBUTE = "data-dsh-archived-batch-progress-result";
+		const ARCHIVED_BATCH_PROGRESS_CLOSE_ATTRIBUTE = "data-dsh-archived-batch-progress-close";
+		const ARCHIVED_BATCH_PROGRESS_DONE_ATTRIBUTE = "data-dsh-archived-batch-progress-done";
+
+		function archivedBatchRows() {
+			const rows = [];
+			for (const row of document.querySelectorAll("li")) {
+				if (!archivedUnarchiveButton(row)) continue;
+				const id = archivedSessionIdFromElement(row);
+				if (!id) continue;
+				rows.push({ row, id });
+			}
+			return rows;
+		}
+		function archivedBatchList() {
+			for (const list of document.querySelectorAll("ul")) {
+				if (archivedBatchRows().some((entry) => entry.row.parentElement === list)) return list;
+			}
+			return null;
+		}
+		function archivedBatchTitle(row, id) {
+			const spans = row?.querySelectorAll?.("span") || [];
+			const text = spans[0]?.textContent || row?.textContent || id;
+			return String(text || id).replace(/\s+/g, " ").trim().slice(0, 120) || id;
+		}
+		function archivedBatchProgress(kind, total) {
+			const host = document.body || document.documentElement;
+			const backdrop = document.createElement("div");
+			backdrop.setAttribute(ARCHIVED_BATCH_PROGRESS_ATTRIBUTE, "");
+			backdrop.setAttribute("role", "presentation");
+			const panel = document.createElement("div");
+			panel.setAttribute(ARCHIVED_BATCH_PROGRESS_PANEL_ATTRIBUTE, "");
+			panel.setAttribute("role", "status");
+			panel.setAttribute("aria-live", "polite");
+			const title = document.createElement("div");
+			title.setAttribute(ARCHIVED_BATCH_PROGRESS_TITLE_ATTRIBUTE, "");
+			title.textContent = t("bridge.archived_batch_progress_title");
+			const detail = document.createElement("div");
+			detail.setAttribute(ARCHIVED_BATCH_PROGRESS_DETAIL_ATTRIBUTE, "");
+			const track = document.createElement("div");
+			track.setAttribute(ARCHIVED_BATCH_PROGRESS_TRACK_ATTRIBUTE, "");
+			const bar = document.createElement("div");
+			bar.setAttribute(ARCHIVED_BATCH_PROGRESS_BAR_ATTRIBUTE, "");
+			track.appendChild(bar);
+			const result = document.createElement("div");
+			result.setAttribute(ARCHIVED_BATCH_PROGRESS_RESULT_ATTRIBUTE, "");
+			const close = document.createElement("button");
+			close.setAttribute("type", "button");
+			close.setAttribute(ARCHIVED_BATCH_PROGRESS_CLOSE_ATTRIBUTE, "");
+			close.textContent = t("bridge.archived_batch_close");
+			let closed = false;
+			const closePanel = () => {
+				if (closed) return;
+				closed = true;
+				if (backdrop.parentElement) backdrop.remove();
+			};
+			close.addEventListener("click", closePanel);
+			panel.appendChild(title);
+			panel.appendChild(detail);
+			panel.appendChild(track);
+			panel.appendChild(result);
+			panel.appendChild(close);
+			backdrop.appendChild(panel);
+			host.appendChild(backdrop);
+			const update = (index, sessionTitle) => {
+				const safeIndex = Math.max(0, Math.min(total, index));
+				const percent = total > 0 ? Math.round((safeIndex / total) * 100) : 0;
+				detail.textContent = safeIndex > 0
+					? t("bridge.archived_batch_progress", safeIndex, total, sessionTitle || "")
+					: t("bridge.archived_batch_progress", 0, total, "");
+				bar.style.width = percent + "%";
+				backdrop.setAttribute("aria-valuenow", String(percent));
+			};
+			const finish = (completed, failed) => {
+				backdrop.setAttribute(ARCHIVED_BATCH_PROGRESS_DONE_ATTRIBUTE, "");
+				bar.style.width = "100%";
+				result.textContent = failed.length === 0
+					? t("bridge.archived_batch_done", completed, total)
+					: t("bridge.archived_batch_partial", completed, total, failed.length) + "\n" + failed.map((item) => item.title + ": " + desktopErrorMessage(item.error)).join("\n");
+				close.focus?.();
+			};
+			update(0, "");
+			return { update, finish, close: closePanel };
+		}
+		function installArchivedSessionBatch(ctx) {
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
+			const selected = new Set();
+			let knownOrder = [];
+			let scheduled = false;
+			let busy = false;
+			let deleteEnabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false;
+			let activeProgress = null;
+			const selectedInListOrder = () => {
+				const rank = new Map(knownOrder.map((id, index) => [id, index]));
+				return [...selected].sort((a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER));
+			};
+			const updateToolbar = (toolbar, rows) => {
+				if (!toolbar) return;
+				const visibleIds = rows.map((entry) => entry.id);
+				const selectedCount = selected.size;
+				const selectAll = toolbar.querySelector("[" + ARCHIVED_BATCH_SELECT_ALL_ATTRIBUTE + "]");
+				const count = toolbar.querySelector("[" + ARCHIVED_BATCH_COUNT_ATTRIBUTE + "]");
+				const unarchive = toolbar.querySelector("[" + ARCHIVED_BATCH_UNARCHIVE_ATTRIBUTE + "]");
+				const deleteButton = toolbar.querySelector("[" + ARCHIVED_BATCH_DELETE_ATTRIBUTE + "]");
+				const selectedVisible = visibleIds.filter((id) => selected.has(id)).length;
+				if (selectAll) {
+					selectAll.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+					selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+					selectAll.disabled = busy || visibleIds.length === 0;
+				}
+				if (count) count.textContent = t("bridge.archived_batch_selected", selectedCount);
+				if (unarchive) unarchive.disabled = busy || selectedCount === 0;
+				if (deleteButton) {
+					deleteButton.disabled = busy || selectedCount === 0;
+					deleteButton.style.display = deleteEnabled ? "" : "none";
+				}
+				for (const entry of rows) {
+					const checkbox = entry.row.querySelector("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]");
+					if (checkbox) {
+						checkbox.checked = selected.has(entry.id);
+						checkbox.disabled = busy;
+					}
+				}
+			};
+			const createToolbar = () => {
+				const toolbar = document.createElement("div");
+				toolbar.setAttribute(ARCHIVED_BATCH_ATTRIBUTE, "");
+				const label = document.createElement("label");
+				const selectAll = document.createElement("input");
+				selectAll.type = "checkbox";
+				selectAll.setAttribute(ARCHIVED_BATCH_SELECT_ALL_ATTRIBUTE, "");
+				selectAll.setAttribute("aria-label", t("bridge.archived_batch_select_all"));
+				const labelText = document.createElement("span");
+				labelText.textContent = t("bridge.archived_batch_select_all");
+				label.appendChild(selectAll);
+				label.appendChild(labelText);
+				const count = document.createElement("span");
+				count.setAttribute(ARCHIVED_BATCH_COUNT_ATTRIBUTE, "");
+				const actions = document.createElement("div");
+				actions.setAttribute("data-dsh-archived-batch-actions", "");
+				const unarchive = document.createElement("button");
+				unarchive.type = "button";
+				unarchive.setAttribute(ARCHIVED_BATCH_UNARCHIVE_ATTRIBUTE, "");
+				unarchive.textContent = t("bridge.archived_batch_unarchive");
+				const deleteButton = document.createElement("button");
+				deleteButton.type = "button";
+				deleteButton.setAttribute(ARCHIVED_BATCH_DELETE_ATTRIBUTE, "");
+				deleteButton.textContent = t("bridge.archived_batch_delete");
+				actions.appendChild(unarchive);
+				actions.appendChild(deleteButton);
+				toolbar.appendChild(label);
+				toolbar.appendChild(count);
+				toolbar.appendChild(actions);
+				selectAll.addEventListener("change", () => {
+					if (busy) return;
+					for (const entry of archivedBatchRows()) {
+						if (selectAll.checked) selected.add(entry.id);
+						else selected.delete(entry.id);
+					}
+					decorate();
+				});
+				unarchive.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void confirmAndRun("unarchive"); });
+				deleteButton.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void confirmAndRun("delete"); });
+				return toolbar;
+			};
+			const rowCheckbox = (entry) => {
+				const checkbox = document.createElement("input");
+				checkbox.type = "checkbox";
+				checkbox.setAttribute(ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE, "");
+				checkbox.setAttribute(ARCHIVED_BATCH_ROW_SELECT_ID_ATTRIBUTE, entry.id);
+				checkbox.setAttribute("aria-label", entry.id);
+				checkbox.checked = selected.has(entry.id);
+				checkbox.addEventListener("click", (event) => { event.stopPropagation(); });
+				checkbox.addEventListener("change", (event) => {
+					if (busy) return;
+					if (event.target.checked) selected.add(entry.id);
+					else selected.delete(entry.id);
+					decorate();
+				});
+				return checkbox;
+			};
+			const decorate = () => {
+				const list = archivedBatchList();
+				if (!list) {
+					for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) toolbar.remove();
+					for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) checkbox.remove();
+					return;
+				}
+				const rows = archivedBatchRows().filter((entry) => entry.row.parentElement === list);
+				knownOrder = rows.map((entry) => entry.id);
+				let toolbar = document.querySelector("[" + ARCHIVED_BATCH_ATTRIBUTE + "]");
+				if (!toolbar) toolbar = createToolbar();
+				if (toolbar.parentElement !== list.parentElement) list.before(toolbar);
+				for (const entry of rows) {
+					if (entry.row.querySelector("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) continue;
+					const first = entry.row.childNodes[0];
+					const checkbox = rowCheckbox(entry);
+					if (first) first.before(checkbox);
+					else entry.row.appendChild(checkbox);
+				}
+				updateToolbar(toolbar, rows);
+			};
+			const schedule = () => {
+				if (scheduled) return;
+				scheduled = true;
+				const run = () => { decorate(); scheduled = false; };
+				if (typeof queueMicrotask === "function") queueMicrotask(run);
+				else if (typeof window.setTimeout === "function") window.setTimeout(run, 0);
+				else setTimeout(run, 0);
+			};
+			const rowById = (id) => archivedBatchRows().find((entry) => entry.id === id)?.row;
+			const confirmAndRun = async (kind) => {
+				if (busy) return;
+				const ids = selectedInListOrder();
+				if (ids.length === 0) return;
+				const deleting = kind === "delete";
+				const confirmed = await requestDeleteSessionConfirmation(
+					deleting ? t("bridge.archived_batch_delete_confirm", ids.length) : t("bridge.archived_batch_unarchive_confirm", ids.length),
+					{
+						title: deleting ? t("bridge.archived_batch_delete_title") : t("bridge.archived_batch_unarchive_title"),
+						action: deleting ? t("bridge.archived_batch_delete") : t("bridge.archived_batch_unarchive"),
+						danger: deleting
+					}
+				);
+				if (!confirmed) return;
+				busy = true;
+				const progress = archivedBatchProgress(kind, ids.length);
+				activeProgress = progress;
+				const failed = [];
+				let completed = 0;
+				for (const [index, id] of ids.entries()) {
+					const row = rowById(id);
+					const title = archivedBatchTitle(row, id);
+					progress.update(index, title);
+					try {
+						if (deleting) {
+							const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId: id }, undefined);
+							if (!result?.ok) {
+								const error = new Error(result?.error?.message || t("bridge.session_delete_failed", ""));
+								error.code = result?.error?.code || "desktop-bridge/delete-failed";
+								throw error;
+							}
+						} else {
+							const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+							if (typeof uiWorkspace?.unarchiveSession !== "function") throw new Error("unarchive unavailable");
+							await uiWorkspace.unarchiveSession(id);
+						}
+						completed += 1;
+						selected.delete(id);
+						if (row?.parentElement) row.remove();
+					} catch (error) {
+						failed.push({ id, title, error });
+					}
+					progress.update(index + 1, title);
+					decorate();
+				}
+				busy = false;
+				activeProgress = null;
+				progress.finish(completed, failed);
+				schedule();
+			};
+			const onSettingChange = (event) => { deleteEnabled = event.detail !== false; schedule(); };
+			window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
+			const observer = new MutationObserver(schedule);
+			observer.observe(document.documentElement, { childList: true, subtree: true });
+			schedule();
+			return () => {
+				window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
+				observer.disconnect();
+				activeProgress?.close();
+				for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) toolbar.remove();
+				for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) checkbox.remove();
+				selected.clear();
+			};
 		}
 
 		function keyboardEventToAccelerator(event, isMac) {
@@ -4630,6 +4975,7 @@ window.__ModuleLoader__.load({
 			const stopCopySessionIdMenu = installCopySessionIdMenu();
 			const stopDeleteSessionMenu = installDeleteSessionMenu(ctx);
 			const stopArchivedSessionDelete = installArchivedSessionDelete(ctx);
+			const stopArchivedSessionBatch = installArchivedSessionBatch(ctx);
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
 			const stopChatContentVisibility = installChatContentVisibility();
 			if (typeof ctx.effect === "function") {
@@ -4638,6 +4984,7 @@ window.__ModuleLoader__.load({
 					stopCopySessionIdMenu();
 					stopDeleteSessionMenu();
 					stopArchivedSessionDelete();
+					stopArchivedSessionBatch();
 					stopHoverMessageActions();
 					stopChatContentVisibility();
 				});

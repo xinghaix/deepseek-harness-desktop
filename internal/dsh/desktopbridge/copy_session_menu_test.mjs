@@ -261,6 +261,8 @@ const flushMicrotasks = async () => {
   for (let i = 0; i < 6; i += 1) await Promise.resolve();
 };
 const cleanups = [];
+const batchDeleteCalls = [];
+const batchUnarchiveCalls = [];
 const ctx = {
   slots: { inject() {} },
   effect(fn) {
@@ -269,11 +271,18 @@ const ctx = {
   },
   connection: {
     rpc: {
-      call(_channel, method) {
-        if (method === "prefs") return Promise.resolve({ ok: true, value: { showCopySessionId: true } });
+      call(_channel, method, payload) {
+        if (method === "prefs") return Promise.resolve({ ok: true, value: { showCopySessionId: true, deleteSessionActions: true } });
+        if (method === "deleteSession") {
+          batchDeleteCalls.push(payload?.sessionId || "");
+          return Promise.resolve({ ok: true, value: { sessionId: payload?.sessionId, deleted: true } });
+        }
         return Promise.resolve({ ok: true, value: {} });
       },
     },
+  },
+  uiWorkspace: {
+    async unarchiveSession(id) { batchUnarchiveCalls.push(id); },
   },
   remote: null,
 };
@@ -402,14 +411,20 @@ noFiberMenu.appendChild(noFiberViewport);
 document.documentElement.appendChild(noFiberMenu);
 assert.equal(noFiberMenu.querySelector("[data-dsh-copy-session-id]"), null, "missing React fiber must fail closed");
 
-const archivedRow = document.createElement("li");
-const archivedFiber = { key: "session-archived-test", memoizedProps: {}, return: null };
-Object.defineProperty(archivedRow, "__reactFiber$archived", { value: archivedFiber });
-const unarchive = document.createElement("button");
-unarchive.setAttribute("aria-label", "Unarchive Archived test");
-unarchive.textContent = "Unarchive";
-archivedRow.appendChild(unarchive);
-document.documentElement.appendChild(archivedRow);
+const makeArchivedRow = (id, label = id) => {
+  const row = document.createElement("li");
+  const fiber = { key: id, memoizedProps: {}, return: null };
+  Object.defineProperty(row, "__reactFiber$" + id, { value: fiber });
+  const unarchive = document.createElement("button");
+  unarchive.setAttribute("aria-label", "Unarchive " + label);
+  unarchive.textContent = "Unarchive";
+  row.appendChild(unarchive);
+  return row;
+};
+const archivedList = document.createElement("ul");
+const archivedRow = makeArchivedRow("session-archived-test", "Archived test");
+archivedList.appendChild(archivedRow);
+document.documentElement.appendChild(archivedList);
 assert.ok(archivedRow.querySelector("[data-dsh-delete-archived-session]"), "archived row delete item was not injected");
 assert.equal(archivedRow.querySelector("[data-dsh-delete-archived-session]").getAttribute("data-dsh-delete-archived-id"), "session-archived-test");
 archivedRow.querySelector("[data-dsh-delete-archived-session]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
@@ -419,6 +434,55 @@ assert.ok(archivedConfirm, "archived delete click must open a confirmation dialo
 archivedConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
 await flushMicrotasks();
 assert.equal(archivedRow.parentElement, null, "confirmed archived deletion must remove the row");
+
+const makeArchivedList = (ids) => {
+  const list = document.createElement("ul");
+  for (const id of ids) list.appendChild(makeArchivedRow(id));
+  document.documentElement.appendChild(list);
+  return list;
+};
+const unarchiveList = makeArchivedList(["session-batch-unarchive-1", "session-batch-unarchive-2"]);
+await flushMicrotasks();
+const batchToolbar = document.querySelector("[data-dsh-archived-batch]");
+assert.ok(batchToolbar, "archived batch toolbar was not injected");
+const batchRows = unarchiveList.querySelectorAll("[data-dsh-archived-session-select]");
+assert.equal(batchRows.length, 2, "each archived row must receive a selection checkbox");
+const selectAll = batchToolbar.querySelector("[data-dsh-archived-batch-select-all]");
+selectAll.checked = true;
+selectAll.dispatchEvent({ type: "change" });
+assert.equal(batchToolbar.querySelector("[data-dsh-archived-batch-count]").textContent.includes("2"), true, "select-all must select every visible archived row");
+selectAll.checked = false;
+selectAll.dispatchEvent({ type: "change" });
+assert.equal(batchToolbar.querySelector("[data-dsh-archived-batch-count]").textContent.includes("0"), true, "select-all off must clear visible selections");
+selectAll.checked = true;
+selectAll.dispatchEvent({ type: "change" });
+batchToolbar.querySelector("[data-dsh-archived-batch-unarchive]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+const batchUnarchiveConfirm = document.querySelector("[data-dsh-delete-session-confirm]");
+assert.ok(batchUnarchiveConfirm, "batch unarchive must ask for confirmation");
+batchUnarchiveConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.deepEqual(batchUnarchiveCalls, ["session-batch-unarchive-1", "session-batch-unarchive-2"], "batch unarchive must execute in list order");
+assert.equal(unarchiveList.querySelectorAll("li").length, 0, "successful batch unarchive must remove processed rows");
+document.querySelector("[data-dsh-archived-batch-progress-close]")?.dispatchEvent({ type: "click" });
+
+batchDeleteCalls.length = 0;
+const deleteList = makeArchivedList(["session-batch-delete-1", "session-batch-delete-2"]);
+await flushMicrotasks();
+const deleteToolbar = document.querySelector("[data-dsh-archived-batch]");
+const deleteRows = deleteList.querySelectorAll("[data-dsh-archived-session-select]");
+for (const checkbox of deleteRows) {
+  checkbox.checked = true;
+  checkbox.dispatchEvent({ type: "change" });
+}
+deleteToolbar.querySelector("[data-dsh-archived-batch-delete]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+const batchDeleteConfirm = document.querySelector("[data-dsh-delete-session-confirm]");
+assert.ok(batchDeleteConfirm, "batch delete must ask for confirmation");
+batchDeleteConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.deepEqual(batchDeleteCalls, ["session-batch-delete-1", "session-batch-delete-2"], "batch delete must execute in list order");
+assert.equal(deleteList.querySelectorAll("li").length, 0, "successful batch delete must remove processed rows");
 
 for (const cleanup of cleanups) cleanup();
 assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove injected menu nodes");
