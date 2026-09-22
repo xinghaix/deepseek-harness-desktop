@@ -349,9 +349,9 @@ window.__ModuleLoader__.load({
 		// Symmetric body padding, so a text-only card and an attachments+text card share the
 		// same top and bottom inset instead of the old 10px/14px asymmetry.
 		const PROMPT_OVERLAY_CONTENT_PAD = 12;
-		// Right padding is kept at 1px so the vertical scrollbar hugs the right border closely,
+		// Right padding is kept at 0 so the vertical scrollbar sits flush against the right border,
 		// maximizing horizontal space for reading prompts.
-		const PROMPT_OVERLAY_CONTENT_PAD_RIGHT = 1;
+		const PROMPT_OVERLAY_CONTENT_PAD_RIGHT = 0;
 		// The action strip is placed ON the last line of the card instead of owning a row below
 		// it. A row below the text was what made a single-line prompt look "offset down", and for
 		// an attachment-only card it drifted a whole row lower still. Its own box is the control
@@ -437,7 +437,7 @@ window.__ModuleLoader__.load({
 				// card's padding insets on every side. A scroll container's own padding-bottom scrolls
 				// out of view, so a card that scrolled itself clipped its last line flush against the
 				// bottom border while keeping its top padding — the asymmetric look this fixes.
-				body + " { display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-width: thin !important; scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 15%, transparent) transparent !important; transition: scrollbar-color .15s ease !important; padding-right: 8px !important; }",
+				body + " { display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 auto !important; min-height: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain !important; scrollbar-width: thin !important; scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 15%, transparent) transparent !important; transition: scrollbar-color .15s ease !important; padding-right: 6px !important; }",
 				overlay + ":hover" + bodySuffix + ", " + overlay + ":focus-within" + bodySuffix + " { scrollbar-color: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 32%, transparent) transparent !important; }",
 				// Text fades out at the very bottom so the next line looks like it continues below. A mask
 				// on the scroller is used instead of a painted gradient: the text fades to transparent
@@ -446,7 +446,7 @@ window.__ModuleLoader__.load({
 				// clipped line is gone rather than half-visible.
 				body + "[" + PROMPT_OVERLAY_MORE_BELOW_ATTR + "] { -webkit-mask-image: " + fadeMask + " !important; mask-image: " + fadeMask + " !important; }",
 				body + "::-webkit-scrollbar { width: 5px !important; height: 5px !important; }",
-				body + "::-webkit-scrollbar-track { background: transparent !important; margin: 4px 0 !important; }",
+				body + "::-webkit-scrollbar-track { background: transparent !important; margin: 4px 0 8px 0 !important; }",
 				// Unfocused / default state: lower contrast (subtle 15% opacity), so it doesn't distract when reading.
 				body + "::-webkit-scrollbar-thumb { border: none !important; border-radius: 999px !important; background: color-mix(in srgb, var(--dsw-alias-text-tertiary, #8a8a8a) 15%, transparent) !important; background-clip: padding-box !important; transition: background .15s ease !important; }",
 				// Restores current contrast (30%) when card is hovered or focused, and 48% when directly hovered on thumb.

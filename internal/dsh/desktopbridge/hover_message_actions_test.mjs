@@ -609,7 +609,7 @@ assert.doesNotMatch(hoverStyle.textContent, /top: calc\(100% \+ 6px\)/, "no per-
 assert.doesNotMatch(hoverStyle.textContent, /:last-child::after/);
 // The body's inset must be symmetric, or a text-only card looks top-heavy beside an
 // attachments+text card. One constant drives both the padding and the height budget.
-assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-content\] \{[^}]*padding: 12px 1px 12px 12px !important/);
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-content\] \{[^}]*padding: 12px 0px 12px 12px !important/);
 assert.doesNotMatch(hoverStyle.textContent, /padding: 10px 12px 14px/, "the old asymmetric inset is gone");
 // The CARD must not scroll; the inner body must. A scroll container's own padding-bottom
 // scrolls out of view, which clipped the last line flush against the card's bottom border
