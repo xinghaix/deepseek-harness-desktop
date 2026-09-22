@@ -653,6 +653,8 @@ window.__ModuleLoader__.load({
 			if (visible.length > 1) return null;
 			// The protection band covers the actual top edge, not a source-node marker.
 			if (visible.some(({ rect }) => Number(rect.top) < top + PROMPT_OVERLAY_TOP_PROTECTION_PX && Number(rect.bottom) > top + PROMPT_OVERLAY_EPSILON)) return null;
+			// If the candidate itself is visible in the viewport, it must never duplicate as a sticky overlay.
+			if (candidate && visible.some(({ node }) => node === candidate)) return null;
 			return candidate;
 		}
 		function overlayColumnBounds(root, node) {
@@ -1930,10 +1932,26 @@ window.__ModuleLoader__.load({
 				history.previewKey = "";
 				return null;
 			};
-			const historyPreviewSource = (target) => {
+			const historyPreviewSource = (target, root) => {
 				if (!target) return null;
+				const scrollRoot = root || conversationScrollRoot();
+				const top = scrollRoot && typeof scrollRoot.getBoundingClientRect === "function"
+					? Number(scrollRoot.getBoundingClientRect().top) || 0
+					: 0;
+				const bottom = scrollRoot && typeof scrollRoot.getBoundingClientRect === "function"
+					? (Number(scrollRoot.getBoundingClientRect().bottom) > top
+						? Number(scrollRoot.getBoundingClientRect().bottom)
+						: top + (Number(scrollRoot.clientHeight) || (typeof window !== "undefined" ? window.innerHeight : 0)))
+					: Infinity;
 				const loaded = promptNodes().find((node) => promptTurn(node) === target.turn);
-				return loaded || createHistoryPreview(target);
+				if (loaded) {
+					// The prompt is loaded in DOM.
+					// If it has not scrolled past the top, it is still visible in the chat flow;
+					// the floating overlay and the in-chat message bubble must be strictly mutually exclusive.
+					if (!promptScrolledPast(loaded, top)) return null;
+					return loaded;
+				}
+				return createHistoryPreview(target);
 			};
 			// Lets a settled action confirmation rebuild the card to drop its ✓ again.
 			promptOverlayRefresh = () => schedule();
@@ -1954,8 +1972,17 @@ window.__ModuleLoader__.load({
 					syncHistoryBinding();
 					const historyTarget = state.awaitingSessionSync ? null : syncOfficialHistoryPreview();
 					updateHistoryState();
-					const historySource = historyPreviewSource(historyTarget);
-					const candidate = historySource || acceptFreshSessionPrompt(pickStickyPrompt(root));
+					const historySource = historyPreviewSource(historyTarget, root);
+					const rawCandidate = historySource || acceptFreshSessionPrompt(pickStickyPrompt(root));
+					const topEdge = root && typeof root.getBoundingClientRect === "function"
+						? Number(root.getBoundingClientRect().top) || 0
+						: 0;
+					// Mutual exclusion: if candidate is a loaded DOM prompt in the chat, it must only
+					// appear as a sticky overlay when it has scrolled past the top of the viewport.
+					// When the prompt bubble is still in the chat view, the overlay must yield.
+					const candidate = rawCandidate && rawCandidate.hasAttribute?.("data-dsh-desktop-history-preview")
+						? rawCandidate
+						: (rawCandidate && !promptScrolledPast(rawCandidate, topEdge) ? null : rawCandidate);
 					setStickyPrompt(candidate, candidate ? root : null, state);
 					markComposerCompact();
 					observeLayout();
