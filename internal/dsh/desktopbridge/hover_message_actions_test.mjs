@@ -746,6 +746,10 @@ activeTurnForHoverRegression.setAttribute("aria-label", "跳转并加载第 0 �
 window.dispatchEvent({ type: "pointermove", target: overlay });
 assert.equal(overlays()[0], overlay, "hovering the plugin overlay must preserve its host");
 assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "hovering the plugin overlay must preserve its toolbar");
+// A pointermove can be retargeted to the document while the pointer crosses the card's
+// animated capsule. It must not reselect the active official rail turn and rebuild the toolbar.
+for (let i = 0; i < 6; i += 1) window.dispatchEvent({ type: "pointermove", target: body });
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "body-retargeted hover must preserve the toolbar");
 body.removeChild(activeTurnForHoverRegression);
 window.dispatchEvent(new CustomEvent("scroll"));
 // Sibling of the body, mounted on the overlay host so it never scrolls with the text.
