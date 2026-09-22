@@ -66,6 +66,9 @@ func (h *recordingBridgeHost) SetTraySessionLimit(int) (BridgePrefs, error) {
 func (h *recordingBridgeHost) SetShowCopySessionId(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }
+func (h *recordingBridgeHost) SetDeleteSessionActions(bool) (BridgePrefs, error) {
+	return BridgePrefs{}, nil
+}
 func (h *recordingBridgeHost) SetHoverMessageActions(bool) (BridgePrefs, error) {
 	return BridgePrefs{}, nil
 }

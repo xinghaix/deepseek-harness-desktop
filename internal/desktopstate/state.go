@@ -49,6 +49,7 @@ type Prefs struct {
 	CloseToTray           *bool             `json:"closeToTray,omitempty"`
 	TraySessionLimit      *int              `json:"traySessionLimit,omitempty"`
 	ShowCopySessionId     *bool             `json:"showCopySessionId,omitempty"`
+	DeleteSessionActions  *bool             `json:"deleteSessionActions,omitempty"`
 	HoverMessageActions   *bool             `json:"hoverMessageActions,omitempty"`
 	ChatContentVisibility *bool             `json:"chatContentVisibility,omitempty"`
 	PromptOverlayMaxLines *int              `json:"promptOverlayMaxLines,omitempty"`
@@ -188,7 +189,7 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
-	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
+	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.ShowCopySessionId != nil || f.Prefs.DeleteSessionActions != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}
 	if f.Update.AutoCheck != nil {

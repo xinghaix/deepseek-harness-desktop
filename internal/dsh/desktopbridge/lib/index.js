@@ -39,6 +39,7 @@ const routes = Object.freeze({
 	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
 	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
 	setShowCopySessionId: Object.freeze({ method: "POST", path: "/v1/set-show-copy-session-id" }),
+	setDeleteSessionActions: Object.freeze({ method: "POST", path: "/v1/set-delete-session-actions" }),
 	setHoverMessageActions: Object.freeze({ method: "POST", path: "/v1/set-hover-message-actions" }),
 	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
 	setPromptOverlayMaxLines: Object.freeze({ method: "POST", path: "/v1/set-prompt-overlay-max-lines" }),
@@ -54,7 +55,8 @@ const routes = Object.freeze({
 	reportChatBusy: Object.freeze({ method: "POST", path: "/v1/report-chat-busy" }),
 	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" }),
 	clearLastSession: Object.freeze({ method: "POST", path: "/v1/clear-last-session" }),
-	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" })
+	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" }),
+	deleteSession: Object.freeze({ method: "POST", path: "/v1/delete-session" })
 });
 
 /** Host-side sticky tray errors (turn/end error|interrupted + api-session/error). */
@@ -63,6 +65,7 @@ let lastTraySessions = [];
 let lastClearErrors = [];
 let trayRepublishTimer = null;
 let trayConfigGetter = null;
+let deleteSessionHandler = null;
 
 function markStickySessionError(sessionId) {
 	const id = String(sessionId || "").trim();
@@ -182,6 +185,16 @@ async function invoke(config, endpoint, payload, signal) {
 			currentSessionId: typeof payload.currentSessionId === "string" ? payload.currentSessionId : ""
 		};
 	}
+	if (endpoint === "deleteSession") {
+		if (typeof deleteSessionHandler !== "function") {
+			return { ok: false, error: { code: "desktop-bridge/delete-unsupported", message: "This DSH version does not expose a safe session deletion handler", details: {} } };
+		}
+		try {
+			return { ok: true, value: await deleteSessionHandler(payload) };
+		} catch (error) {
+			return { ok: false, error: { code: error?.code || "desktop-bridge/delete-failed", message: error instanceof Error ? error.message : String(error), details: {} } };
+		}
+	}
 	const route = routes[endpoint];
 	if (route === undefined) {
 		return {
@@ -287,6 +300,141 @@ async function readJsonBody(req, maxBytes = 1024 * 1024) {
 		err.statusCode = 400;
 		throw err;
 	}
+}
+
+const DELETE_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/;
+
+function deleteSessionFailure(code, message) {
+	const error = new Error(message);
+	error.code = code;
+	return error;
+}
+
+function deleteSessionId(payload) {
+	const id = typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "";
+	if (!DELETE_SESSION_ID_PATTERN.test(id)) {
+		throw deleteSessionFailure("desktop-bridge/delete-invalid-id", "Session id is invalid");
+	}
+	return id;
+}
+
+async function waitForSessionRelease(ctx, id, timeoutMs = 5000) {
+	const sessions = typeof ctx?.get === "function" ? ctx.get("sessions") : undefined;
+	const agents = typeof ctx?.get === "function" ? ctx.get("agents") : undefined;
+	const deadline = Date.now() + timeoutMs;
+	while (true) {
+		const liveSession = typeof sessions?.get === "function" ? sessions.get(id) : undefined;
+		const liveAgent = typeof agents?.get === "function" ? agents.get(id) : undefined;
+		if (liveSession === undefined && liveAgent === undefined) return;
+		if (Date.now() >= deadline) {
+			throw deleteSessionFailure("desktop-bridge/delete-busy", "The session is still in use");
+		}
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+}
+
+function isSessionArtifactDirectoryInsideRoot(root, dir) {
+	const relative = pathRelative(root, dir);
+	return relative !== "" && relative !== "." && !relative.startsWith("..") && !pathIsAbsolute(relative);
+}
+
+let pathRelative = (root, dir) => {
+	const rootParts = String(root).replaceAll("\\", "/").split("/").filter(Boolean);
+	const dirParts = String(dir).replaceAll("\\", "/").split("/").filter(Boolean);
+	let common = 0;
+	while (common < rootParts.length && common < dirParts.length && rootParts[common] === dirParts[common]) common += 1;
+	return "../".repeat(rootParts.length - common) + dirParts.slice(common).join("/");
+};
+let pathIsAbsolute = (value) => String(value).startsWith("/") || /^[A-Za-z]:[\\/]/.test(String(value));
+
+async function deleteSessionNow(ctx, id) {
+	const get = typeof ctx?.get === "function" ? (key) => ctx.get(key) : () => undefined;
+	const persistence = get("sessionPersistence");
+	const sessions = get("sessions");
+	const agents = get("agents");
+	if (!persistence || typeof persistence.listArtifacts !== "function") {
+		throw deleteSessionFailure("desktop-bridge/delete-unsupported", "This DSH version does not expose a safe session persistence backend");
+	}
+	const artifacts = await persistence.listArtifacts();
+	const target = artifacts.find((entry) => String(entry?.header?.id || "") === id);
+	if (target?.header?.origin === "subagent") {
+		throw deleteSessionFailure("desktop-bridge/delete-subagent", "Subagent sessions cannot be deleted from this menu");
+	}
+	if (artifacts.some((entry) => String(entry?.header?.parentSession || "") === id)) {
+		throw deleteSessionFailure("desktop-bridge/delete-has-children", "Delete child sessions before deleting their parent");
+	}
+	const agent = typeof agents?.get === "function" ? agents.get(id) : undefined;
+	const liveSession = typeof sessions?.get === "function" ? sessions.get(id) : undefined;
+	const hadLiveSession = agent !== undefined || liveSession !== undefined;
+	if (target === undefined && agent === undefined && liveSession === undefined) {
+		throw deleteSessionFailure("desktop-bridge/delete-not-found", "The selected session no longer exists");
+	}
+	const registry = get("workspaceRegistry");
+	// Capture the owning entities before disposing the live session. Workspace
+	// membership is exposed through a filtered getter backed by the live/header
+	// path index; disposal can invalidate that getter before the durable record is
+	// detached. Retaining the entity makes the subsequent mutation deterministic.
+	const workspaceOwners = registry && typeof registry.list === "function"
+		? registry.list().filter((workspace) => workspace?.sessionIds?.includes?.(id) && typeof workspace.detachSession === "function")
+		: [];
+	if (agent !== undefined) {
+		const dispose = typeof agent.dispose === "function"
+			? () => agent.dispose()
+			: typeof agent.scope?.dispose === "function"
+				? () => agent.scope.dispose()
+				: typeof agent.ctx?.scope?.dispose === "function"
+					? () => agent.ctx.scope.dispose()
+					: undefined;
+		if (dispose === undefined) {
+			throw deleteSessionFailure("desktop-bridge/delete-unsupported", "This DSH version cannot safely close an active session");
+		}
+		await dispose();
+	} else if (typeof sessions?.get === "function" && sessions.get(id) !== undefined) {
+		throw deleteSessionFailure("desktop-bridge/delete-busy", "The session is still in use");
+	}
+	await waitForSessionRelease(ctx, id);
+	const latestArtifacts = await persistence.listArtifacts();
+	const latest = latestArtifacts.find((entry) => String(entry?.header?.id || "") === id);
+	if (latest !== undefined) {
+		const { rm } = await import("node:fs/promises");
+		const { dirname, resolve } = await import("node:path");
+		const root = typeof persistence.root === "string" && persistence.root.trim() ? resolve(persistence.root) : "";
+		const dir = resolve(dirname(String(latest.path || "")));
+		if (!root || !latest.path || !isSessionArtifactDirectoryInsideRoot(root, dir)) {
+			throw deleteSessionFailure("desktop-bridge/delete-unsafe-path", "The session artifact path failed validation");
+		}
+		await rm(dir, { recursive: true, force: true });
+		if (persistence.coldLogMemo && typeof persistence.coldLogMemo.delete === "function") persistence.coldLogMemo.delete(id);
+	}
+	if (registry) {
+		if (typeof registry.unarchiveSession === "function") await registry.unarchiveSession(id);
+		for (const workspace of workspaceOwners) await workspace.detachSession(id);
+		if (typeof registry.replaceHeaderIndex === "function" && typeof registry.listStoredHeaders === "function") {
+			await registry.replaceHeaderIndex(await registry.listStoredHeaders());
+		}
+	}
+	// Cold deletions do not emit the normal session/disposed lifecycle event. Tell
+	// the remote session catalog explicitly so its stale row cannot become an
+	// ungrouped, clickable ghost after the workspace membership is removed.
+	if (!hadLiveSession && typeof ctx?.emit === "function") {
+		try { ctx.emit("api-session/removed", id); } catch { /* deletion already committed; notification is best effort */ }
+	}
+	return { sessionId: id, deleted: true };
+}
+
+function createDeleteSessionHandler(ctx) {
+	const tails = new Map();
+	return async (payload) => {
+		const id = deleteSessionId(payload);
+		const prior = tails.get(id) || Promise.resolve();
+		const next = prior.catch(() => {}).then(() => deleteSessionNow(ctx, id));
+		tails.set(id, next);
+		try {
+			return await next;
+		} finally {
+			if (tails.get(id) === next) tails.delete(id);
+		}
+	};
 }
 
 function serverResponse(rpcId, result) {
@@ -411,6 +559,13 @@ function createRouteHandler(connection, getCached, setCached) {
 function apply(ctx) {
 	let cached = configFromEnv();
 	trayConfigGetter = () => cached;
+	const localDeleteSessionHandler = createDeleteSessionHandler(ctx);
+	deleteSessionHandler = localDeleteSessionHandler;
+	if (typeof ctx.effect === "function") {
+		ctx.effect(() => () => {
+			if (deleteSessionHandler === localDeleteSessionHandler) deleteSessionHandler = null;
+		});
+	}
 	ctx.inject(["connection", "webServer"], (rpcCtx) => {
 		const handler = createRouteHandler(
 			rpcCtx.connection,

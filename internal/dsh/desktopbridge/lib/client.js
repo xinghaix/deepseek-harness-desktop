@@ -119,6 +119,18 @@ window.__ModuleLoader__.load({
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(SHOW_COPY_SESSION_ID_EVENT, { detail: enabled }));
 		}
+		const DELETE_SESSION_ACTIONS_GLOBAL = "__DSH_DESKTOP_DELETE_SESSION_ACTIONS__";
+		const DELETE_SESSION_ACTIONS_EVENT = "dsh-desktop-delete-session-actions";
+		if (typeof window !== "undefined" && typeof window[DELETE_SESSION_ACTIONS_GLOBAL] !== "boolean") {
+			window[DELETE_SESSION_ACTIONS_GLOBAL] = true;
+		}
+		function publishDeleteSessionActions(value) {
+			if (typeof value?.deleteSessionActions !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.deleteSessionActions;
+			window[DELETE_SESSION_ACTIONS_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(DELETE_SESSION_ACTIONS_EVENT, { detail: enabled }));
+		}
 		const HOVER_MESSAGE_ACTIONS_GLOBAL = "__DSH_DESKTOP_HOVER_MESSAGE_ACTIONS__";
 		const HOVER_MESSAGE_ACTIONS_EVENT = "dsh-desktop-hover-message-actions";
 		const HOVER_MESSAGE_ACTIONS_ATTR = "data-dsh-desktop-hover-message-actions";
@@ -206,7 +218,15 @@ window.__ModuleLoader__.load({
 			"tray.open_settings": "Desktop settings",
 			"bridge.cli_version": "CLI Version: {0}",
 			"bridge.restart_open_chat": "Reopen",
-			"bridge.status_connected": "Connected to desktop"
+			"bridge.status_connected": "Connected to desktop",
+			"bridge.session_delete_menu": "Delete session",
+			"bridge.session_delete_confirm": "Delete this session permanently from disk? This action cannot be undone.",
+			"bridge.session_delete_failed": "The session could not be deleted: {0}",
+			"field.delete_session_actions": "Show the “Delete session” menu",
+			"field.delete_session_actions_hint": "Show “Delete session” in the session actions menu for active and archived sessions. Deleting permanently removes the local session record from disk.",
+			"bridge.session_delete_title": "Delete session?",
+			"bridge.session_delete_cancel": "Cancel",
+			"bridge.session_delete_action": "Delete",
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -229,11 +249,19 @@ window.__ModuleLoader__.load({
 			"desktop-bridge/not-allowed": "bridge.err_not_allowed",
 			"desktop-bridge/desktop-not-running": "bridge.err_desktop_not_running",
 			"desktop-bridge/unavailable": "bridge.err_unreachable",
-			"desktop-bridge/aborted": "bridge.err_cancelled"
+			"desktop-bridge/aborted": "bridge.err_cancelled",
+			"desktop-bridge/delete-invalid-id": "bridge.session_delete_failed",
+			"desktop-bridge/delete-busy": "bridge.session_delete_failed",
+			"desktop-bridge/delete-unsupported": "bridge.session_delete_failed",
+			"desktop-bridge/delete-subagent": "bridge.session_delete_failed",
+			"desktop-bridge/delete-has-children": "bridge.session_delete_failed",
+			"desktop-bridge/delete-unsafe-path": "bridge.session_delete_failed",
+			"desktop-bridge/delete-not-found": "bridge.session_delete_failed",
+			"desktop-bridge/delete-failed": "bridge.session_delete_failed"
 		});
 		function desktopErrorMessage(error) {
 			const key = error && typeof error.code === "string" ? DESKTOP_ERROR_KEYS[error.code] : "";
-			if (key) return t(key);
+			if (key) return key === "bridge.session_delete_failed" ? t(key, error?.message || "") : t(key);
 			return (error && typeof error.message === "string" && error.message.trim()) || t("bridge.err_call");
 		}
 		function currentLocale() {
@@ -2597,6 +2625,39 @@ window.__ModuleLoader__.load({
 					font-size: 13px !important;
 					line-height: 26px !important;
 				}
+				[data-dsh-delete-session-confirm] {
+					position: fixed; inset: 0; z-index: 2147483647;
+					display: flex; align-items: center; justify-content: center;
+					padding: 24px; background: rgba(0, 0, 0, .38);
+				}
+				[data-dsh-delete-session-confirm-panel] {
+					box-sizing: border-box; width: min(420px, 100%);
+					padding: 22px 24px 20px; border-radius: 16px;
+					background: var(--dsw-alias-bg-layer-3, #fff);
+					color: var(--dsw-alias-label-primary, #1f2329);
+					box-shadow: 0 18px 60px rgba(0, 0, 0, .24);
+				}
+				[data-dsh-delete-session-confirm-title] {
+					font-size: 16px; font-weight: 650; line-height: 24px;
+				}
+				[data-dsh-delete-session-confirm-message] {
+					margin-top: 10px; color: var(--dsw-alias-label-secondary, #5f6368);
+					font-size: 13px; line-height: 20px;
+				}
+				[data-dsh-delete-session-confirm-actions] {
+					display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;
+				}
+				[data-dsh-delete-session-confirm-actions] button {
+					min-width: 72px; height: 34px; padding: 0 14px; border-radius: 9px;
+					border: 0; font: inherit; font-size: 13px; cursor: pointer;
+				}
+				[data-dsh-delete-session-confirm-cancel] {
+					background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .06));
+					color: var(--dsw-alias-label-primary, #1f2329);
+				}
+				[data-dsh-delete-session-confirm-submit] {
+					background: var(--dsw-alias-state-error-primary, #c93c42); color: #fff;
+				}
 `;
 		}
 
@@ -2973,6 +3034,164 @@ window.__ModuleLoader__.load({
 
 
 
+		const DELETE_SESSION_MENU_ATTRIBUTE = "data-dsh-delete-session";
+		const DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE = "data-dsh-delete-session-wrapper";
+		const DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE = "data-dsh-delete-session-completed";
+		const DELETE_SESSION_MENU_VALUE_ATTRIBUTE = "data-dsh-delete-session-value";
+		const DELETE_SESSION_MENU_LABEL_ATTRIBUTE = "data-dsh-delete-session-label";
+		const DELETE_SESSION_MENU_LABELS = Object.freeze({ zh: "删除会话", en: "Delete session", de: "Sitzung löschen", fr: "Supprimer la session", es: "Eliminar sesión", ja: "セッションを削除", ko: "세션 삭제", pt: "Excluir sessão" });
+		const DELETE_SESSION_CONFIRM_ATTRIBUTE = "data-dsh-delete-session-confirm";
+		const DELETE_SESSION_CONFIRM_PANEL_ATTRIBUTE = "data-dsh-delete-session-confirm-panel";
+		const DELETE_SESSION_CONFIRM_TITLE_ATTRIBUTE = "data-dsh-delete-session-confirm-title";
+		const DELETE_SESSION_CONFIRM_MESSAGE_ATTRIBUTE = "data-dsh-delete-session-confirm-message";
+		const DELETE_SESSION_CONFIRM_ACTIONS_ATTRIBUTE = "data-dsh-delete-session-confirm-actions";
+		const DELETE_SESSION_CONFIRM_CANCEL_ATTRIBUTE = "data-dsh-delete-session-confirm-cancel";
+		const DELETE_SESSION_CONFIRM_SUBMIT_ATTRIBUTE = "data-dsh-delete-session-confirm-submit";
+		let deleteSessionConfirmCloser = null;
+		function closeDeleteSessionConfirmation() {
+			const close = deleteSessionConfirmCloser;
+			if (typeof close === "function") close();
+		}
+		function requestDeleteSessionConfirmation(message) {
+			if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.documentElement) return Promise.resolve(false);
+			closeDeleteSessionConfirmation();
+			return new Promise((resolve) => {
+				const host = document.body || document.documentElement;
+				const backdrop = document.createElement("div");
+				backdrop.setAttribute(DELETE_SESSION_CONFIRM_ATTRIBUTE, "");
+				backdrop.setAttribute("role", "presentation");
+				const panel = document.createElement("div");
+				panel.setAttribute(DELETE_SESSION_CONFIRM_PANEL_ATTRIBUTE, "");
+				panel.setAttribute("role", "dialog");
+				panel.setAttribute("aria-modal", "true");
+				const title = document.createElement("div");
+				title.setAttribute(DELETE_SESSION_CONFIRM_TITLE_ATTRIBUTE, "");
+				title.textContent = t("bridge.session_delete_title");
+				const body = document.createElement("div");
+				body.setAttribute(DELETE_SESSION_CONFIRM_MESSAGE_ATTRIBUTE, "");
+				body.textContent = message;
+				const actions = document.createElement("div");
+				actions.setAttribute(DELETE_SESSION_CONFIRM_ACTIONS_ATTRIBUTE, "");
+				const cancel = document.createElement("button");
+				cancel.setAttribute("type", "button");
+				cancel.setAttribute(DELETE_SESSION_CONFIRM_CANCEL_ATTRIBUTE, "");
+				cancel.textContent = t("bridge.session_delete_cancel");
+				const submit = document.createElement("button");
+				submit.setAttribute("type", "button");
+				submit.setAttribute(DELETE_SESSION_CONFIRM_SUBMIT_ATTRIBUTE, "");
+				submit.textContent = t("bridge.session_delete_action");
+				let settled = false;
+				const finish = (accepted) => {
+					if (settled) return;
+					settled = true;
+					if (typeof window !== "undefined" && typeof window.removeEventListener === "function") window.removeEventListener("keydown", onKeydown);
+					if (deleteSessionConfirmCloser === close) deleteSessionConfirmCloser = null;
+					if (backdrop.parentElement) backdrop.remove();
+					resolve(accepted);
+				};
+				const close = () => finish(false);
+				const onKeydown = (event) => { if (event.key === "Escape") finish(false); };
+				deleteSessionConfirmCloser = close;
+				cancel.addEventListener("click", () => finish(false));
+				submit.addEventListener("click", () => finish(true));
+				backdrop.addEventListener("click", (event) => { if (event.target === backdrop) finish(false); });
+				if (typeof window !== "undefined" && typeof window.addEventListener === "function") window.addEventListener("keydown", onKeydown);
+				actions.appendChild(cancel); actions.appendChild(submit);
+				panel.appendChild(title); panel.appendChild(body); panel.appendChild(actions);
+				backdrop.appendChild(panel); host.appendChild(backdrop);
+				if (typeof submit.focus === "function") submit.focus();
+			});
+		}
+
+		// Match the official IconTrashOutline16 geometry so the injected delete item
+		// matches the exact visual weight, proportions, and curves of Rename/Fork/Copy/Archive.
+		function deleteSessionIconSVG() {
+			if (typeof document === "undefined" || typeof document.createElementNS !== "function") return null;
+			const ns = "http://www.w3.org/2000/svg";
+			const svg = document.createElementNS(ns, "svg");
+			svg.setAttribute("width", "16");
+			svg.setAttribute("height", "16");
+			svg.setAttribute("viewBox", "0 0 16 16");
+			svg.setAttribute("fill", "none");
+			svg.setAttribute("aria-hidden", "true");
+			const path = document.createElementNS(ns, "path");
+			path.setAttribute("d", "M14.4782 4.84067L14.2138 10.1152C14.1102 12.1872 14.067 13.0115 13.3866 13.9607C13.1044 14.3546 12.7498 14.6912 12.3424 14.9535C11.8239 15.2872 11.2415 15.4316 10.5585 15.4998C9.88727 15.5668 9.04946 15.5656 7.99998 15.5656C6.95051 15.5656 6.1127 15.5668 5.44142 15.4998C4.75851 15.4316 4.17602 15.2872 3.65753 14.9535C3.25012 14.6912 2.89559 14.3546 2.61332 13.9607C1.93296 13.0115 1.88979 12.1872 1.78619 10.1152L1.52179 4.84067L2.89006 4.77277L3.15343 10.0463C3.26221 12.2218 3.32452 12.6015 3.72646 13.1624C3.90825 13.4161 4.13686 13.6334 4.39927 13.8023C4.66204 13.9714 5.00263 14.0792 5.57825 14.1367C6.16562 14.1953 6.92298 14.1963 7.99998 14.1963C9.07699 14.1963 9.83434 14.1953 10.4217 14.1367C10.9973 14.0792 11.3379 13.9714 11.6007 13.8023C11.8631 13.6334 12.0917 13.4161 12.2735 13.1624C12.6755 12.6015 12.7378 12.2218 12.8465 10.0463L13.1099 4.77277L14.4782 4.84067ZM5.43011 6.22849H6.7994V11.3909H5.43011V6.22849ZM9.20056 6.22849H10.5699V11.3909H9.20056V6.22849ZM8.53597 0.434431C9.17976 0.434431 9.6522 0.426926 10.0966 0.571258C10.2357 0.616451 10.3717 0.672554 10.502 0.738948C10.9182 0.951107 11.2464 1.29099 11.7015 1.74612L12.4978 2.54136H15.3742V3.91169H0.625732V2.54136H3.50218L4.29845 1.74612C4.75358 1.29099 5.08174 0.951107 5.49801 0.738948C5.62831 0.672554 5.76425 0.616451 5.90334 0.571258C6.34776 0.426926 6.82021 0.434431 7.46399 0.434431H8.53597ZM7.46399 1.80476C6.73208 1.80476 6.51641 1.81187 6.32617 1.87369C6.25545 1.89667 6.18668 1.92533 6.12041 1.95907C5.96398 2.03878 5.82348 2.16253 5.44142 2.54136H10.5585C10.1765 2.16253 10.036 2.03878 9.87955 1.95907C9.81329 1.92533 9.74452 1.89667 9.6738 1.87369C9.48356 1.81187 9.26789 1.80476 8.53597 1.80476H7.46399Z");
+			path.setAttribute("fill", "currentColor");
+			svg.appendChild(path);
+			return svg;
+		}
+		function removeDeleteSessionMenuItem(item) { if (!item) return; const wrapper = item.parentElement?.hasAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE) ? item.parentElement : item; wrapper.remove(); }
+		async function deleteSessionFromMenu(item, ctx) {
+			const sessionId = item.getAttribute(DELETE_SESSION_MENU_VALUE_ATTRIBUTE) || "";
+			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
+			item.setAttribute("aria-disabled", "true");
+			try {
+				const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
+				if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; }
+				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+				if (typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession();
+				const menu = item.closest?.("[role=\"menu\"]");
+				if (menu) menu.setAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE, "");
+				removeDeleteSessionMenuItem(item);
+			} catch (error) {
+				const message = t("bridge.session_delete_failed", desktopErrorMessage(error));
+				if (typeof window.alert === "function") window.alert(message); else if (typeof console !== "undefined" && typeof console.error === "function") console.error(message, error);
+				item.removeAttribute("aria-disabled");
+			}
+		}
+		function makeDeleteSessionMenuItem(template, sessionId, locale, ctx) {
+			const labelText = DELETE_SESSION_MENU_LABELS[locale] || DELETE_SESSION_MENU_LABELS.en;
+			const item = template.cloneNode(true); item.removeAttribute("disabled"); item.removeAttribute("aria-haspopup"); item.removeAttribute("aria-expanded");
+			item.setAttribute(DELETE_SESSION_MENU_ATTRIBUTE, ""); item.setAttribute(DELETE_SESSION_MENU_VALUE_ATTRIBUTE, sessionId); item.setAttribute("aria-label", labelText);
+			const spans = item.querySelectorAll("span"); const label = spans.length > 0 ? spans[spans.length - 1] : document.createElement("span"); if (spans.length === 0) item.appendChild(label); label.setAttribute(DELETE_SESSION_MENU_LABEL_ATTRIBUTE, ""); label.textContent = labelText;
+			if (spans.length > 1) { spans[0].textContent = ""; spans[0].setAttribute("aria-hidden", "true"); const icon = deleteSessionIconSVG(); if (icon) spans[0].appendChild(icon); }
+			item.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void deleteSessionFromMenu(item, ctx); }); return item;
+		}
+		function installDeleteSessionMenu(ctx) {
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
+			let enabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false; let pendingSessionId = ""; let pendingAt = 0; let scheduled = false;
+			const rememberSessionAction = (event) => { const button = event.target?.closest?.("button"); if (!button || button.closest("[role='menu']")) return; const row = button.closest("[role='treeitem']"); if (!row) return; const id = sessionIdFromElement(button) || sessionIdFromElement(row); if (id) { pendingSessionId = id; pendingAt = Date.now(); } };
+			const decorate = () => {
+				const injected = document.querySelectorAll("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]"); if (!enabled) { for (const item of injected) removeDeleteSessionMenuItem(item); return; }
+				for (const menu of document.querySelectorAll("[role='menu']")) {
+					if (menu.hasAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE) || menu.querySelector("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]")) continue; const locale = sessionMenuLocale(menu); if (!locale) continue;
+					const fresh = pendingSessionId && Date.now() - pendingAt < PENDING_SESSION_ID_TTL_MS; const sessionId = sessionIdFromElement(menu) || (fresh ? pendingSessionId : ""); if (!sessionId) continue;
+					const menuItems = [...menu.querySelectorAll("button[role='menuitem']")]; const archive = menuItems.find((entry) => (entry.textContent || "").replace(/\s+/g, " ").trim() === SESSION_MENU_LABELS[locale].archive); const template = archive || menuItems[menuItems.length - 1]; if (!template) continue;
+					const item = makeDeleteSessionMenuItem(template, sessionId, locale, ctx); const templateWrapper = template.parentElement; const wrapper = templateWrapper?.cloneNode(false);
+					if (wrapper) { wrapper.setAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE, ""); wrapper.appendChild(item); if (templateWrapper?.parentElement) templateWrapper.parentElement.appendChild(wrapper); } else menu.appendChild(item);
+					pendingSessionId = ""; pendingAt = 0;
+				}
+			};
+			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
+			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); };
+			document.addEventListener("pointerdown", rememberSessionAction, true); document.addEventListener("click", rememberSessionAction, true); window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
+			const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
+			return () => { document.removeEventListener("pointerdown", rememberSessionAction, true); document.removeEventListener("click", rememberSessionAction, true); window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const menu of document.querySelectorAll("[role='menu']")) menu.removeAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE); for (const item of document.querySelectorAll("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]")) removeDeleteSessionMenuItem(item); };
+		}
+		const ARCHIVED_DELETE_SESSION_ATTRIBUTE = "data-dsh-delete-archived-session";
+		function likelySessionId(value) { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/.test(value) && !/^(row|item|archived|session|undefined|null)$/i.test(value); }
+		function archivedSessionIdFromElement(element) {
+			const candidates = []; for (const name of ["data-session-id", "data-id"]) { const value = element?.getAttribute?.(name); if (value) candidates.push(value); }
+			try { for (let current = reactFiberFromElement(element), depth = 0; current && depth < 80; current = current.return, depth += 1) { const props = current.memoizedProps || current.pendingProps; for (const value of [props?.id, props?.sessionId, props?.session?.id, props?.item?.id, props?.row?.id, props?.entity?.id, current.key]) if (value != null) candidates.push(String(value)); } } catch (_) { /* fail closed below */ }
+			return candidates.find(likelySessionId) || "";
+		}
+		function archivedUnarchiveButton(row) { const labels = ["unarchive", "取消归档", "désarchiv", "desarchiv", "archivierung rückgängig", "アーカイブ解除", "보관 취소", "desarquiv"]; return [...row.querySelectorAll("button")].find((button) => { const text = ((button.getAttribute("aria-label") || "") + " " + (button.textContent || "")).toLowerCase(); return labels.some((label) => text.includes(label.toLowerCase())); }); }
+		async function deleteArchivedSession(button, row, ctx) {
+			const sessionId = button.getAttribute("data-dsh-delete-archived-id") || "";
+			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
+			button.setAttribute("aria-disabled", "true");
+			try { const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined); if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; } const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace; if (typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(); row.remove(); } catch (error) { const message = t("bridge.session_delete_failed", desktopErrorMessage(error)); if (typeof window.alert === "function") window.alert(message); else if (typeof console !== "undefined" && typeof console.error === "function") console.error(message, error); button.removeAttribute("aria-disabled"); }
+		}
+		function makeArchivedDeleteButton(template, sessionId, row, ctx) { const button = template.cloneNode(true); button.removeAttribute("disabled"); button.setAttribute(ARCHIVED_DELETE_SESSION_ATTRIBUTE, ""); button.setAttribute("data-dsh-delete-archived-id", sessionId); const deleteLocale = localeCode === "zh-CN" ? "zh" : (DELETE_SESSION_MENU_LABELS[localeCode] ? localeCode : "en"); const deleteLabel = DELETE_SESSION_MENU_LABELS[deleteLocale] || DELETE_SESSION_MENU_LABELS.en; button.setAttribute("aria-label", deleteLabel); button.textContent = deleteLabel; button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void deleteArchivedSession(button, row, ctx); }); return button; }
+		function installArchivedSessionDelete(ctx) {
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
+			let enabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false; let scheduled = false;
+			const decorate = () => { const injected = document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]"); if (!enabled) { for (const button of injected) button.remove(); return; } for (const row of document.querySelectorAll("li")) { if (row.querySelector("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) continue; const unarchive = archivedUnarchiveButton(row); if (!unarchive) continue; const sessionId = archivedSessionIdFromElement(row); if (!sessionId) continue; const button = makeArchivedDeleteButton(unarchive, sessionId, row, ctx); (unarchive.parentElement || row).appendChild(button); } };
+			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
+			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); }; window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
+			return () => { window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const button of document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) button.remove(); };
+		}
+
 		function keyboardEventToAccelerator(event, isMac) {
 			const code = event.code || "";
 			const key = event.key || "";
@@ -3067,6 +3286,7 @@ window.__ModuleLoader__.load({
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
 					publishShowCopySessionId(nextPrefs);
+					publishDeleteSessionActions(nextPrefs);
 					publishHoverMessageActions(nextPrefs);
 					publishPromptOverlayLanguage(nextPrefs);
 					publishPromptOverlayMaxLines(nextPrefs);
@@ -3118,13 +3338,14 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
 				if (looksLikeUpdate) setUpdate(value);
 				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
 				publishShowCopySessionId(value);
+				publishDeleteSessionActions(value);
 				publishHoverMessageActions(value);
 				publishPromptOverlayLanguage(value);
 				publishPromptOverlayMaxLines(value);
@@ -3902,6 +4123,30 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.delete_session_actions") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.delete_session_actions_hint") })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.deleteSessionActions !== false,
+										checked: prefs?.deleteSessionActions !== false,
+										disabled: !connected || pending || !prefs || enhancementDisabled,
+										onChange: (event) => void invoke("setDeleteSessionActions", { enabled: event.target.checked })
+									})
+								})
+							]
+						}),
 						// One grouped block: the toggle decides whether the card exists, and the line
 						// budget only means something once it does, so they belong together rather than
 						// as two unrelated rows.
@@ -4209,6 +4454,7 @@ window.__ModuleLoader__.load({
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (!result?.ok) return;
 				publishShowCopySessionId(result.value);
+				publishDeleteSessionActions(result.value);
 				publishHoverMessageActions(result.value);
 				publishPromptOverlayLanguage(result.value);
 				publishPromptOverlayMaxLines(result.value);
@@ -4217,12 +4463,16 @@ window.__ModuleLoader__.load({
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
 			const stopCopySessionIdMenu = installCopySessionIdMenu();
+			const stopDeleteSessionMenu = installDeleteSessionMenu(ctx);
+			const stopArchivedSessionDelete = installArchivedSessionDelete(ctx);
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
 			const stopChatContentVisibility = installChatContentVisibility();
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
 					stopCopySessionIdMenu();
+					stopDeleteSessionMenu();
+					stopArchivedSessionDelete();
 					stopHoverMessageActions();
 					stopChatContentVisibility();
 				});

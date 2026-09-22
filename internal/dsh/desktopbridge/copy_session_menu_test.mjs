@@ -325,8 +325,8 @@ const copyItem = () => menu.querySelector("[data-dsh-copy-session-id]");
 assert.ok(copyItem(), "session menu item was not injected");
 assert.deepEqual(
   menu.querySelectorAll("button[role='menuitem']").map((item) => item.textContent),
-  ["重命名", "分叉会话", "复制会话ID", "归档会话"],
-  "copy item order must be rename/fork/copy/archive",
+  ["重命名", "分叉会话", "复制会话ID", "归档会话", "删除会话"],
+  "session menu order must end with delete",
 );
 assert.equal(copyItem().parentElement.parentElement, viewport, "copy item must have its own sibling wrapper");
 assert.ok(copyItem().querySelector("svg"), "copy item must retain a visible icon");
@@ -336,6 +336,17 @@ assert.equal(copyItem().querySelector("svg").getAttribute("height"), "16");
 assert.equal(copyItem().querySelectorAll("path").length, 1, "official copy icon path missing");
 assert.equal(copyItem().querySelector("path").getAttribute("fill"), "currentColor");
 assert.equal(copyItem().getAttribute("data-dsh-copy-session-id-value"), "session-copy-test");
+const deleteItem = () => menu.querySelector("[data-dsh-delete-session]");
+assert.ok(deleteItem(), "delete session item was not injected");
+assert.equal(deleteItem().textContent, "删除会话");
+assert.equal(deleteItem().getAttribute("data-dsh-delete-session-value"), "session-copy-test");
+assert.equal(deleteItem().parentElement.parentElement, viewport, "delete item must have its own sibling wrapper");
+assert.ok(deleteItem().querySelector("svg"), "delete item must retain a visible icon");
+assert.equal(deleteItem().querySelector("svg").getAttribute("viewBox"), "0 0 16 16");
+assert.equal(deleteItem().querySelector("svg").getAttribute("width"), "16");
+assert.equal(deleteItem().querySelector("svg").getAttribute("height"), "16");
+assert.equal(deleteItem().querySelectorAll("path").length, 1, "official trash icon path missing");
+assert.equal(deleteItem().querySelector("path").getAttribute("fill"), "currentColor");
 
 let clipboardValue = "";
 let clipboardRejects = false;
@@ -361,6 +372,17 @@ window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: false }
 assert.equal(copyItem(), null, "disabled preference must remove the injected item");
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });
 assert.ok(copyItem(), "re-enabled preference must restore the injected item");
+window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: false });
+assert.equal(deleteItem(), null, "disabled delete preference must remove the injected item");
+window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: true });
+assert.ok(deleteItem(), "re-enabled delete preference must restore the injected item");
+deleteItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+const activeConfirm = document.querySelector("[data-dsh-delete-session-confirm]");
+assert.ok(activeConfirm, "delete click must open a confirmation dialog");
+activeConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.equal(deleteItem(), null, "confirmed active deletion must remove the menu item");
 
 const workspaceMenu = document.createElement("div");
 workspaceMenu.setAttribute("role", "menu");
@@ -380,8 +402,27 @@ noFiberMenu.appendChild(noFiberViewport);
 document.documentElement.appendChild(noFiberMenu);
 assert.equal(noFiberMenu.querySelector("[data-dsh-copy-session-id]"), null, "missing React fiber must fail closed");
 
+const archivedRow = document.createElement("li");
+const archivedFiber = { key: "session-archived-test", memoizedProps: {}, return: null };
+Object.defineProperty(archivedRow, "__reactFiber$archived", { value: archivedFiber });
+const unarchive = document.createElement("button");
+unarchive.setAttribute("aria-label", "Unarchive Archived test");
+unarchive.textContent = "Unarchive";
+archivedRow.appendChild(unarchive);
+document.documentElement.appendChild(archivedRow);
+assert.ok(archivedRow.querySelector("[data-dsh-delete-archived-session]"), "archived row delete item was not injected");
+assert.equal(archivedRow.querySelector("[data-dsh-delete-archived-session]").getAttribute("data-dsh-delete-archived-id"), "session-archived-test");
+archivedRow.querySelector("[data-dsh-delete-archived-session]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+const archivedConfirm = document.querySelector("[data-dsh-delete-session-confirm]");
+assert.ok(archivedConfirm, "archived delete click must open a confirmation dialog");
+archivedConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.equal(archivedRow.parentElement, null, "confirmed archived deletion must remove the row");
+
 for (const cleanup of cleanups) cleanup();
 assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove injected menu nodes");
+assert.equal(menu.querySelector("[data-dsh-delete-session]"), null, "dispose must remove delete menu nodes");
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });
 assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove setting listeners");
 console.log("ok - plugin-only session menu adapter injects, gates, copies, fails closed, and cleans up");

@@ -222,6 +222,34 @@ func TestHoverMessageActionsDefaultsOnAndPersists(t *testing.T) {
 	}
 }
 
+func TestDeleteSessionActionsDefaultsOnAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+	var p desktopPrefs
+	p.load()
+	if !p.getDeleteSessionActions() {
+		t.Fatal("deleteSessionActions must default to on")
+	}
+	p.setDeleteSessionActions(false)
+	if err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	file, err := desktopstate.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Prefs.DeleteSessionActions == nil || *file.Prefs.DeleteSessionActions {
+		t.Fatalf("deleteSessionActions persisted = %v, want false", file.Prefs.DeleteSessionActions)
+	}
+	desktopstate.ResetCacheForTest()
+	var p2 desktopPrefs
+	p2.load()
+	if p2.getDeleteSessionActions() {
+		t.Fatal("disabled deleteSessionActions was not reloaded")
+	}
+}
+
 func TestChatContentVisibilityDefaultsOnAndPersists(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)

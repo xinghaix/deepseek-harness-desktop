@@ -32,6 +32,7 @@ type desktopPrefs struct {
 	closeToTray           atomic.Bool
 	traySessionLimit      atomic.Int32
 	showCopySessionId     atomic.Bool
+	deleteSessionActions  atomic.Bool
 	hoverMessageActions   atomic.Bool
 	chatContentVisibility atomic.Bool
 	promptOverlayMaxLines atomic.Int32
@@ -47,6 +48,7 @@ func (p *desktopPrefs) load() {
 	p.closeToTray.Store(false)
 	p.traySessionLimit.Store(defaultTraySessionLimit)
 	p.showCopySessionId.Store(true)
+	p.deleteSessionActions.Store(true)
 	p.hoverMessageActions.Store(true)
 	p.chatContentVisibility.Store(true)
 	p.promptOverlayMaxLines.Store(defaultPromptOverlayMaxLines)
@@ -81,6 +83,9 @@ func (p *desktopPrefs) load() {
 	if prefs.ShowCopySessionId != nil {
 		p.showCopySessionId.Store(*prefs.ShowCopySessionId)
 	}
+	if prefs.DeleteSessionActions != nil {
+		p.deleteSessionActions.Store(*prefs.DeleteSessionActions)
+	}
 	if prefs.HoverMessageActions != nil {
 		p.hoverMessageActions.Store(*prefs.HoverMessageActions)
 	}
@@ -108,6 +113,7 @@ func (p *desktopPrefs) save() error {
 	closeToTray := p.closeToTray.Load() && trayEnabled
 	limit := int(p.traySessionLimit.Load())
 	showCopySessionId := p.showCopySessionId.Load()
+	deleteSessionActions := p.deleteSessionActions.Load()
 	hoverMessageActions := p.hoverMessageActions.Load()
 	chatContentVisibility := p.chatContentVisibility.Load()
 	promptOverlayMaxLines := int(p.promptOverlayMaxLines.Load())
@@ -120,6 +126,7 @@ func (p *desktopPrefs) save() error {
 		f.Prefs.CloseToTray = &closeToTray
 		f.Prefs.TraySessionLimit = &limit
 		f.Prefs.ShowCopySessionId = &showCopySessionId
+		f.Prefs.DeleteSessionActions = &deleteSessionActions
 		f.Prefs.HoverMessageActions = &hoverMessageActions
 		f.Prefs.ChatContentVisibility = &chatContentVisibility
 		f.Prefs.PromptOverlayMaxLines = &promptOverlayMaxLines
@@ -163,6 +170,14 @@ func (p *desktopPrefs) getRestoreLastSession() bool {
 
 func (p *desktopPrefs) setRestoreLastSession(val bool) {
 	p.restoreLastSession.Store(val)
+}
+
+func (p *desktopPrefs) getDeleteSessionActions() bool {
+	return p.deleteSessionActions.Load()
+}
+
+func (p *desktopPrefs) setDeleteSessionActions(enabled bool) {
+	p.deleteSessionActions.Store(enabled)
 }
 
 func (p *desktopPrefs) getRememberWindowSize() bool {

@@ -29,6 +29,10 @@ func (*routeTestBridgeHost) SetRestoreLastSession(b bool) (BridgePrefs, error) {
 func (*routeTestBridgeHost) SetRememberWindowSize(b bool) (BridgePrefs, error) {
 	return BridgePrefs{RememberWindowSize: b}, nil
 }
+
+func (*routeTestBridgeHost) SetDeleteSessionActions(b bool) (BridgePrefs, error) {
+	return BridgePrefs{DeleteSessionActions: b}, nil
+}
 func (*routeTestBridgeHost) ClaimOpenSession() string { return "legacy-session" }
 
 type sequencedBridgeHost struct{ routeTestBridgeHost }
