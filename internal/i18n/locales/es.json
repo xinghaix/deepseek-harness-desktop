@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "Reconectando con el escritorio…",
   "bridge.status_desktop_down": "La app de escritorio no está en ejecución",
   "bridge.overlay_max_lines": "Líneas de indicación máx.",
-  "bridge.overlay_max_lines_hint": "Cuántas líneas de texto de la indicación muestra la tarjeta flotante antes de que el contenido se desplace. La tarjeta sigue encogiéndose para ajustarse al espacio sobre el campo de entrada del Chat, así que nunca lo cubre."
+  "bridge.overlay_max_lines_hint": "Cuántas líneas de texto de la indicación muestra la tarjeta flotante antes de que el contenido se desplace. La tarjeta sigue encogiéndose para ajustarse al espacio sobre el campo de entrada del Chat, así que nunca lo cubre.",
+  "bridge.overlay_load_older": "Cargar anteriores",
+  "bridge.overlay_loading": "Cargando…"
 }

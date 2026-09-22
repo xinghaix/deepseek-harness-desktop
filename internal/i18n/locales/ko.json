@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "데스크톱에 다시 연결 중…",
   "bridge.status_desktop_down": "데스크톱 앱이 실행되고 있지 않습니다",
   "bridge.overlay_max_lines": "프롬프트 최대 줄 수",
-  "bridge.overlay_max_lines_hint": "스크롤되기 전에 고정 표시 카드가 보여 주는 프롬프트 줄 수입니다. 카드는 Chat 입력창 위 공간에 맞춰 줄어들므로 입력창을 가리지 않습니다."
+  "bridge.overlay_max_lines_hint": "스크롤되기 전에 고정 표시 카드가 보여 주는 프롬프트 줄 수입니다. 카드는 Chat 입력창 위 공간에 맞춰 줄어들므로 입력창을 가리지 않습니다.",
+  "bridge.overlay_load_older": "이전 메시지 로드",
+  "bridge.overlay_loading": "로드 중…"
 }

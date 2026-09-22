@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "A restabelecer a ligação ao ambiente de trabalho…",
   "bridge.status_desktop_down": "A app de ambiente de trabalho não está em execução",
   "bridge.overlay_max_lines": "Máx. linhas do prompt",
-  "bridge.overlay_max_lines_hint": "Quantas linhas de texto do prompt o cartão flutuante mostra antes de se deslocar. O cartão continua a encolher para caber no espaço acima do campo de entrada do Chat, pelo que nunca o cobre."
+  "bridge.overlay_max_lines_hint": "Quantas linhas de texto do prompt o cartão flutuante mostra antes de se deslocar. O cartão continua a encolher para caber no espaço acima do campo de entrada do Chat, pelo que nunca o cobre.",
+  "bridge.overlay_load_older": "Carregar anteriores",
+  "bridge.overlay_loading": "Carregando…"
 }

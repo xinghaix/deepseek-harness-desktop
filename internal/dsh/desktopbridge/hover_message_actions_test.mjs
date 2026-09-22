@@ -15,6 +15,10 @@ assert.match(source, /t\("bridge\.enhanced_hover_title"\)/);
 assert.match(source, /t\("bridge\.overlay_label"\)/);
 assert.doesNotMatch(source, /data-actions-reveal="always"/);
 assert.doesNotMatch(source, /navigator\.clipboard\.writeText\(messageText\)/);
+// Unloaded historical prompts must use DSH's official full-log outline and jump loader rather
+// than relying only on currently mounted DOM nodes.
+assert.match(source, /turnOutline/);
+assert.match(source, /loadThrough/);
 
 const observers = new Set();
 const windowListeners = new Map();
@@ -99,6 +103,7 @@ class FakeElement {
   }
   click() {
     this.clicked = (this.clicked || 0) + 1;
+    this.dispatchEvent({ type: "click" });
   }
   cloneNode(deep) {
     const clone = new FakeElement(this.tagName);
@@ -115,14 +120,14 @@ class FakeElement {
     const idx = ref ? this.childNodes.indexOf(ref) : -1;
     if (idx >= 0) this.childNodes.splice(idx, 0, child);
     else this.childNodes.push(child);
-    for (const observer of observers) observer.callback();
+    for (const observer of observers) observer.callback([{ target: this, type: "childList" }]);
     return child;
   }
   appendChild(child) {
     child.parentNode = this;
     child.parentElement = this;
     this.childNodes.push(child);
-    for (const observer of observers) observer.callback();
+    for (const observer of observers) observer.callback([{ target: this, type: "childList" }]);
     return child;
   }
   removeChild(child) {
@@ -180,6 +185,15 @@ scroll.rect = { top: 80, bottom: 800, left: 0, right: 800 };
 documentElement.appendChild(head);
 documentElement.appendChild(body);
 body.appendChild(scroll);
+// Official DSH renders this control at the top of the conversation when older history exists.
+const olderSlot = new FakeElement("div");
+olderSlot.setAttribute("class", "OfficialHash_older");
+const olderButton = new FakeElement("button");
+olderButton.setAttribute("type", "button");
+olderButton.innerText = "加载更早";
+olderButton.rect = { top: 80, bottom: 116, left: 240, right: 320 };
+olderSlot.appendChild(olderButton);
+scroll.appendChild(olderSlot);
 
 function addFlow(kind, top, bottom) {
   const el = new FakeElement("div");
@@ -191,10 +205,12 @@ function addFlow(kind, top, bottom) {
 }
 
 const u1 = addFlow("user", -200, -120);
+u1.setAttribute("data-chat-turn", "1");
 u1.innerText = "first prompt";
 const a1 = addFlow("assistant", -110, 40);
 const u2 = addFlow("user", 50, 110);
-u2.innerText = "second prompt with context";
+u2.setAttribute("data-chat-turn", "2");
+u2.innerText = "second prompt with context...";
 u2.setAttribute("id", "prompt-u2");
 const mediaWrap = new FakeElement("div");
 mediaWrap.setAttribute("data-attachment", "images");
@@ -210,7 +226,7 @@ u2.appendChild(mediaWrap);
 const textWrap = new FakeElement("div");
 const md = new FakeElement("div");
 md.setAttribute("data-markdown-body", "");
-md.innerText = "second prompt with context";
+md.innerText = "second prompt with context...";
 textWrap.appendChild(md);
 u2.appendChild(textWrap);
 // DSH image attachments expose a filename AND the <img>; the thumbnail must win.
@@ -283,6 +299,7 @@ u2.appendChild(plainBubble);
 // there — there is nothing to copy — and the card must not re-introduce one just because the
 // native strip happens to render a control while it is being mirrored.
 const u3 = addFlow("user", 60, 120);
+u3.setAttribute("data-chat-turn", "3");
 // Inert until this prompt is selected below: a zero-size node is not renderable, so it stays
 // invisible to prompt selection and cannot perturb the assertions above.
 u3.rect = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -433,6 +450,52 @@ let navRegistrations = 0;
 let lastNavConfig = null;
 let lastNavRender = null;
 const cleanups = [];
+const historyLoadCalls = [];
+const historyOutline = [{ turn: 0, seq: 42, prompt: "archived prompt with attachment", response: "" }];
+let historyNodeMounted = false;
+let historyNode = null;
+const historyOutlineFace = {
+  getSnapshot() { return historyOutline; },
+  subscribe() { return () => {}; }
+};
+const historySession = {
+  projections: { faceOf(key) { return key === "turnOutline" ? historyOutlineFace : null; } },
+  subscribe() { return () => {}; },
+  loadThrough(seq) {
+    historyLoadCalls.push(seq);
+    if (seq === 42 && !historyNodeMounted) {
+      historyNodeMounted = true;
+      const oldPrompt = new FakeElement("div");
+      historyNode = oldPrompt;
+      oldPrompt.setAttribute("data-chat-flow-kind", "user");
+      oldPrompt.setAttribute("data-chat-flow-key", "history-u0");
+      oldPrompt.setAttribute("data-chat-turn", "0");
+      oldPrompt.rect = { top: -260, bottom: -120, left: 0, right: 400 };
+      oldPrompt.innerText = "archived prompt with attachment";
+      const oldImage = new FakeElement("img");
+      oldImage.setAttribute("src", "https://example.test/archived.png");
+      const oldMedia = new FakeElement("div");
+      oldMedia.setAttribute("data-attachment", "image");
+      oldMedia.appendChild(oldImage);
+      oldPrompt.appendChild(oldMedia);
+      const oldFile = new FakeElement("div");
+      oldFile.setAttribute("data-attachment", "file");
+      oldFile.setAttribute("data-filename", "archived.pdf");
+      oldFile.innerText = "archived.pdf";
+      oldPrompt.appendChild(oldFile);
+      scroll.appendChild(oldPrompt);
+    }
+    return Promise.resolve();
+  }
+};
+const historySessions = {
+  list: {
+    getSnapshot() { return { current: "session-current", byId: { "session-current": { id: "session-current" } } }; },
+    subscribe() { return () => {}; }
+  },
+  binding(id) { return id === "session-current" ? { session: historySession } : null; }
+};
+window.__DSH_DESKTOP_ACTIVE_SESSION_ID__ = "session-current";
 client.apply({
   // Mirrors ctx.slots.inject(slotName, callback) -> disposer.
   slots: {
@@ -478,6 +541,7 @@ client.apply({
       },
     },
   },
+  sessions: historySessions,
   remote: null,
 });
 
@@ -545,7 +609,7 @@ assert.doesNotMatch(hoverStyle.textContent, /top: calc\(100% \+ 6px\)/, "no per-
 assert.doesNotMatch(hoverStyle.textContent, /:last-child::after/);
 // The body's inset must be symmetric, or a text-only card looks top-heavy beside an
 // attachments+text card. One constant drives both the padding and the height budget.
-assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-content\] \{[^}]*padding: 12px !important/);
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-content\] \{[^}]*padding: 12px 1px 12px 12px !important/);
 assert.doesNotMatch(hoverStyle.textContent, /padding: 10px 12px 14px/, "the old asymmetric inset is gone");
 // The CARD must not scroll; the inner body must. A scroll container's own padding-bottom
 // scrolls out of view, which clipped the last line flush against the card's bottom border
@@ -641,6 +705,8 @@ window.dispatchEvent(new CustomEvent("scroll"));
 assert.equal(overlays().length, 1, "create exactly one prompt overlay");
 const overlay = overlays()[0];
 assert.equal(overlay.parentNode, body, "mount overlay directly under document.body");
+assert.equal(overlay.style._props.top, "80px", "dock flush to conversation top under tabs");
+assert.equal(overlay.getAttribute("data-dsh-desktop-prompt-overlay-encounter-older"), "", "encounter-older attribute is set on overlay when at top");
 assert.match(overlay.textContent, /second prompt with context/, "mirror selected prompt content");
 assert.match(overlay.textContent, /report\.csv/, "preserve file attachment previews");
 assert.match(overlay.textContent, /plain prompt body/, "preserve plain prompt content beside native controls");
@@ -655,6 +721,26 @@ assert.ok(nativeTime, "render native timestamp in toolbar");
 assert.equal(nativeTime.textContent, "9月17日 17:57");
 const toolbarActions = toolbar.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]");
 assert.equal(toolbarActions.length, 4, "render all semantic native actions in the compact toolbar, including an icon-bearing one");
+const embeddedLoadOlder = toolbar.querySelector("[data-dsh-desktop-prompt-overlay-load-older]");
+assert.ok(embeddedLoadOlder, "load-older action is embedded in the overlay toolbar");
+assert.match(embeddedLoadOlder.textContent, /加载更早|Load older/);
+// Verify ordering: metadata time on the left, then load-older at the far left of the action controls, then copy
+assert.equal(toolbar.childNodes[0], nativeTime, "timestamp is on the left");
+assert.equal(toolbar.childNodes[1], embeddedLoadOlder, "load-older is placed at the far left of the action controls");
+assert.equal(toolbar.childNodes[2], toolbarActions[0], "copy action follows load-older");
+embeddedLoadOlder.click();
+assert.equal(olderButton.clicked, 1, "clicking embedded load-older triggers native load-older button");
+// Pointer movement inside our own card must not reselect the official active turn and rebuild the
+// toolbar under the pointer. That rebuild restarts the strip animation and causes first-hover flicker.
+const activeTurnForHoverRegression = new FakeElement("button");
+body.appendChild(activeTurnForHoverRegression);
+activeTurnForHoverRegression.setAttribute("aria-current", "true");
+activeTurnForHoverRegression.setAttribute("aria-label", "跳转并加载第 0 轮");
+window.dispatchEvent({ type: "pointermove", target: overlay });
+assert.equal(overlays()[0], overlay, "hovering the plugin overlay must preserve its host");
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "hovering the plugin overlay must preserve its toolbar");
+body.removeChild(activeTurnForHoverRegression);
+window.dispatchEvent(new CustomEvent("scroll"));
 // Sibling of the body, mounted on the overlay host so it never scrolls with the text.
 assert.equal(toolbar.parentNode, overlay, "action strip mounts on the overlay, outside the scrolling body");
 assert.notEqual(toolbar.parentNode, previewContent, "action strip is not inside the scroll body");
@@ -708,7 +794,9 @@ assert.equal(attachmentTitles.filter((label) => /image\.png|quarterly\.xlsx|点�
     "an attachment is never proxied into the action strip");
 assert.ok(overlay.querySelector("[data-dsh-desktop-prompt-overlay-text]"), "render text row");
 assert.equal(overlay.querySelector("[data-dsh-desktop-prompt-overlay-native-ops]"), null, "do not mirror DSH native operation bars");
-assert.equal(overlay.querySelectorAll("button").length, 4, "owned toolbar contains only compact proxy controls");
+assert.equal(toolbar.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]").length, 4, "owned toolbar contains only compact proxy controls");
+assert.ok(toolbar.querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), "toolbar contains embedded load-older action");
+assert.equal(overlay.querySelectorAll("button").length, 5, "overlay contains 4 proxy controls and 1 load-older action");
 assert.equal(u2.querySelectorAll("time").length, 1, "original timestamp remains in the source bubble");
 // copyBtn, plainCopy, fileCard, imageAttachment, fileAttachment, iconAction — overlay adds none.
 assert.equal(u2.querySelectorAll("button").length, 6, "source attachment and operation controls remain untouched");
@@ -727,7 +815,7 @@ assert.equal(overlay.querySelectorAll("[id]").length, 0, "owned preview does not
 // stylesheet's !important clamp, which silently disabled the line budget and left the card
 // capped only by the composer gap — exactly the reported "I set 2 lines but it shows many".
 assert.equal(overlay.style._props["max-height"], undefined, "the height cap is not set inline");
-assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-avail"], "632px", "avail cap matches the composer gap");
+assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-avail"], "632px", "avail cap matches the composer gap with top-flush docking");
 // The stylesheet owns it, and must combine BOTH bounds: composer gap and line budget.
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay\] \{[^}]*max-height: min\(var\(--dsh-desktop-prompt-overlay-avail[^)]*\), calc\(var\(--dsh-desktop-prompt-overlay-lines[^)]*\) \* [\d.]+rem \+ var\(--dsh-desktop-prompt-overlay-extra/);
 
@@ -952,6 +1040,19 @@ window.dispatchEvent(new CustomEvent("scroll"));
 assert.equal(overlays().length, 1, "reuse the single overlay when prompt selection changes");
 assert.equal(overlays()[0], overlay, "overlay host identity remains stable");
 assert.match(overlay.textContent, /first prompt/, "overlay content follows prompt switching");
+// Even if the prompt is short / not truncated (like u1: 'first prompt'), encountering DSH Web's older
+// button at the top must still show load-older in the long-display state so native functionality isn't blocked:
+assert.ok(overlay.querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), "short complete prompt shows load-older when encountering older button at top");
+assert.equal(overlay.hasAttribute("data-dsh-desktop-prompt-overlay-encounter-older"), true, "encounter-older is active for short complete prompt at top");
+
+// Mutual exclusion: when olderButton scrolls away (midway down the conversation), a complete prompt must NOT show load-older:
+const savedOlderRect = { ...olderButton.rect };
+olderButton.rect = { top: -200, bottom: -160, left: 700, right: 780 };
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlay.querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), null, "a complete prompt without truncation does not show load-older when away from older boundary");
+assert.equal(overlay.hasAttribute("data-dsh-desktop-prompt-overlay-encounter-older"), false, "encounter-older is not active when scrolled away");
+olderButton.rect = savedOlderRect;
+window.dispatchEvent(new CustomEvent("scroll"));
 
 // ---------------------------------------------------------------------------
 // The strip hangs on the LAST LINE BOX of the card. As a flow row below the text it read as
@@ -1002,6 +1103,8 @@ window.dispatchEvent(new CustomEvent("scroll"));
 // renders a copy control while the card is being mirrored.
 // ---------------------------------------------------------------------------
 const flowRects = { u1: { ...u1.rect }, u2: { ...u2.rect }, u3: { ...u3.rect }, a1: { ...a1.rect }, a2: { ...a2.rect }, a3: { ...a3.rect } };
+const savedOlderRectForFlow = { ...olderButton.rect };
+olderButton.rect = { top: -620, bottom: -584, left: 240, right: 320 }; // scrolled away above top
 u1.rect = { top: -900, bottom: -800, left: 0, right: 400 };
 u2.rect = { top: -140, bottom: -80, left: 0, right: 400 };
 a2.rect = { top: -70, bottom: 20, left: 0, right: 400 };
@@ -1013,6 +1116,8 @@ const onlyStrip = overlay.querySelector("[data-dsh-desktop-prompt-overlay-toolba
 assert.ok(onlyStrip, "an attachment-only card still shows its timestamp strip");
 assert.equal(onlyStrip.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]").length, 0,
   "no copy action while the card mirrors no text");
+assert.equal(onlyStrip.querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), null,
+  "no load-older action when prompt is not truncated and not encountering older boundary");
 assert.equal(onlyStrip.querySelector("[data-dsh-desktop-prompt-overlay-time]").textContent, "9月18日 08:15",
   "the timestamp still renders without any action");
 assert.equal(u3CopyClicks, 0, "the native copy control is never forwarded to");
@@ -1044,6 +1149,7 @@ assert.notEqual(overlay.querySelector("[data-dsh-desktop-prompt-overlay-content]
 for (const [key, key3] of [["u1", u1], ["u2", u2], ["u3", u3], ["a1", a1], ["a2", a2], ["a3", a3]]) {
   key3.rect = flowRects[key];
 }
+olderButton.rect = savedOlderRectForFlow;
 window.dispatchEvent(new CustomEvent("scroll"));
 
 // Regression replay through the actual overlay entry point.
@@ -1218,6 +1324,88 @@ window.dispatchEvent(new CustomEvent("resize"));
 console.log("ok - live width expansion, collapse, column thresholds and stable observation");
 console.log("ok - mixed attachments share two rows and one icon-based overflow tile");
 console.log("ok - attachment identity, prose classification, long names and inert labels");
+
+// The current official rail turn can be unloaded even when the user never hovers its
+// lower-right preview. aria-current is the stable signal for the message being read. It may
+// provide a text-only turnOutline preview, but it must not start an unbounded history jump.
+const activeTurnButton = new FakeElement("button");
+activeTurnButton.setAttribute("aria-current", "true");
+activeTurnButton.setAttribute("aria-label", "跳转并加载第 0 轮");
+body.appendChild(activeTurnButton);
+for (let i = 0; i < 6; i += 1) await Promise.resolve();
+assert.deepEqual(historyLoadCalls, [], "passive active turn does not page history without hover");
+assert.equal(historyNodeMounted, false, "passive active turn does not mount older DOM");
+const outlineOverlay = overlays()[0];
+assert.match(outlineOverlay.textContent, /archived prompt with attachment/, "active turnOutline text is still shown without hover");
+assert.equal(outlineOverlay.querySelector("[data-dsh-desktop-prompt-overlay-media]")?.querySelectorAll("img").length || 0, 0, "passive preview does not trigger historical image loading");
+assert.equal([...fileItems(outlineOverlay)].length, 0, "passive preview does not trigger historical file loading");
+
+// An explicit official tooltip hover is an intentional request for the complete turn and may
+// use the jump loader so the real DOM can provide files and images.
+const turnTooltip = new FakeElement("div");
+turnTooltip.setAttribute("role", "tooltip");
+turnTooltip.setAttribute("id", "dsh-turn-preview");
+turnTooltip.innerText = "archived prompt with attachment";
+const turnButton = new FakeElement("button");
+turnButton.setAttribute("aria-describedby", "dsh-turn-preview");
+turnButton.setAttribute("aria-label", "跳转并加载第 0 轮");
+body.appendChild(turnTooltip);
+body.appendChild(turnButton);
+for (let i = 0; i < 6; i += 1) await Promise.resolve();
+assert.deepEqual(historyLoadCalls, [42], "explicit official preview uses its turnOutline seq");
+assert.ok(historyNodeMounted, "explicit preview mounts the previously unloaded prompt");
+const historyOverlay = overlays()[0];
+assert.match(historyOverlay.textContent, /archived prompt with attachment/, "full historical prompt replaces the short preview");
+assert.equal(historyOverlay.querySelector("[data-dsh-desktop-prompt-overlay-media]")?.querySelectorAll("img").length || 0, 1, "historical image is rendered from the real prompt DOM");
+assert.ok([...fileItems(historyOverlay)].some((node) => node.getAttribute("title") === "archived.pdf"), "historical file is rendered from the real prompt DOM");
+body.removeChild(turnTooltip);
+body.removeChild(turnButton);
+body.removeChild(activeTurnButton);
+if (historyNode?.parentNode) historyNode.parentNode.removeChild(historyNode);
+historyNodeMounted = false;
+window.dispatchEvent(new CustomEvent("pointermove"));
+
+// A session switch can be reported before the new history has hydrated. The old card must
+// disappear immediately instead of showing stale text or stale media from the previous session.
+const staleSessionText = overlay.textContent;
+window.dispatchEvent(new CustomEvent("dsh-desktop-active-session-changed", { detail: { sessionId: "session-new" } }));
+assert.equal(overlays().length, 0, "session change clears the stale detached overlay");
+assert.ok(staleSessionText && /report\.csv|second prompt|image\.png/.test(staleSessionText), "the pre-switch card contains the old session");
+
+// Once the new prompt DOM arrives, the same card path must render text, files and images together.
+for (const node of [u1, u2, u3]) node.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+// Virtualized history can remount the old bubble as a new node; its unchanged signature is
+// still stale and must not reopen the card.
+const staleRemount = u2.cloneNode(true);
+staleRemount.rect = { top: -220, bottom: -120, left: 0, right: 400 };
+scroll.appendChild(staleRemount);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 0, "a remounted old bubble stays hidden during session hydration");
+staleRemount.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+const u4 = addFlow("user", -220, -120);
+u4.innerText = "latest session prompt";
+const u4Image = new FakeElement("button");
+u4Image.setAttribute("role", "button");
+u4Image.setAttribute("title", "latest.png，点击查看原图");
+const u4ImageNode = new FakeElement("img");
+u4ImageNode.setAttribute("src", "https://example.test/latest.png");
+u4Image.appendChild(u4ImageNode);
+u4.appendChild(u4Image);
+const u4File = fixtureFile("latest-report.pdf", "new/latest-report.pdf");
+u4.appendChild(u4File);
+const a4 = addFlow("assistant", -100, 900);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 1, "new session content recreates the detached overlay");
+const latestOverlay = overlays()[0];
+assert.match(latestOverlay.textContent, /latest session prompt/, "new session text replaces stale text");
+assert.equal(latestOverlay.textContent.includes("second prompt with context"), false, "stale session text is not retained");
+assert.equal(latestOverlay.querySelector("[data-dsh-desktop-prompt-overlay-media]")?.querySelectorAll("img").length || 0, 1, "new session image is rendered");
+assert.deepEqual(
+  [...fileItems(latestOverlay)].map((node) => node.getAttribute("title")).filter(Boolean),
+  ["new/latest-report.pdf"],
+  "new session file is rendered without demoting the image"
+);
+assert.ok(fileItems(latestOverlay).some((node) => node.getAttribute("title") === "new/latest-report.pdf"), "new session file identity is preserved");
 
 window.dispatchEvent(new CustomEvent("dsh-desktop-hover-message-actions", { detail: false }));
 assert.equal(overlays().length, 0, "setting off removes the detached overlay");

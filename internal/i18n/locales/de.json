@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
   "bridge.status_desktop_down": "Desktop-App läuft nicht",
   "bridge.overlay_max_lines": "Max. Eingabezeilen",
-  "bridge.overlay_max_lines_hint": "Wie viele Zeilen Eingabetext die schwebende Karte anzeigt, bevor sie scrollt. Die Karte verkleinert sich weiterhin, um in den Platz über dem Chat-Eingabefeld zu passen, sodass sie das Eingabefeld nie verdeckt."
+  "bridge.overlay_max_lines_hint": "Wie viele Zeilen Eingabetext die schwebende Karte anzeigt, bevor sie scrollt. Die Karte verkleinert sich weiterhin, um in den Platz über dem Chat-Eingabefeld zu passen, sodass sie das Eingabefeld nie verdeckt.",
+  "bridge.overlay_load_older": "Ältere laden",
+  "bridge.overlay_loading": "Wird geladen…"
 }

@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "正在重连桌面端…",
   "bridge.status_desktop_down": "桌面端未运行",
   "bridge.overlay_max_lines": "文案最大显示行数",
-  "bridge.overlay_max_lines_hint": "悬浮卡片最多显示的文案行数，超出后可上下滑动查看。卡片同时会收窄以适配 Chat 输入框上方的空间，不会遮挡输入框。"
+  "bridge.overlay_max_lines_hint": "悬浮卡片最多显示的文案行数，超出后可上下滑动查看。卡片同时会收窄以适配 Chat 输入框上方的空间，不会遮挡输入框。",
+  "bridge.overlay_load_older": "加载更早",
+  "bridge.overlay_loading": "加载中…"
 }

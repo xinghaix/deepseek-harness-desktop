@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "Reconnecting to desktop...",
   "bridge.status_desktop_down": "Desktop app is not running",
   "bridge.overlay_max_lines": "Max prompt lines",
-  "bridge.overlay_max_lines_hint": "How many lines of prompt text the floating card shows before it scrolls. The card still shrinks to fit the space above the Chat input, so it never covers the composer."
+  "bridge.overlay_max_lines_hint": "How many lines of prompt text the floating card shows before it scrolls. The card still shrinks to fit the space above the Chat input, so it never covers the composer.",
+  "bridge.overlay_load_older": "Load older",
+  "bridge.overlay_loading": "Loading…"
 }

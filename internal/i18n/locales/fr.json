@@ -425,5 +425,7 @@
   "bridge.status_reconnecting": "Reconnexion au bureau…",
   "bridge.status_desktop_down": "L’appli bureau n’est pas en cours d’exécution",
   "bridge.overlay_max_lines": "Lignes d’invite max",
-  "bridge.overlay_max_lines_hint": "Nombre de lignes de texte d’invite que la carte flottante affiche avant de défiler. La carte se réduit encore pour s’ajuster à l’espace au-dessus du champ de saisie du Chat, afin de ne jamais recouvrir la zone de saisie."
+  "bridge.overlay_max_lines_hint": "Nombre de lignes de texte d’invite que la carte flottante affiche avant de défiler. La carte se réduit encore pour s’ajuster à l’espace au-dessus du champ de saisie du Chat, afin de ne jamais recouvrir la zone de saisie.",
+  "bridge.overlay_load_older": "Charger plus anciens",
+  "bridge.overlay_loading": "Chargement…"
 }
