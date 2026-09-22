@@ -15,8 +15,27 @@ const scheduleTimer = (fn, delay) => {
 const cancelTimer = (timer) => {
   if (timer) timer.cancelled = true;
 };
+let asyncMutationDelivery = false;
+let mutationDeliveryScheduled = false;
+let mutationDeliveryCount = 0;
+let mutationDeliveryLimit = Infinity;
+let mutationDeliveryError = null;
 const notifyMutation = () => {
-  for (const observer of [...observers]) observer.callback([]);
+  if (!asyncMutationDelivery) {
+    for (const observer of [...observers]) observer.callback([]);
+    return;
+  }
+  if (mutationDeliveryScheduled) return;
+  mutationDeliveryScheduled = true;
+  Promise.resolve().then(() => {
+    mutationDeliveryScheduled = false;
+    mutationDeliveryCount += 1;
+    if (mutationDeliveryCount > mutationDeliveryLimit) {
+      mutationDeliveryError = new Error("mutation delivery limit exceeded");
+      return;
+    }
+    for (const observer of [...observers]) observer.callback([]);
+  });
 };
 
 function splitSelectors(selector) {
@@ -483,6 +502,22 @@ batchDeleteConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dis
 await flushMicrotasks();
 assert.deepEqual(batchDeleteCalls, ["session-batch-delete-1", "session-batch-delete-2"], "batch delete must execute in list order");
 assert.equal(deleteList.querySelectorAll("li").length, 0, "successful batch delete must remove processed rows");
+
+// Real browsers deliver MutationObserver callbacks asynchronously. Re-run the
+// archived decoration under that delivery model so an identical text assignment
+// cannot hide an infinite observer loop behind the synchronous fixture shim.
+asyncMutationDelivery = true;
+mutationDeliveryScheduled = false;
+mutationDeliveryCount = 0;
+mutationDeliveryLimit = 40;
+mutationDeliveryError = null;
+const stableList = makeArchivedList(["session-batch-observer-stability"]);
+for (let i = 0; i < 64; i += 1) await Promise.resolve();
+assert.equal(mutationDeliveryError, null, "archived decoration must settle under async MutationObserver delivery");
+assert.ok(mutationDeliveryCount < mutationDeliveryLimit, "archived decoration must not continuously schedule MutationObserver work");
+assert.equal(stableList.querySelectorAll("[data-dsh-archived-session-select]").length, 1, "observer stability fixture must remain decorated");
+asyncMutationDelivery = false;
+stableList.remove();
 
 for (const cleanup of cleanups) cleanup();
 assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove injected menu nodes");

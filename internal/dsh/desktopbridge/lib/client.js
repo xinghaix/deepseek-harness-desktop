@@ -3536,7 +3536,10 @@ window.__ModuleLoader__.load({
 					selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
 					selectAll.disabled = busy || visibleIds.length === 0;
 				}
-				if (count) count.textContent = t("bridge.archived_batch_selected", selectedCount);
+				if (count) {
+					const selectedLabel = t("bridge.archived_batch_selected", selectedCount);
+					if (count.textContent !== selectedLabel) count.textContent = selectedLabel;
+				}
 				if (unarchive) unarchive.disabled = busy || selectedCount === 0;
 				if (deleteButton) {
 					deleteButton.disabled = busy || selectedCount === 0;
