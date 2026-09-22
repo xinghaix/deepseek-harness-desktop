@@ -177,6 +177,7 @@ window.__ModuleLoader__.load({
 		const PROMPT_OVERLAY_VARIANT_ATTR = "data-dsh-desktop-prompt-overlay-variant";
 		const PROMPT_OVERLAY_LOAD_OLDER_ATTR = "data-dsh-desktop-prompt-overlay-load-older";
 		const PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR = "data-dsh-desktop-prompt-overlay-encounter-older";
+		const PROMPT_OVERLAY_DIVIDER_ATTR = "data-dsh-desktop-prompt-overlay-divider";
 		// Height of the fading band at the bottom of the body, about one prompt line (.86rem at
 		// 1.45 line-height is ~20px). It is EXTRA space reserved on top of the configured line
 		// budget — see PROMPT_OVERLAY_CHROME_PX — so the fade is always a peek at the line below
@@ -411,6 +412,7 @@ window.__ModuleLoader__.load({
 			const timePath = toolbarPath + " [" + PROMPT_OVERLAY_TIME_ATTR + "]";
 			const actionPath = toolbarPath + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]";
 			const loadOlderPath = toolbarPath + " [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]";
+			const dividerPath = toolbarPath + " [" + PROMPT_OVERLAY_DIVIDER_ATTR + "]";
 			const overlay = root + " " + overlayPath;
 			const content = root + " " + contentPath;
 			const body = root + " " + bodyPath;
@@ -423,6 +425,7 @@ window.__ModuleLoader__.load({
 			const time = root + " " + timePath;
 			const action = root + " " + actionPath;
 			const loadOlder = root + " " + loadOlderPath;
+			const divider = root + " " + dividerPath;
 			// Descendant paths re-anchored on the overlay element, for `:hover`-prefixed selectors.
 			const toolbarSuffix = " [" + PROMPT_OVERLAY_TOOLBAR_ATTR + "]";
 			const bodySuffix = " [" + PROMPT_OVERLAY_BODY_ATTR + "]";
@@ -462,7 +465,7 @@ window.__ModuleLoader__.load({
 				// It is absolutely positioned: as a flow row BELOW the text it read as offset down
 				// for a single-line prompt, and for an attachment-only card it drifted a whole row
 				// lower still, because a "last line" of pure attachments is a tall row, not a line.
-				toolbar + " { position: absolute !important; z-index: 3 !important; right: " + PROMPT_OVERLAY_CONTENT_PAD + "px !important; box-sizing: content-box !important; max-width: calc(100% - 24px) !important; display: none !important; align-items: center !important; justify-content: flex-end !important; gap: " + PROMPT_OVERLAY_STRIP_GAP + "px !important; min-height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; padding: " + PROMPT_OVERLAY_STRIP_PAD + "px " + PROMPT_OVERLAY_STRIP_PAD_RIGHT + "px " + PROMPT_OVERLAY_STRIP_PAD + "px " + PROMPT_OVERLAY_STRIP_PAD_LEFT + "px !important; border-radius: 999px !important; background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-canvas, Canvas)) !important; box-shadow: 0 0 0 .5px color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 92%, transparent), 0 3px 12px -6px rgb(0 0 0 / 32%) !important; }",
+				toolbar + " { position: absolute !important; z-index: 3 !important; right: " + PROMPT_OVERLAY_CONTENT_PAD + "px !important; box-sizing: content-box !important; max-width: calc(100% - 24px) !important; display: none !important; align-items: stretch !important; justify-content: flex-end !important; min-height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; border-radius: 999px !important; background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-canvas, Canvas)) !important; box-shadow: 0 0 0 .5px color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 92%, transparent), 0 3px 12px -6px rgb(0 0 0 / 32%) !important; overflow: hidden !important; padding: 0 !important; }",
 				// Hidden by default and expanded on hover/focus. It must be REMOVED from layout while
 				// hidden: an opacity-only hide still reserved its row inside the card, which showed up
 				// as a permanent blank band under the text.
@@ -470,7 +473,7 @@ window.__ModuleLoader__.load({
 				// Softens the strip's appearance: revealing it also grows the card, and a hard pop
 				// reads as a glitch where a short fade reads as the control sliding in.
 				"@keyframes " + PROMPT_OVERLAY_STRIP_IN + " { from { opacity: 0; } to { opacity: 1; } }",
-				time + " { margin-right: 3px !important; color: var(--dsw-alias-text-tertiary, inherit) !important; font-size: " + PROMPT_OVERLAY_TIME_REM + " !important; line-height: 1 !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }",
+				time + " { margin-right: 3px !important; display: inline-flex !important; align-items: center !important; padding: 0 3px 0 6px !important; color: var(--dsw-alias-text-tertiary, inherit) !important; font-size: " + PROMPT_OVERLAY_TIME_REM + " !important; line-height: 1 !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }",
 				// Buttons follow the official Chat control shape: a hairline circle with a dark label tooltip.
 				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "] { position: relative !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; width: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important; background: transparent !important; color: var(--dsw-alias-text-secondary, inherit) !important; cursor: pointer !important; font-size: .84rem !important; line-height: 1 !important; transition: background .12s ease, color .12s ease, transform .12s ease !important; }",
 				// ...and BARE while idle: a permanently drawn hairline circle put two nested
@@ -481,11 +484,14 @@ window.__ModuleLoader__.load({
 				// Keyboard reach must stay visible even with the disc gone. Blue, so focus can never
 				// be mistaken for the green "copied" state.
 				toolbar + " [" + PROMPT_OVERLAY_ACTION_ATTR + "]:focus-visible { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 14%, transparent) !important; color: var(--dsw-alias-text-primary, inherit) !important; outline: 2px solid color-mix(in srgb, var(--dsw-alias-text-link, #3b74e0) 72%, transparent) !important; outline-offset: 1px !important; }",
-				loadOlder + " { position: relative !important; display: inline-flex !important; align-items: center !important; gap: 4px !important; height: " + PROMPT_OVERLAY_ACTION_SIZE + "px !important; padding: 0 8px !important; border: 1px solid color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 25%, transparent) !important; border-radius: 999px !important; background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 8%, transparent) !important; color: var(--dsw-alias-text-link, #2563eb) !important; cursor: pointer !important; font-size: .72rem !important; font-weight: 600 !important; line-height: 1 !important; white-space: nowrap !important; transition: background .12s ease, color .12s ease, border-color .12s ease !important; }",
-				loadOlder + ":hover { background: var(--dsw-alias-text-link, #2563eb) !important; color: #fff !important; border-color: var(--dsw-alias-text-link, #2563eb) !important; }",
+				loadOlder + " { position: relative !important; display: inline-flex !important; align-items: center !important; gap: 4px !important; height: 100% !important; min-height: 24px !important; padding: 0 10px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: var(--dsw-alias-text-secondary, #334155) !important; cursor: pointer !important; font-size: .72rem !important; font-weight: 500 !important; line-height: 1 !important; white-space: nowrap !important; transition: background .12s ease, color .12s ease !important; }",
+				loadOlder + ":hover { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 10%, transparent) !important; color: var(--dsw-alias-text-primary, #0f172a) !important; }",
+				loadOlder + ":active { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 18%, transparent) !important; }",
 				loadOlder + " [" + PROMPT_OVERLAY_GLYPH_ATTR + "] { display: block !important; width: 11px !important; height: 11px !important; pointer-events: none !important; }",
+				divider + " { display: block !important; width: 1px !important; background: color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; margin: 3px 0 !important; flex-shrink: 0 !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] " + toolbarSuffix + " { display: flex !important; }",
-				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "] { background: var(--dsw-alias-text-link, #2563eb) !important; color: #fff !important; border-color: var(--dsw-alias-text-link, #2563eb) !important; }",
+				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "] { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 12%, transparent) !important; color: var(--dsw-alias-text-link, #2563eb) !important; }",
+				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]:hover { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 20%, transparent) !important; }",
 				// Confirmed copy: the glyph turns green and NOTHING else changes (the quiet option the
 				// user picked). The disc stays suppressed even while hovered, or the state would read
 				// as a green check inside a grey circle instead of "only the ✓".
@@ -1185,14 +1191,7 @@ window.__ModuleLoader__.load({
             const toolbar = document.createElement("div");
             toolbar.setAttribute(PROMPT_OVERLAY_TOOLBAR_ATTR, "");
             toolbar.setAttribute("aria-label", t("bridge.overlay_toolbar"));
-            // 1. Metadata time on the far left
-            if (times.length) {
-                const time = document.createElement("time");
-                time.setAttribute(PROMPT_OVERLAY_TIME_ATTR, "");
-                time.textContent = times[0];
-                toolbar.appendChild(time);
-            }
-            // 2. Load-older button inside the action controls area, at its far left
+            // 1. Load-older button on the far left of the toolbar
             if (showOlder) {
                 const olderBtn = document.createElement("button");
                 olderBtn.setAttribute("type", "button");
@@ -1226,6 +1225,20 @@ window.__ModuleLoader__.load({
                     }, 1200);
                 });
                 toolbar.appendChild(olderBtn);
+
+                // Divider when there are also times or action buttons
+                if (times.length > 0 || controls.length > 0) {
+                    const divider = document.createElement("span");
+                    divider.setAttribute(PROMPT_OVERLAY_DIVIDER_ATTR, "");
+                    toolbar.appendChild(divider);
+                }
+            }
+            // 2. Metadata time
+            if (times.length) {
+                const time = document.createElement("time");
+                time.setAttribute(PROMPT_OVERLAY_TIME_ATTR, "");
+                time.textContent = times[0];
+                toolbar.appendChild(time);
             }
             for (const target of controls) {
                 const label = operationLabel(target);

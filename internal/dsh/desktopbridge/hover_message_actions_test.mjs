@@ -594,7 +594,7 @@ assert.match(hoverStyle.textContent, /prompt-overlay-glyph\] \{ display: block !
 assert.match(hoverStyle.textContent, /prompt-overlay-toolbar\] \{ position: absolute !important[^}]*box-sizing: content-box !important/);
 // Compact on purpose: 22px control, 1px vertical padding, 2px gap. At 26px with 16px glyphs the
 // pill crowded the very line it hangs on and read as a second toolbar.
-assert.match(hoverStyle.textContent, /prompt-overlay-toolbar\] \{ position: absolute !important[^}]*gap: 2px !important; min-height: 22px !important; padding: 1px 3px 1px 7px !important/);
+assert.match(hoverStyle.textContent, /prompt-overlay-toolbar\] \{ position: absolute !important[^}]*min-height: 22px !important;[^}]*overflow: hidden !important; padding: 0 !important/);
 assert.doesNotMatch(hoverStyle.textContent, /prompt-overlay-toolbar\] \{ position: absolute[^}]*min-height: 26px/, "the strip is not the old 26px pill");
 assert.doesNotMatch(hoverStyle.textContent, /position:\s*sticky/);
 // The strip is absolutely positioned on purpose (see above); it is the only overlay element that
@@ -724,10 +724,13 @@ assert.equal(toolbarActions.length, 4, "render all semantic native actions in th
 const embeddedLoadOlder = toolbar.querySelector("[data-dsh-desktop-prompt-overlay-load-older]");
 assert.ok(embeddedLoadOlder, "load-older action is embedded in the overlay toolbar");
 assert.match(embeddedLoadOlder.textContent, /加载更早|Load older/);
-// Verify ordering: metadata time on the left, then load-older at the far left of the action controls, then copy
-assert.equal(toolbar.childNodes[0], nativeTime, "timestamp is on the left");
-assert.equal(toolbar.childNodes[1], embeddedLoadOlder, "load-older is placed at the far left of the action controls");
-assert.equal(toolbar.childNodes[2], toolbarActions[0], "copy action follows load-older");
+// Verify Option 2B ordering: load-older at the far left of the capsule, then divider, then time, then actions
+assert.equal(toolbar.childNodes[0], embeddedLoadOlder, "load-older is placed at the far left of the capsule");
+const divider = toolbar.querySelector("[data-dsh-desktop-prompt-overlay-divider]");
+assert.ok(divider, "divider separates load-older from metadata/actions");
+assert.equal(toolbar.childNodes[1], divider, "divider follows load-older");
+assert.equal(toolbar.childNodes[2], nativeTime, "timestamp follows divider");
+assert.equal(toolbar.childNodes[3], toolbarActions[0], "copy action follows timestamp");
 embeddedLoadOlder.click();
 assert.equal(olderButton.clicked, 1, "clicking embedded load-older triggers native load-older button");
 // Pointer movement inside our own card must not reselect the official active turn and rebuild the
