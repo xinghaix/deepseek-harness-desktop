@@ -1368,6 +1368,35 @@ if (historyNode?.parentNode) historyNode.parentNode.removeChild(historyNode);
 historyNodeMounted = false;
 window.dispatchEvent(new CustomEvent("pointermove"));
 
+// Regression: the official rail can identify the current turn by outline metadata even when
+// the mounted prompt bubble has no data-chat-turn attribute. The visible bubble and its history
+// preview are the same prompt and must never appear simultaneously.
+const savedDuplicateFixtureRects = new Map([
+  [u1, { ...u1.rect }], [u2, { ...u2.rect }], [u3, { ...u3.rect }],
+  [a1, { ...a1.rect }], [a2, { ...a2.rect }], [a3, { ...a3.rect }]
+]);
+for (const node of savedDuplicateFixtureRects.keys()) node.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+const visibleHistoryPrompt = new FakeElement("div");
+visibleHistoryPrompt.setAttribute("data-chat-flow-kind", "user");
+visibleHistoryPrompt.setAttribute("data-chat-flow-key", "visible-history-u0");
+visibleHistoryPrompt.rect = { top: 140, bottom: 220, left: 0, right: 400 };
+visibleHistoryPrompt.innerText = "archived prompt with attachment";
+scroll.appendChild(visibleHistoryPrompt);
+const visibleHistoryTurnButton = new FakeElement("button");
+visibleHistoryTurnButton.setAttribute("aria-current", "true");
+visibleHistoryTurnButton.setAttribute("aria-label", "跳转并加载第 0 轮");
+body.appendChild(visibleHistoryTurnButton);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 0, "history preview is mutually exclusive with its visible in-chat prompt");
+visibleHistoryPrompt.rect = { top: -240, bottom: -160, left: 0, right: 400 };
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 1, "the matching prompt can still mirror after it leaves the viewport");
+assert.match(overlays()[0].textContent, /archived prompt with attachment/);
+body.removeChild(visibleHistoryTurnButton);
+scroll.removeChild(visibleHistoryPrompt);
+for (const [node, rect] of savedDuplicateFixtureRects) node.rect = rect;
+window.dispatchEvent(new CustomEvent("pointermove"));
+
 // A session switch can be reported before the new history has hydrated. The old card must
 // disappear immediately instead of showing stale text or stale media from the previous session.
 const staleSessionText = overlay.textContent;

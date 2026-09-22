@@ -938,6 +938,27 @@ window.__ModuleLoader__.load({
             }
             return null;
         }
+        function normalizedPromptIdentity(value) {
+            return normalizePreviewText(value).replace(/\s+/g, " ").trim();
+        }
+        function promptMatchesHistoryEntry(source, entry) {
+            if (!source || !entry) return false;
+            const turn = Number(entry.turn);
+            const sourceTurn = promptTurn(source);
+            // A real turn marker is authoritative. Only nodes without one need the text fallback;
+            // otherwise two different turns with identical wording could be mistaken for one.
+            if (sourceTurn !== null) return Number.isSafeInteger(turn) && sourceTurn === turn;
+            const expected = normalizedPromptIdentity(entry.prompt);
+            if (expected.length < 8) return false;
+            const actual = normalizedPromptIdentity(collectPromptPreviewParts(source)
+                .filter((part) => part.kind === "text")
+                .map((part) => part.value)
+                .join(" "));
+            if (!actual) return false;
+            if (actual === expected) return true;
+            const prefix = expected.slice(0, Math.min(64, expected.length)).replace(/[.…]+$/, "").trim();
+            return prefix.length >= 8 && actual.includes(prefix);
+        }
         function outlineEntries(value) {
             if (!Array.isArray(value)) return [];
             return value.filter((entry) => {
@@ -1938,18 +1959,15 @@ window.__ModuleLoader__.load({
 				const top = scrollRoot && typeof scrollRoot.getBoundingClientRect === "function"
 					? Number(scrollRoot.getBoundingClientRect().top) || 0
 					: 0;
-				const bottom = scrollRoot && typeof scrollRoot.getBoundingClientRect === "function"
-					? (Number(scrollRoot.getBoundingClientRect().bottom) > top
-						? Number(scrollRoot.getBoundingClientRect().bottom)
-						: top + (Number(scrollRoot.clientHeight) || (typeof window !== "undefined" ? window.innerHeight : 0)))
-					: Infinity;
-				const loaded = promptNodes().find((node) => promptTurn(node) === target.turn);
-				if (loaded) {
-					// The prompt is loaded in DOM.
-					// If it has not scrolled past the top, it is still visible in the chat flow;
-					// the floating overlay and the in-chat message bubble must be strictly mutually exclusive.
-					if (!promptScrolledPast(loaded, top)) return null;
-					return loaded;
+				// DSH's rail metadata is more stable than the message DOM, but it can point at a
+				// mounted prompt whose node has no data-chat-turn. Match by turn first and by the
+				// normalized prompt text as a fallback so a visible bubble cannot be mirrored above itself.
+				const matchingPrompt = promptNodes().find((node) => promptMatchesHistoryEntry(node, target));
+				if (matchingPrompt) {
+					// A matching bubble that has re-entered the conversation viewport owns the display;
+					// only its fully scrolled-past state may be represented by the detached mirror.
+					if (!promptScrolledPast(matchingPrompt, top)) return null;
+					return matchingPrompt;
 				}
 				return createHistoryPreview(target);
 			};
