@@ -734,8 +734,11 @@ window.__ModuleLoader__.load({
 		// DSH owns the older-history control. Find it structurally instead of matching one locale's
 		// label, so the overlay can reserve its lane without replacing or duplicating the native UI.
 		function officialLoadOlderButton(root) {
-			if (!root || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
-			for (const button of document.querySelectorAll("button")) {
+			if (!root || typeof document === "undefined") return null;
+			const buttons = typeof root.querySelectorAll === "function"
+				? root.querySelectorAll("button")
+				: (typeof document.querySelectorAll === "function" ? document.querySelectorAll("button") : []);
+			for (const button of buttons) {
 				if (!button || isPromptOverlayNode(button)) continue;
 				let parent = button.parentElement;
 				for (let depth = 0; parent && parent !== root && depth < 5; depth += 1, parent = parent.parentElement) {
@@ -1752,7 +1755,9 @@ window.__ModuleLoader__.load({
 				requested: new Set(),
 				previewTarget: null,
 				previewNode: null,
-				previewKey: ""
+				previewKey: "",
+				boundaryPreviewNode: null,
+				boundaryPreviewKey: ""
 			};
 			const updateHistoryState = () => {
 				state.hasOlderTarget = Boolean(history.previewTarget && typeof history.session?.loadThrough === "function");
@@ -1802,6 +1807,8 @@ window.__ModuleLoader__.load({
 				history.previewTarget = null;
 				history.previewNode = null;
 				history.previewKey = "";
+				history.boundaryPreviewNode = null;
+				history.boundaryPreviewKey = "";
 			};
 			const readHistoryOutline = () => {
 				const value = history.outlineFace?.getSnapshot?.() ?? history.session?.projections?.get?.("turnOutline");
@@ -1949,9 +1956,43 @@ window.__ModuleLoader__.load({
 					return target;
 				}
 				history.previewTarget = null;
-				history.previewNode = null;
-				history.previewKey = "";
+				// Keep the lightweight preview node cached. The native-boundary fallback can be
+				// selected on consecutive scroll frames; clearing it here would create a fresh DOM
+				// source every frame and re-enter MutationObserver-driven sync indefinitely.
 				return null;
+			};
+			// When the native older-history control is visible but no rail tooltip was hovered,
+			// content-visibility may leave us without a measurable offscreen DOM candidate. Use the
+			// newest outline entry before the visible prompt as a passive text fallback; never choose
+			// the same entry as a prompt that is already visible in the conversation.
+			const historyBoundaryFallback = (root) => {
+				if (!history.outline.length) return null;
+				const prompts = promptNodes();
+				const rootRect = root && typeof root.getBoundingClientRect === "function" ? root.getBoundingClientRect() : null;
+				const top = rootRect ? Number(rootRect.top) || 0 : 0;
+				const bottom = rootRect && Number(rootRect.bottom) > top
+					? Number(rootRect.bottom)
+					: top + (Number(root?.clientHeight) || (typeof window !== "undefined" ? Number(window.innerHeight) || 0 : 0));
+				const visible = prompts.filter((node) => {
+					if (!node || typeof node.getBoundingClientRect !== "function") return false;
+					const rect = node.getBoundingClientRect();
+					return Number(rect.bottom) > top + PROMPT_OVERLAY_EPSILON && Number(rect.top) < bottom - PROMPT_OVERLAY_EPSILON;
+				});
+				const ordered = [...history.outline].sort((a, b) => Number(a.turn) - Number(b.turn));
+				const visibleEntries = ordered.filter((entry) => visible.some((node) => promptMatchesHistoryEntry(node, entry)));
+				const firstVisibleTurn = visibleEntries.length ? Math.min(...visibleEntries.map((entry) => Number(entry.turn))) : Infinity;
+				const candidate = [...ordered].reverse().find((entry) => {
+					if (Number(entry.turn) >= firstVisibleTurn) return false;
+					return !prompts.some((node) => promptMatchesHistoryEntry(node, entry));
+				}) || (!visibleEntries.length ? [...ordered].reverse().find((entry) => !prompts.some((node) => promptMatchesHistoryEntry(node, entry))) : null);
+				if (!candidate) return null;
+				const key = history.sessionId + ":" + candidate.turn + ":" + candidate.seq + ":" + normalizedPromptIdentity(candidate.prompt);
+				if (!history.boundaryPreviewNode || history.boundaryPreviewKey !== key) {
+					history.boundaryPreviewNode = createHistoryPreview(candidate);
+					history.boundaryPreviewKey = key;
+				}
+				history.previewTarget = candidate;
+				return history.boundaryPreviewNode;
 			};
 			const historyPreviewSource = (target, root) => {
 				if (!target) return null;
@@ -1990,8 +2031,26 @@ window.__ModuleLoader__.load({
 					syncHistoryBinding();
 					const historyTarget = state.awaitingSessionSync ? null : syncOfficialHistoryPreview();
 					updateHistoryState();
+					const rootRect = root && typeof root.getBoundingClientRect === "function" ? root.getBoundingClientRect() : null;
+					const boundaryTop = rootRect ? Number(rootRect.top) || 0 : 0;
+					const boundaryLeft = rootRect ? Number(rootRect.left) || 0 : 0;
+					const boundaryWidth = Number(root?.clientWidth) || (rootRect ? Math.max(0, Number(rootRect.right) - boundaryLeft) : 0);
+					const boundaryFloor = rootRect && Number(rootRect.bottom) > boundaryTop ? Number(rootRect.bottom) : boundaryTop;
+					// Probe the native boundary before choosing a candidate. This is deliberately cheaper than
+					// computeOverlayMetrics(): composer measurement scans the whole document and is not needed
+					// to decide whether DSH's own load-older control is currently in the conversation lane.
+					const encounterOlder = Boolean(root && rootRect && isOfficialLoadOlderEncountered(root, rootRect, boundaryLeft, boundaryWidth, boundaryTop, boundaryFloor));
+					const protectedPrompt = promptNodes().some((node) => {
+						const rect = node?.getBoundingClientRect?.();
+						return rect && Number(rect.top) < boundaryTop + PROMPT_OVERLAY_TOP_PROTECTION_PX
+							&& Number(rect.bottom) > boundaryTop + PROMPT_OVERLAY_EPSILON;
+					});
 					const historySource = historyPreviewSource(historyTarget, root);
-					const rawCandidate = historySource || acceptFreshSessionPrompt(pickStickyPrompt(root));
+					const stickyCandidate = acceptFreshSessionPrompt(pickStickyPrompt(root));
+					const boundarySource = !state.awaitingSessionSync && !protectedPrompt && !historySource && !stickyCandidate && encounterOlder
+						? historyBoundaryFallback(root)
+						: null;
+					const rawCandidate = historySource || stickyCandidate || boundarySource;
 					const topEdge = root && typeof root.getBoundingClientRect === "function"
 						? Number(root.getBoundingClientRect().top) || 0
 						: 0;
@@ -2055,12 +2114,23 @@ window.__ModuleLoader__.load({
 			let observer = null;
 			if (typeof MutationObserver === "function" && document.documentElement) {
 				observer = new MutationObserver((records) => {
+					let relevant = false;
 					for (const record of records || []) {
 						const target = record && record.target;
 						if (!target || (state.host && (target === state.host || (state.host.contains && state.host.contains(target))))) continue;
+						// Prompt previews are assembled in detached subtrees before the host is mounted.
+						// Browser MutationObserver delivery is asynchronous, but the replay harness and some
+						// WebView shims can invoke callbacks during appendChild; do not schedule a re-entrant
+						// frame for a node that is not connected to the document yet.
+						let connected = target === document.documentElement || target === document.body;
+						for (let current = target, depth = 0; !connected && current && depth < 64; depth += 1, current = current.parentNode) {
+							connected = current === document.documentElement;
+						}
+						if (!connected) continue;
+						relevant = true;
 						if (state.source && (target === state.source || (state.source.contains && state.source.contains(target)) || hasPromptRelation(target, state.source))) state.needsRefresh = true;
 					}
-					schedule();
+					if (relevant) schedule();
 				});
 				observer.observe(document.documentElement, {
 					childList: true,
@@ -2847,7 +2917,29 @@ window.__ModuleLoader__.load({
 				}
 			};
 			paint();
-			const obs = new MutationObserver(() => paint());
+			const obs = new MutationObserver((records) => {
+				// The prompt mirror is mounted under body and can create many child nodes while it
+				// paints. None of those mutations can change the desktop settings row, and ignoring them
+				// avoids needless repaint/replacement churn (especially in synchronous WebView shims).
+				const isConnected = (node) => {
+					if (!node) return false;
+					if (node === document.documentElement || node === document.body) return true;
+					let current = node;
+					for (let depth = 0; current && depth < 64; depth += 1, current = current.parentNode) {
+						if (current === document.documentElement) return true;
+					}
+					return false;
+				};
+				const relevant = (records || []).some((record) => {
+					const target = record?.target;
+					// Detached prompt-preview subtrees are assembled before they are mounted. Real
+					// MutationObserver delivery sees them after mounting, while synchronous replay shims
+					// can deliver each append immediately; neither should repaint the nav row.
+					if (!isConnected(target) || target === document.body) return false;
+					return !(target.hasAttribute?.(PROMPT_OVERLAY_ATTR) || target.closest?.("[" + PROMPT_OVERLAY_ATTR + "]"));
+				});
+				if (relevant) paint();
+			});
 			obs.observe(document.documentElement, { childList: true, subtree: true });
 			return () => obs.disconnect();
 		}

@@ -1401,6 +1401,38 @@ scroll.removeChild(visibleHistoryPrompt);
 for (const [node, rect] of savedDuplicateFixtureRects) node.rect = rect;
 window.dispatchEvent(new CustomEvent("pointermove"));
 
+// Regression: reaching DSH's native "加载更早" boundary must be enough to surface a passive
+// turnOutline mirror even without hovering the official right-side prompt preview. Older virtualized
+// bubbles may have no measurable DOM candidate, so the boundary needs a history fallback.
+const savedBoundaryOlderRect = { ...olderButton.rect };
+const savedBoundaryScrollRect = { ...scroll.rect };
+const savedBoundaryRects = new Map([
+  [u1, { ...u1.rect }], [u2, { ...u2.rect }], [u3, { ...u3.rect }],
+  [a1, { ...a1.rect }], [a2, { ...a2.rect }], [a3, { ...a3.rect }]
+]);
+// Keep this regression independent from the preceding resize fixtures: the boundary prompt is
+// intentionally just outside the 56px top-protection band.
+scroll.rect = { top: 80, bottom: 800, left: 0, right: 800 };
+for (const node of savedBoundaryRects.keys()) node.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+olderButton.rect = { top: 80, bottom: 116, left: 240, right: 320 };
+const boundaryVisiblePrompt = new FakeElement("div");
+boundaryVisiblePrompt.setAttribute("data-chat-flow-kind", "user");
+boundaryVisiblePrompt.setAttribute("data-chat-flow-key", "boundary-visible-prompt");
+boundaryVisiblePrompt.rect = { top: 140, bottom: 220, left: 0, right: 400 };
+boundaryVisiblePrompt.innerText = "current visible prompt";
+scroll.appendChild(boundaryVisiblePrompt);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 1, "native load-older boundary creates a passive history overlay without hover");
+assert.match(overlays()[0].textContent, /archived prompt with attachment/, "boundary fallback uses turnOutline text");
+assert.deepEqual(historyLoadCalls, [42], "boundary fallback stays passive until the integrated action is clicked");
+assert.equal(overlays()[0].hasAttribute("data-dsh-desktop-prompt-overlay-encounter-older"), true, "boundary fallback enters encounter-older mode");
+assert.ok(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), "boundary fallback exposes integrated load-older");
+scroll.removeChild(boundaryVisiblePrompt);
+scroll.rect = savedBoundaryScrollRect;
+olderButton.rect = savedBoundaryOlderRect;
+for (const [node, rect] of savedBoundaryRects) node.rect = rect;
+window.dispatchEvent(new CustomEvent("pointermove"));
+
 // A session switch can be reported before the new history has hydrated. The old card must
 // disappear immediately instead of showing stale text or stale media from the previous session.
 const staleSessionText = overlay.textContent;
