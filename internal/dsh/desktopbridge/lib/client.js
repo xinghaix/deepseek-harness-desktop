@@ -2098,11 +2098,11 @@ window.__ModuleLoader__.load({
 				// Re-running selection there can swap the source under the pointer and restart the
 				// toolbar reveal animation, which appears as copy/time flicker on first hover.
 				if (state.host && target && (target === state.host || state.host.contains?.(target))) return;
-				// pointermove is a noisy, retargetable event: while entering the animated capsule the
-				// browser can briefly report BODY (or another unrelated node) as the target. Only let a
-				// pointermove from an official history control refresh selection; pointerover/focus events
-				// still handle entering the control and tooltip itself.
-				if (event?.type === "pointermove" && target) {
+				// Pointer events are noisy around the animated capsule: entering the native load-older
+				// action must not be mistaken for hovering DSH's official history preview. Only let
+				// pointerover/pointermove from an official history control refresh selection; focus events
+				// still handle keyboard entry into the control and tooltip itself.
+				if ((event?.type === "pointerover" || event?.type === "pointermove") && target) {
 					const control = typeof target.closest === "function"
 						? target.closest("button, [role='button'], [role='tooltip']")
 						: null;

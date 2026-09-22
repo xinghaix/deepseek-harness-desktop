@@ -737,12 +737,18 @@ assert.equal(toolbar.childNodes[2], nativeTime, "timestamp follows divider");
 assert.equal(toolbar.childNodes[3], toolbarActions[0], "copy action follows timestamp");
 embeddedLoadOlder.click();
 assert.equal(olderButton.clicked, 1, "clicking embedded load-older triggers native load-older button");
+// Hovering the native load-older boundary control must not look like hovering the official history
+// preview. It is a passive action target, not a reason to replace the toolbar under the pointer.
 // Pointer movement inside our own card must not reselect the official active turn and rebuild the
 // toolbar under the pointer. That rebuild restarts the strip animation and causes first-hover flicker.
 const activeTurnForHoverRegression = new FakeElement("button");
 body.appendChild(activeTurnForHoverRegression);
 activeTurnForHoverRegression.setAttribute("aria-current", "true");
 activeTurnForHoverRegression.setAttribute("aria-label", "跳转并加载第 0 轮");
+const nativeLoadOlderClicksBeforeHover = olderButton.clicked;
+window.dispatchEvent({ type: "pointerover", target: olderButton });
+assert.equal(olderButton.clicked, nativeLoadOlderClicksBeforeHover, "hovering native load-older must not click it");
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "hovering native load-older must preserve the toolbar");
 window.dispatchEvent({ type: "pointermove", target: overlay });
 assert.equal(overlays()[0], overlay, "hovering the plugin overlay must preserve its host");
 assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "hovering the plugin overlay must preserve its toolbar");
