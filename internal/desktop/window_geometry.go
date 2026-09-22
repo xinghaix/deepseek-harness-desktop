@@ -71,7 +71,7 @@ func ResolveChatWindowGeometry(saved *desktopstate.WindowState, screens []*appli
 	var targetScreen *application.Screen
 	displayChanged := false
 
-	if saved != nil && (saved.DisplayID != "" || saved.DisplayName != "") {
+	if saved != nil {
 		for _, s := range screens {
 			if s == nil {
 				continue
@@ -82,6 +82,12 @@ func ResolveChatWindowGeometry(saved *desktopstate.WindowState, screens []*appli
 			}
 			if targetScreen == nil && saved.DisplayName != "" && s.Name == saved.DisplayName {
 				targetScreen = s
+			}
+			if targetScreen == nil && s.Bounds.Width > 0 && s.Bounds.Height > 0 {
+				if saved.X >= s.Bounds.X && saved.X < s.Bounds.X+s.Bounds.Width &&
+					saved.Y >= s.Bounds.Y && saved.Y < s.Bounds.Y+s.Bounds.Height {
+					targetScreen = s
+				}
 			}
 		}
 	}
@@ -113,31 +119,43 @@ func ResolveChatWindowGeometry(saved *desktopstate.WindowState, screens []*appli
 		}
 	}
 
-	initialPosition := application.WindowCentered
-	relX := 0
-	relY := 0
+	initialPosition := application.WindowXY
+	finalX := 0
+	finalY := 0
 
-	if !displayChanged && saved != nil && saved.X >= 0 && saved.Y >= 0 && saved.X <= MaxCoordinate && saved.Y <= MaxCoordinate && targetScreen != nil {
+	if targetScreen != nil && targetScreen.WorkArea.Width > 0 && targetScreen.WorkArea.Height > 0 {
+		waX := targetScreen.WorkArea.X
+		waY := targetScreen.WorkArea.Y
 		waW := targetScreen.WorkArea.Width
 		waH := targetScreen.WorkArea.Height
-		if waW > 0 && waH > 0 {
-			maxX := waW - width
-			if maxX < 0 {
-				maxX = 0
+
+		if displayChanged || saved == nil || saved.X < -MaxCoordinate || saved.X > MaxCoordinate || saved.Y < -MaxCoordinate || saved.Y > MaxCoordinate {
+			initialPosition = application.WindowCentered
+			finalX = waX + (waW-width)/2
+			finalY = waY + (waH-height)/2
+		} else {
+			minX := waX
+			maxX := waX + waW - width
+			minY := waY
+			maxY := waY + waH - height
+			if maxX < minX {
+				maxX = minX
 			}
-			maxY := waH - height
-			if maxY < 0 {
-				maxY = 0
+			if maxY < minY {
+				maxY = minY
 			}
-			relX = saved.X
-			if relX > maxX {
-				relX = maxX
+			finalX = saved.X
+			if finalX < minX {
+				finalX = minX
+			} else if finalX > maxX {
+				finalX = maxX
 			}
-			relY = saved.Y
-			if relY > maxY {
-				relY = maxY
+			finalY = saved.Y
+			if finalY < minY {
+				finalY = minY
+			} else if finalY > maxY {
+				finalY = maxY
 			}
-			initialPosition = application.WindowXY
 		}
 	}
 
@@ -145,9 +163,9 @@ func ResolveChatWindowGeometry(saved *desktopstate.WindowState, screens []*appli
 		Width:           width,
 		Height:          height,
 		InitialPosition: initialPosition,
-		X:               relX,
-		Y:               relY,
-		Screen:          targetScreen,
+		X:               finalX,
+		Y:               finalY,
+		Screen:          nil,
 		StartState:      startState,
 	}
 }

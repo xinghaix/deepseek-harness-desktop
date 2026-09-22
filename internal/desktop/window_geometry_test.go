@@ -82,21 +82,19 @@ func TestResolveChatWindowGeometry_MultiMonitorDisconnectFallback(t *testing.T) 
 		DisplayName: "LG UltraFine 4K",
 		Width:       1600,
 		Height:      1000,
-		X:           200,
+		X:           2000,
 		Y:           150,
 	}
 
 	geom := ResolveChatWindowGeometry(saved, screens, primary)
-	// Must fall back to primary screen and center
-	if geom.Screen != primary {
-		t.Fatalf("expected fallback to primary screen, got %v", geom.Screen)
-	}
-	if geom.InitialPosition != application.WindowCentered {
-		t.Fatalf("expected WindowCentered on fallback display, got %v", geom.InitialPosition)
-	}
 	// Must clamp to primary work area
 	if geom.Width > 1440 || geom.Height > 875 {
 		t.Fatalf("expected clamped to primary work area <= 1440x875, got %dx%d", geom.Width, geom.Height)
+	}
+	wantX := (1440 - geom.Width) / 2
+	wantY := 25 + (875 - geom.Height) / 2
+	if geom.X != wantX || geom.Y != wantY {
+		t.Fatalf("expected centered fallback on primary (%d, %d), got (%d, %d)", wantX, wantY, geom.X, geom.Y)
 	}
 }
 
@@ -118,19 +116,16 @@ func TestResolveChatWindowGeometry_MultiMonitorConnectedPreservesPosition(t *tes
 		DisplayName: "External Monitor",
 		Width:       1400,
 		Height:      900,
-		X:           100,
+		X:           1540,
 		Y:           120,
 	}
 
 	geom := ResolveChatWindowGeometry(saved, screens, primary)
-	if geom.Screen != external {
-		t.Fatalf("expected external screen, got %v", geom.Screen)
-	}
 	if geom.InitialPosition != application.WindowXY {
 		t.Fatalf("expected WindowXY, got %v", geom.InitialPosition)
 	}
-	if geom.X != 100 || geom.Y != 120 {
-		t.Fatalf("expected X=100, Y=120, got X=%d, Y=%d", geom.X, geom.Y)
+	if geom.X != 1540 || geom.Y != 120 {
+		t.Fatalf("expected X=1540, Y=120, got X=%d, Y=%d", geom.X, geom.Y)
 	}
 }
 

@@ -111,6 +111,26 @@ assert.equal(detached, "session-active-delete", "active deletion must detach wor
 
 artifacts = [];
 services.agents.get = () => undefined;
+let staleUnarchived = "";
+const staleDetached = [];
+services.workspaceRegistry = {
+  archivedSessionIds: ["session-stale"],
+  async unarchiveSession(id) { staleUnarchived = id; },
+  list() {
+    return [
+      { sessionIds: [], async detachSession(id) { staleDetached.push(["one", id]); } },
+      { sessionIds: [], async detachSession(id) { staleDetached.push(["two", id]); } },
+    ];
+  },
+};
+emittedEvents.length = 0;
+const stale = await request("session-stale", "stale");
+assert.equal(stale.ok, true, "archived metadata without an artifact must still be cleanable");
+assert.deepEqual(stale.value, { sessionId: "session-stale", deleted: true });
+assert.equal(staleUnarchived, "session-stale");
+assert.deepEqual(staleDetached, [["one", "session-stale"], ["two", "session-stale"]]);
+assert.deepEqual(emittedEvents, [["api-session/removed", "session-stale"]]);
+
 const missing = await request("session-missing", "missing");
 assert.equal(missing.ok, false);
 assert.equal(missing.error.code, "desktop-bridge/delete-not-found");

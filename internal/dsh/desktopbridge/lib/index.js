@@ -365,18 +365,27 @@ async function deleteSessionNow(ctx, id) {
 	}
 	const agent = typeof agents?.get === "function" ? agents.get(id) : undefined;
 	const liveSession = typeof sessions?.get === "function" ? sessions.get(id) : undefined;
-
-	if (target === undefined && agent === undefined && liveSession === undefined) {
+	const registry = get("workspaceRegistry");
+	let archivedSessionIds;
+	try { archivedSessionIds = registry?.archivedSessionIds; } catch { archivedSessionIds = undefined; }
+	const hasArchivedReference = Array.isArray(archivedSessionIds) && archivedSessionIds.includes(id);
+	// A renderer row can outlive its session artifact when the archive registry
+	// still contains the ID. Treat that host-owned reference as a metadata-only
+	// deletion: it is safe to unarchive/detach, but arbitrary unknown IDs remain
+	// fail-closed below.
+	const metadataOnly = target === undefined && agent === undefined && liveSession === undefined && hasArchivedReference;
+	if (target === undefined && agent === undefined && liveSession === undefined && !metadataOnly) {
 		throw deleteSessionFailure("desktop-bridge/delete-not-found", "The selected session no longer exists");
 	}
-	const registry = get("workspaceRegistry");
 	// Capture the owning entities before disposing the live session. Workspace
 	// membership is exposed through a filtered getter backed by the live/header
 	// path index; disposal can invalidate that getter before the durable record is
-	// detached. Retaining the entity makes the subsequent mutation deterministic.
-	const workspaceOwners = registry && typeof registry.list === "function"
-		? registry.list().filter((workspace) => workspace?.sessionIds?.includes?.(id) && typeof workspace.detachSession === "function")
-		: [];
+	// detached. Metadata-only rows have no valid path, so call the idempotent
+	// detach operation on every entity to remove any stale raw membership.
+	const workspaceEntities = registry && typeof registry.list === "function" ? registry.list() : [];
+	const workspaceOwners = workspaceEntities.filter((workspace) =>
+		typeof workspace.detachSession === "function" && (metadataOnly || workspace?.sessionIds?.includes?.(id))
+	);
 	if (agent !== undefined) {
 		const dispose = typeof agent.dispose === "function"
 			? () => agent.dispose()

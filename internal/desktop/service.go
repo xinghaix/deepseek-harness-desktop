@@ -433,13 +433,42 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 		}
 		d.recordChatWindowState(window)
 	}
-	window.RegisterHook(events.Common.WindowDidResize, onResizeOrMove)
-	window.RegisterHook(events.Common.WindowDidMove, onResizeOrMove)
-	window.RegisterHook(events.Common.WindowMaximise, onResizeOrMove)
-	window.RegisterHook(events.Common.WindowUnMaximise, onResizeOrMove)
-	window.RegisterHook(events.Common.WindowRestore, onResizeOrMove)
+
+	registerMoveResize := func(evt events.WindowEventType) {
+		window.RegisterHook(evt, onResizeOrMove)
+		window.OnWindowEvent(evt, onResizeOrMove)
+	}
+
+	registerMoveResize(events.Common.WindowDidResize)
+	registerMoveResize(events.Common.WindowDidMove)
+	registerMoveResize(events.Common.WindowMaximise)
+	registerMoveResize(events.Common.WindowUnMaximise)
+	registerMoveResize(events.Common.WindowRestore)
+	registerMoveResize(events.Common.WindowFocus)
+	registerMoveResize(events.Common.WindowLostFocus)
+
+	switch runtime.GOOS {
+	case "darwin":
+		registerMoveResize(events.Mac.WindowDidMove)
+		registerMoveResize(events.Mac.WindowDidResize)
+		registerMoveResize(events.Mac.WindowDidChangeScreen)
+		registerMoveResize(events.Mac.WindowDidZoom)
+		registerMoveResize(events.Mac.WindowDidBecomeKey)
+		registerMoveResize(events.Mac.WindowDidResignKey)
+	case "windows":
+		registerMoveResize(events.Windows.WindowDidMove)
+		registerMoveResize(events.Windows.WindowDidResize)
+	case "linux":
+		registerMoveResize(events.Linux.WindowDidMove)
+		registerMoveResize(events.Linux.WindowDidResize)
+	}
+
+	go d.monitorChatWindowGeometry(window)
 
 	onClosing := func(event *application.WindowEvent) {
+		if d.prefs.getRememberWindowSize() {
+			d.recordChatWindowState(window)
+		}
 		d.flushPendingWindowState()
 		d.flushPendingLastSession()
 		if d.allowQuit.Load() {
@@ -476,16 +505,36 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	}
 }
 
+func (d *Service) monitorChatWindowGeometry(window application.Window) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	wid := window.ID()
+	for {
+		<-ticker.C
+		d.windowMu.Lock()
+		hooked := d.chatHookedID == wid
+		d.windowMu.Unlock()
+		if !hooked || window == nil {
+			return
+		}
+		if !d.prefs.getRememberWindowSize() {
+			continue
+		}
+		d.recordChatWindowState(window)
+	}
+}
+
 func (d *Service) recordChatWindowState(window application.Window) {
-	if window == nil {
+	if window == nil || !window.IsVisible() {
 		return
 	}
-	d.windowStateMu.Lock()
-	defer d.windowStateMu.Unlock()
-
 	if window.IsMinimised() || window.IsFullscreen() {
 		return
 	}
+
+	d.windowStateMu.Lock()
+	defer d.windowStateMu.Unlock()
 
 	screen, _ := window.GetScreen()
 	var dispID, dispName string
@@ -501,38 +550,44 @@ func (d *Service) recordChatWindowState(window application.Window) {
 				Height: DefaultChatHeight,
 			}
 		}
-		d.cachedWindowState.Maximised = true
-		if dispID != "" {
-			d.cachedWindowState.DisplayID = dispID
-			d.cachedWindowState.DisplayName = dispName
+		if !d.cachedWindowState.Maximised {
+			d.cachedWindowState.Maximised = true
+			if dispID != "" {
+				d.cachedWindowState.DisplayID = dispID
+				d.cachedWindowState.DisplayName = dispName
+			}
+			_ = desktopstate.SaveWindowState(*d.cachedWindowState)
 		}
-	} else {
-		w, h := window.Size()
-		if w < MinChatWidth {
-			w = MinChatWidth
-		}
-		if h < MinChatHeight {
-			h = MinChatHeight
-		}
-		rx, ry := window.RelativePosition()
-		d.cachedWindowState = &desktopstate.WindowState{
-			Width:       w,
-			Height:      h,
-			X:           rx,
-			Y:           ry,
-			Maximised:   false,
-			DisplayID:   dispID,
-			DisplayName: dispName,
-		}
+		return
 	}
 
-	if d.windowStateTimer != nil {
-		d.windowStateTimer.Stop()
+	w, h := window.Size()
+	if w < MinChatWidth {
+		w = MinChatWidth
 	}
+	if h < MinChatHeight {
+		h = MinChatHeight
+	}
+	x, y := window.Position()
+
+	// Check if state actually changed
+	prev := d.cachedWindowState
+	if prev != nil && prev.Width == w && prev.Height == h && prev.X == x && prev.Y == y && !prev.Maximised && prev.DisplayID == dispID {
+		return
+	}
+
+	d.cachedWindowState = &desktopstate.WindowState{
+		Width:       w,
+		Height:      h,
+		X:           x,
+		Y:           y,
+		Maximised:   false,
+		DisplayID:   dispID,
+		DisplayName: dispName,
+	}
+
 	stateToSave := *d.cachedWindowState
-	d.windowStateTimer = time.AfterFunc(500*time.Millisecond, func() {
-		_ = desktopstate.SaveWindowState(stateToSave)
-	})
+	_ = desktopstate.SaveWindowState(stateToSave)
 }
 
 func (d *Service) flushPendingWindowState() {
