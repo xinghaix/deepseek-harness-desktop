@@ -502,7 +502,9 @@ window.__ModuleLoader__.load({
 				loadOlder + ":active { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 18%, transparent) !important; }",
 				loadOlder + " [" + PROMPT_OVERLAY_GLYPH_ATTR + "] { display: block !important; width: 11px !important; height: 11px !important; pointer-events: none !important; }",
 				divider + " { display: block !important; width: .5px !important; min-width: .5px !important; background: color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; margin: 0 !important; align-self: stretch !important; flex-shrink: 0 !important; }",
-				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] " + toolbarSuffix + " { display: flex !important; }",
+				// The load-older capsule is already pinned visible. Replaying the hover fade here
+				// (including after a rebuild) blinks it from transparent while the pointer rests.
+				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] " + toolbarSuffix + " { display: flex !important; animation: none !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "] { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 12%, transparent) !important; color: var(--dsw-alias-text-link, #2563eb) !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]:hover { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 20%, transparent) !important; }",
 				// Confirmed copy: the glyph turns green and NOTHING else changes (the quiet option the
@@ -1823,9 +1825,11 @@ window.__ModuleLoader__.load({
 				history.boundaryPreviewNode = null;
 				history.boundaryPreviewKey = "";
 			};
+			const outlineSignature = (entries) => (entries || []).map((entry) => [entry?.turn, entry?.seq, entry?.prompt].join("\u001f")).join("\u001e");
 			const readHistoryOutline = () => {
 				const value = history.outlineFace?.getSnapshot?.() ?? history.session?.projections?.get?.("turnOutline");
 				history.outline = outlineEntries(value);
+				history.outlineSignature = outlineSignature(history.outline);
 				return history.outline;
 			};
 			const syncHistoryBinding = () => {
@@ -1846,8 +1850,13 @@ window.__ModuleLoader__.load({
 					history.outlineFace = history.session?.projections?.faceOf?.("turnOutline") || null;
 					readHistoryOutline();
 					const onHistoryChange = () => {
+						const previous = history.outlineSignature;
 						readHistoryOutline();
-						state.needsRefresh = true;
+						// Streaming tokens notify the whole session, and often the outline face, on
+						// every chunk. Rebuilding the card for an unchanged prompt restarts the hover
+						// fade and the lower-right capsule blinks. Refresh only when the mirrored
+						// prompt identity actually changes.
+						if (previous !== history.outlineSignature) state.needsRefresh = true;
 						schedule();
 					};
 					if (typeof history.outlineFace?.subscribe === "function") history.stopOutline = history.outlineFace.subscribe(onHistoryChange);

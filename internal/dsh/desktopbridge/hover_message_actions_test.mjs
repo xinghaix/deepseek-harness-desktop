@@ -454,13 +454,20 @@ const historyLoadCalls = [];
 const historyOutline = [{ turn: 0, seq: 42, prompt: "archived prompt with attachment", response: "" }];
 let historyNodeMounted = false;
 let historyNode = null;
+const historySessionListeners = new Set();
 const historyOutlineFace = {
   getSnapshot() { return historyOutline; },
-  subscribe() { return () => {}; }
+  subscribe(listener) {
+    if (typeof listener === "function") historySessionListeners.add(listener);
+    return () => historySessionListeners.delete(listener);
+  }
 };
 const historySession = {
   projections: { faceOf(key) { return key === "turnOutline" ? historyOutlineFace : null; } },
-  subscribe() { return () => {}; },
+  subscribe(listener) {
+    if (typeof listener === "function") historySessionListeners.add(listener);
+    return () => historySessionListeners.delete(listener);
+  },
   loadThrough(seq) {
     historyLoadCalls.push(seq);
     if (seq === 42 && !historyNodeMounted) {
@@ -566,6 +573,7 @@ assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-too
 // ...and it is restored, with a soft entrance, on hover/focus.
 assert.match(hoverStyle.textContent, /data-dsh-desktop-hover-message-actions\] \[data-dsh-desktop-prompt-overlay\]:hover \[data-dsh-desktop-prompt-overlay-toolbar\][^}]*display: flex !important/);
 assert.match(hoverStyle.textContent, /@keyframes dsh-desktop-prompt-overlay-strip-in \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-encounter-older\]\s+\[data-dsh-desktop-prompt-overlay-toolbar\] \{ display: flex !important; animation: none !important; \}/, "the pinned load-older capsule does not replay the hover fade");
 for (const trigger of [":focus", ":focus-within"]) {
   assert.ok(hoverStyle.textContent.includes("data-dsh-desktop-prompt-overlay\]" + trigger + " [data-dsh-desktop-prompt-overlay-toolbar\]"), "the strip is reachable via " + trigger);
 }
@@ -761,6 +769,13 @@ window.dispatchEvent(new CustomEvent("scroll"));
 // Sibling of the body, mounted on the overlay host so it never scrolls with the text.
 assert.equal(toolbar.parentNode, overlay, "action strip mounts on the overlay, outside the scrolling body");
 assert.notEqual(toolbar.parentNode, previewContent, "action strip is not inside the scroll body");
+// An in-progress turn updates the session projection on every token. Those ticks must not rebuild
+// the already-visible capsule: recreation restarts the hover fade and the button blinks.
+assert.ok(historySessionListeners.size > 0, "active session projection is subscribed");
+for (let i = 0; i < 8; i += 1) {
+  for (const listener of historySessionListeners) listener();
+}
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-toolbar]"), toolbar, "streaming session updates must not rebuild the capsule");
 const copyProxy = [...toolbarActions].find((button) => button.getAttribute("aria-label") === "复制");
 assert.ok(copyProxy, "render compact copy action");
 const officialGlyph = (button) => button.querySelector("[data-dsh-desktop-prompt-overlay-glyph]");
