@@ -365,7 +365,7 @@ async function deleteSessionNow(ctx, id) {
 	}
 	const agent = typeof agents?.get === "function" ? agents.get(id) : undefined;
 	const liveSession = typeof sessions?.get === "function" ? sessions.get(id) : undefined;
-	const hadLiveSession = agent !== undefined || liveSession !== undefined;
+
 	if (target === undefined && agent === undefined && liveSession === undefined) {
 		throw deleteSessionFailure("desktop-bridge/delete-not-found", "The selected session no longer exists");
 	}
@@ -413,10 +413,11 @@ async function deleteSessionNow(ctx, id) {
 			await registry.replaceHeaderIndex(await registry.listStoredHeaders());
 		}
 	}
-	// Cold deletions do not emit the normal session/disposed lifecycle event. Tell
-	// the remote session catalog explicitly so its stale row cannot become an
-	// ungrouped, clickable ghost after the workspace membership is removed.
-	if (!hadLiveSession && typeof ctx?.emit === "function") {
+	// The renderer may retain a summary for both cold and live sessions. Always
+	// publish the removal after the durable delete so archived/workspace views
+	// cannot keep a stale row or reclassify it as an ungrouped ghost. The normal
+	// session/disposed path is idempotent with this explicit catalog eviction.
+	if (typeof ctx?.emit === "function") {
 		try { ctx.emit("api-session/removed", id); } catch { /* deletion already committed; notification is best effort */ }
 	}
 	return { sessionId: id, deleted: true };

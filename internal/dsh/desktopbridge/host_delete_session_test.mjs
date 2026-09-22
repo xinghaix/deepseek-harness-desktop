@@ -101,8 +101,10 @@ services.workspaceRegistry = {
     }];
   },
 };
+emittedEvents.length = 0;
 const activeDeleted = await request("session-active-delete", "active-delete");
 assert.equal(activeDeleted.ok, true);
+assert.deepEqual(emittedEvents, [["api-session/removed", "session-active-delete"]], "live deletion must evict the deleted id from the renderer session catalog");
 await assert.rejects(access(activeDeletePath));
 assert.equal(activeDisposed, true);
 assert.equal(detached, "session-active-delete", "active deletion must detach workspace membership before disposal invalidates it");
