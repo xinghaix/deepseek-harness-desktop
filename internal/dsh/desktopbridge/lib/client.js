@@ -488,7 +488,7 @@ window.__ModuleLoader__.load({
 				loadOlder + ":hover { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 10%, transparent) !important; color: var(--dsw-alias-text-primary, #0f172a) !important; }",
 				loadOlder + ":active { background: color-mix(in srgb, var(--dsw-alias-text-secondary, #6b6b70) 18%, transparent) !important; }",
 				loadOlder + " [" + PROMPT_OVERLAY_GLYPH_ATTR + "] { display: block !important; width: 11px !important; height: 11px !important; pointer-events: none !important; }",
-				divider + " { display: block !important; width: 1px !important; background: color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; margin: 3px 0 !important; flex-shrink: 0 !important; }",
+				divider + " { display: block !important; width: .5px !important; min-width: .5px !important; background: color-mix(in srgb, var(--dsw-alias-border-l2, rgba(127,127,127,.22)) 80%, transparent) !important; margin: 0 !important; align-self: stretch !important; flex-shrink: 0 !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] " + toolbarSuffix + " { display: flex !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "] { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 12%, transparent) !important; color: var(--dsw-alias-text-link, #2563eb) !important; }",
 				overlay + "[" + PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR + "] [" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]:hover { background: color-mix(in srgb, var(--dsw-alias-text-link, #2563eb) 20%, transparent) !important; }",

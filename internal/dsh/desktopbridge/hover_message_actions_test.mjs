@@ -600,6 +600,10 @@ assert.doesNotMatch(hoverStyle.textContent, /position:\s*sticky/);
 // The strip is absolutely positioned on purpose (see above); it is the only overlay element that
 // is. Pin that so a future "let it flow again" refactor trips this test rather than the user.
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-toolbar\] \{ position: absolute !important; z-index: 3 !important; right: 12px !important; box-sizing: content-box !important;/);
+// Option 2B divider: a subpixel hairline with no vertical margins, stretched from the capsule's
+// top edge to its bottom edge rather than floating with a 3px gap above and below.
+assert.match(hoverStyle.textContent, /prompt-overlay-divider\] \{ display: block !important; width: \.5px !important; min-width: \.5px !important;[^}]*margin: 0 !important;[^}]*align-self: stretch !important;[^}]*flex-shrink: 0 !important; \}/);
+assert.doesNotMatch(hoverStyle.textContent, /prompt-overlay-divider\] \{[^}]*margin: 3px 0 !important/, "divider has no vertical gap inside the capsule");
 // One tooltip for the whole strip, shown in the empty lane beside it, so it lands on
 // One tooltip per strip, in the empty lane beside it, so it never lands on the card's
 // text (above) or on the composer clamp (below).
