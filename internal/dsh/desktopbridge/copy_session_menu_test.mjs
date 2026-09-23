@@ -282,6 +282,8 @@ const flushMicrotasks = async () => {
 const cleanups = [];
 const batchDeleteCalls = [];
 const batchUnarchiveCalls = [];
+const startSessionCalls = [];
+const clearMainCalls = [];
 const ctx = {
   slots: { inject() {} },
   effect(fn) {
@@ -301,7 +303,23 @@ const ctx = {
     },
   },
   uiWorkspace: {
+    mainReference: { sessionId: "session-active-current" },
+    workspaces: {
+      list: {
+        getSnapshot() {
+          return {
+            items: [
+              { workspaceId: "ws-copy", sessionIds: ["session-copy-test"] },
+              { workspaceId: "ws-active", sessionIds: ["session-active-current"] },
+              { workspaceId: "ws-copy-active", sessionIds: ["session-copy-test-active"] },
+            ],
+          };
+        },
+      },
+    },
     async unarchiveSession(id) { batchUnarchiveCalls.push(id); },
+    async startSession(workspaceId) { startSessionCalls.push(workspaceId); },
+    clearMain() { clearMainCalls.push(true); this.mainReference = undefined; },
   },
   remote: null,
 };
@@ -411,6 +429,40 @@ assert.ok(activeConfirm, "delete click must open a confirmation dialog");
 activeConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
 await flushMicrotasks();
 assert.equal(deleteItem(), null, "confirmed active deletion must remove the menu item");
+assert.equal(startSessionCalls.length, 0, "deleting an inactive session must not start a new session or jump workspace");
+assert.equal(clearMainCalls.length, 0, "deleting an inactive session must not clear main view");
+assert.equal(ctx.uiWorkspace.mainReference?.sessionId, "session-active-current", "main reference must stay on active session");
+
+ctx.uiWorkspace.mainReference = { sessionId: "session-copy-test-active" };
+const activeSessionFiber = {
+  memoizedProps: {
+    node: { id: "session-copy-test-active" },
+    onRename() {},
+    onFork() {},
+    onArchive() {},
+  },
+  return: null,
+};
+const activeMenu = document.createElement("div");
+activeMenu.setAttribute("role", "menu");
+const activeViewport = document.createElement("div");
+activeViewport.setAttribute("role", "presentation");
+for (const label of ["重命名", "分叉会话", "归档会话"]) activeViewport.appendChild(makeOfficialItem(label));
+activeMenu.appendChild(activeViewport);
+Object.defineProperty(activeMenu, "__reactFiber$activeMenu", { value: { return: activeSessionFiber } });
+document.documentElement.appendChild(activeMenu);
+await flushMicrotasks();
+const activeDeleteItem = activeMenu.querySelector("[data-dsh-delete-session]");
+assert.ok(activeDeleteItem, "active session delete item must be injected");
+activeDeleteItem.dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+const activeConfirm2 = document.querySelector("[data-dsh-delete-session-confirm]");
+assert.ok(activeConfirm2, "active delete click must open confirmation dialog");
+activeConfirm2.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.equal(clearMainCalls.length, 1, "deleting active session must clear main view");
+assert.equal(startSessionCalls.length, 1, "deleting active session must start fresh session");
+assert.equal(startSessionCalls[0], "ws-copy-active", "deleting active session starts fresh session in the same workspace");
 
 const workspaceMenu = document.createElement("div");
 workspaceMenu.setAttribute("role", "menu");

@@ -3458,6 +3458,15 @@ window.__ModuleLoader__.load({
 			return svg;
 		}
 		function removeDeleteSessionMenuItem(item) { if (!item) return; const wrapper = item.parentElement?.hasAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE) ? item.parentElement : item; wrapper.remove(); }
+		function currentWorkspaceIdForSession(uiWorkspace, sessionId) {
+			try {
+				const items = uiWorkspace?.workspaces?.list?.getSnapshot?.()?.items;
+				if (Array.isArray(items)) {
+					return items.find((item) => item?.sessionIds?.includes?.(sessionId))?.workspaceId;
+				}
+			} catch (_) {}
+			return undefined;
+		}
 		async function releaseOpenSidebarSession(ctx, sessionId) {
 			const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
 			if (uiWorkspace?.mainReference?.sessionId !== sessionId) return;
@@ -3471,11 +3480,13 @@ window.__ModuleLoader__.load({
 			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
 			item.setAttribute("aria-disabled", "true");
 			try {
-				await releaseOpenSidebarSession(ctx, sessionId);
+				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+				const isCurrent = uiWorkspace?.mainReference?.sessionId === sessionId;
+				const workspaceId = isCurrent ? currentWorkspaceIdForSession(uiWorkspace, sessionId) : undefined;
+				if (isCurrent) await releaseOpenSidebarSession(ctx, sessionId);
 				const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
 				if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; }
-				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
-				if (typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession();
+				if (isCurrent && typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(workspaceId);
 				const menu = item.closest?.("[role=\"menu\"]");
 				if (menu) menu.setAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE, "");
 				removeDeleteSessionMenuItem(item);
@@ -3526,7 +3537,20 @@ window.__ModuleLoader__.load({
 			const sessionId = button.getAttribute("data-dsh-delete-archived-id") || "";
 			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
 			button.setAttribute("aria-disabled", "true");
-			try { const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined); if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; } const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace; if (typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(); row.remove(); } catch (error) { const message = t("bridge.session_delete_failed", desktopErrorMessage(error)); if (typeof window.alert === "function") window.alert(message); else if (typeof console !== "undefined" && typeof console.error === "function") console.error(message, error); button.removeAttribute("aria-disabled"); }
+			try {
+				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+				const isCurrent = uiWorkspace?.mainReference?.sessionId === sessionId;
+				const workspaceId = isCurrent ? currentWorkspaceIdForSession(uiWorkspace, sessionId) : undefined;
+				if (isCurrent) await releaseOpenSidebarSession(ctx, sessionId);
+				const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
+				if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; }
+				if (isCurrent && typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(workspaceId);
+				row.remove();
+			} catch (error) {
+				const message = t("bridge.session_delete_failed", desktopErrorMessage(error));
+				await requestDeleteSessionConfirmation(message, { title: t("bridge.session_delete_title"), action: t("bridge.session_delete_dismiss"), danger: false, dismissOnly: true });
+				button.removeAttribute("aria-disabled");
+			}
 		}
 		function makeArchivedDeleteButton(template, sessionId, row, ctx) { const button = template.cloneNode(true); button.removeAttribute("disabled"); button.setAttribute(ARCHIVED_DELETE_SESSION_ATTRIBUTE, ""); button.setAttribute("data-dsh-delete-archived-id", sessionId); const deleteLocale = localeCode === "zh-CN" ? "zh" : (DELETE_SESSION_MENU_LABELS[localeCode] ? localeCode : "en"); const deleteLabel = DELETE_SESSION_MENU_LABELS[deleteLocale] || DELETE_SESSION_MENU_LABELS.en; button.setAttribute("aria-label", deleteLabel); button.textContent = deleteLabel; button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void deleteArchivedSession(button, row, ctx); }); return button; }
 		function installArchivedSessionDelete(ctx) {
@@ -3790,12 +3814,17 @@ window.__ModuleLoader__.load({
 					progress.update(index, title);
 					try {
 						if (deleting) {
+							const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+							const isCurrent = uiWorkspace?.mainReference?.sessionId === id;
+							const workspaceId = isCurrent ? currentWorkspaceIdForSession(uiWorkspace, id) : undefined;
+							if (isCurrent) await releaseOpenSidebarSession(ctx, id);
 							const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId: id }, undefined);
 							if (!result?.ok) {
 								const error = new Error(result?.error?.message || t("bridge.session_delete_failed", ""));
 								error.code = result?.error?.code || "desktop-bridge/delete-failed";
 								throw error;
 							}
+							if (isCurrent && typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(workspaceId);
 						} else {
 							const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
 							if (typeof uiWorkspace?.unarchiveSession !== "function") throw new Error("unarchive unavailable");
