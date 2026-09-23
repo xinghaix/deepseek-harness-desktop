@@ -30,7 +30,22 @@ await writeFile(artifactPath, "header\n");
 let artifacts = [{ header: { id: "session-test" }, path: artifactPath }];
 let unarchived = "";
 let detached = "";
-services.sessionPersistence = { root, async listArtifacts() { return artifacts; } };
+services.sessionPersistence = {
+  root,
+  async listArtifacts() {
+    const present = [];
+    for (const entry of artifacts) {
+      try {
+        await access(entry.path);
+        present.push(entry);
+      } catch {
+        // A deleted artifact must disappear from the next listing so parent
+        // deletion can observe that its children are already gone.
+      }
+    }
+    return present;
+  },
+};
 services.sessions = { get() { return undefined; } };
 services.agents = { get() { return undefined; } };
 services.workspaceRegistry = {
@@ -130,6 +145,60 @@ assert.deepEqual(stale.value, { sessionId: "session-stale", deleted: true });
 assert.equal(staleUnarchived, "session-stale");
 assert.deepEqual(staleDetached, [["one", "session-stale"], ["two", "session-stale"]]);
 assert.deepEqual(emittedEvents, [["api-session/removed", "session-stale"]]);
+
+const parentDir = join(root, "project", "session-parent");
+const childDir = join(root, "project", "child-sub");
+const grandchildDir = join(root, "project", "grandchild-sub");
+await mkdir(parentDir, { recursive: true });
+await mkdir(childDir, { recursive: true });
+await mkdir(grandchildDir, { recursive: true });
+await writeFile(join(parentDir, "session.jsonl"), "parent\n");
+await writeFile(join(childDir, "session.jsonl"), "child\n");
+await writeFile(join(grandchildDir, "session.jsonl"), "grandchild\n");
+artifacts = [
+  { header: { id: "session-parent" }, path: join(parentDir, "session.jsonl") },
+  { header: { id: "child-sub", origin: "subagent", parentSession: "session-parent" }, path: join(childDir, "session.jsonl") },
+  { header: { id: "grandchild-sub", origin: "subagent", parentSession: "child-sub" }, path: join(grandchildDir, "session.jsonl") },
+];
+services.sessions.get = () => undefined;
+services.agents.get = () => undefined;
+services.workspaceRegistry = {
+  archivedSessionIds: ["session-parent"],
+  async unarchiveSession() {},
+  list() { return []; },
+};
+emittedEvents.length = 0;
+const directChild = await request("child-sub", "child");
+assert.equal(directChild.ok, false);
+assert.equal(directChild.error.code, "desktop-bridge/delete-subagent");
+await access(join(childDir, "session.jsonl"));
+const parentDeleted = await request("session-parent", "parent");
+assert.equal(parentDeleted.ok, true, parentDeleted.error?.message || "parent deletion failed");
+await assert.rejects(access(join(parentDir, "session.jsonl")));
+await assert.rejects(access(join(childDir, "session.jsonl")));
+await assert.rejects(access(join(grandchildDir, "session.jsonl")));
+assert.deepEqual(emittedEvents, [
+  ["api-session/removed", "grandchild-sub"],
+  ["api-session/removed", "child-sub"],
+  ["api-session/removed", "session-parent"],
+]);
+
+const ghostId = "session-ghost-cache";
+const ghostFile = join(root, "..", "storages", "session_projcache", "sessions", ghostId + ".json");
+await mkdir(join(ghostFile, ".."), { recursive: true });
+await writeFile(ghostFile, "{\"version\":7}\n");
+artifacts = [];
+services.workspaceRegistry = {
+  archivedSessionIds: [],
+  async unarchiveSession() {},
+  list() { return []; },
+};
+emittedEvents.length = 0;
+const ghost = await request(ghostId, "ghost");
+assert.equal(ghost.ok, true, ghost.error?.message || "projection-cache ghost was not cleanable");
+await assert.rejects(access(ghostFile));
+assert.deepEqual(emittedEvents, [["api-session/removed", ghostId]]);
+await rm(join(root, "..", "storages"), { recursive: true, force: true });
 
 const missing = await request("session-missing", "missing");
 assert.equal(missing.ok, false);

@@ -221,7 +221,7 @@ window.__ModuleLoader__.load({
 			"bridge.restart_open_chat": "Reopen",
 			"bridge.status_connected": "Connected to desktop",
 			"bridge.session_delete_menu": "Delete session",
-			"bridge.session_delete_confirm": "Delete this session permanently from disk? This action cannot be undone.",
+			"bridge.session_delete_confirm": "Delete this session permanently from disk? Child sessions are deleted first. This action cannot be undone.",
 			"bridge.session_delete_failed": "The session could not be deleted: {0}",
 			"field.delete_session_actions": "Show the “Delete session” menu",
 			"field.delete_session_actions_hint": "Show “Delete session” in the session actions menu for active and archived sessions. Deleting permanently removes the local session record from disk.",
@@ -235,7 +235,7 @@ window.__ModuleLoader__.load({
 			"bridge.archived_batch_unarchive_title": "Unarchive selected sessions?",
 			"bridge.archived_batch_unarchive_confirm": "Unarchive {0} selected sessions?",
 			"bridge.archived_batch_delete_title": "Delete selected sessions?",
-			"bridge.archived_batch_delete_confirm": "Permanently delete {0} selected sessions from disk? This action cannot be undone.",
+			"bridge.archived_batch_delete_confirm": "Permanently delete {0} selected sessions from disk? Child sessions are deleted first. This action cannot be undone.",
 			"bridge.archived_batch_progress_title": "Processing sessions",
 			"bridge.archived_batch_progress": "Processing {0} of {1}: {2}",
 			"bridge.archived_batch_done": "Completed {0} of {1}",
@@ -3690,6 +3690,9 @@ window.__ModuleLoader__.load({
 						if (row?.parentElement) row.remove();
 					} catch (error) {
 						failed.push({ id, title, error });
+						// A missing id cannot succeed on retry and otherwise stays checked,
+						// so every later batch reports the same ghost failure.
+						if (deleting && error?.code === "desktop-bridge/delete-not-found") selected.delete(id);
 					}
 					progress.update(index + 1, title);
 					decorate();

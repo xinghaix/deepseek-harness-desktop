@@ -347,7 +347,56 @@ let pathRelative = (root, dir) => {
 };
 let pathIsAbsolute = (value) => String(value).startsWith("/") || /^[A-Za-z]:[\\/]/.test(String(value));
 
-async function deleteSessionNow(ctx, id) {
+function descendantSessionIds(artifacts, rootId) {
+	const childrenByParent = new Map();
+	for (const entry of artifacts) {
+		const parent = String(entry?.header?.parentSession || "");
+		const child = String(entry?.header?.id || "");
+		if (!parent || !child || child === parent) continue;
+		const list = childrenByParent.get(parent) || [];
+		list.push(child);
+		childrenByParent.set(parent, list);
+	}
+	const ordered = [];
+	const seen = new Set();
+	const visit = (id) => {
+		if (seen.has(id)) return;
+		seen.add(id);
+		for (const child of childrenByParent.get(id) || []) visit(child);
+		if (id !== rootId) ordered.push(id);
+	};
+	visit(rootId);
+	return ordered;
+}
+
+async function projectionCacheFile(root, id) {
+	if (typeof root !== "string" || !root.trim() || !DELETE_SESSION_ID_PATTERN.test(id)) return "";
+	const { dirname, resolve } = await import("node:path");
+	const dir = resolve(dirname(resolve(root)), "storages", "session_projcache", "sessions");
+	const file = resolve(dir, id + ".json");
+	return isSessionArtifactDirectoryInsideRoot(dir, file) ? file : "";
+}
+
+async function projectionCacheExists(root, id) {
+	const file = await projectionCacheFile(root, id);
+	if (!file) return false;
+	const { access } = await import("node:fs/promises");
+	try {
+		await access(file);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function removeProjectionCache(root, id) {
+	const file = await projectionCacheFile(root, id);
+	if (!file) return;
+	const { rm } = await import("node:fs/promises");
+	await rm(file, { force: true });
+}
+
+async function deleteSessionNow(ctx, id, options = {}) {
 	const get = typeof ctx?.get === "function" ? (key) => ctx.get(key) : () => undefined;
 	const persistence = get("sessionPersistence");
 	const sessions = get("sessions");
@@ -357,10 +406,23 @@ async function deleteSessionNow(ctx, id) {
 	}
 	const artifacts = await persistence.listArtifacts();
 	const target = artifacts.find((entry) => String(entry?.header?.id || "") === id);
-	if (target?.header?.origin === "subagent") {
+	if (target?.header?.origin === "subagent" && options.allowSubagent !== true) {
 		throw deleteSessionFailure("desktop-bridge/delete-subagent", "Subagent sessions cannot be deleted from this menu");
 	}
-	if (artifacts.some((entry) => String(entry?.header?.parentSession || "") === id)) {
+	// A confirmed parent deletion removes descendants first. Subagent children are
+	// not listed in Archived Sessions, so rejecting the parent with "delete
+	// children first" left the user with no way to remove either session.
+	if (options.cascade !== false) {
+		for (const childId of descendantSessionIds(artifacts, id)) {
+			try {
+				await deleteSessionNow(ctx, childId, { allowSubagent: true, cascade: false });
+			} catch (error) {
+				throw deleteSessionFailure(error?.code || "desktop-bridge/delete-failed", "Could not delete child session " + childId + ": " + (error?.message || "unknown error"));
+			}
+		}
+	}
+	const currentArtifacts = options.cascade === false ? artifacts : await persistence.listArtifacts();
+	if (currentArtifacts.some((entry) => String(entry?.header?.parentSession || "") === id)) {
 		throw deleteSessionFailure("desktop-bridge/delete-has-children", "Delete child sessions before deleting their parent");
 	}
 	const agent = typeof agents?.get === "function" ? agents.get(id) : undefined;
@@ -369,11 +431,13 @@ async function deleteSessionNow(ctx, id) {
 	let archivedSessionIds;
 	try { archivedSessionIds = registry?.archivedSessionIds; } catch { archivedSessionIds = undefined; }
 	const hasArchivedReference = Array.isArray(archivedSessionIds) && archivedSessionIds.includes(id);
+	const persistenceRoot = typeof persistence.root === "string" ? persistence.root : "";
+	const hasProjectionCache = await projectionCacheExists(persistenceRoot, id);
 	// A renderer row can outlive its session artifact when the archive registry
-	// still contains the ID. Treat that host-owned reference as a metadata-only
-	// deletion: it is safe to unarchive/detach, but arbitrary unknown IDs remain
-	// fail-closed below.
-	const metadataOnly = target === undefined && agent === undefined && liveSession === undefined && hasArchivedReference;
+	// or projection cache still contains the ID. Treat that host-owned reference
+	// as a metadata-only deletion: it is safe to unarchive/detach and drop the
+	// cache, but arbitrary unknown IDs remain fail-closed below.
+	const metadataOnly = target === undefined && agent === undefined && liveSession === undefined && (hasArchivedReference || hasProjectionCache);
 	if (target === undefined && agent === undefined && liveSession === undefined && !metadataOnly) {
 		throw deleteSessionFailure("desktop-bridge/delete-not-found", "The selected session no longer exists");
 	}
@@ -426,6 +490,7 @@ async function deleteSessionNow(ctx, id) {
 	// publish the removal after the durable delete so archived/workspace views
 	// cannot keep a stale row or reclassify it as an ungrouped ghost. The normal
 	// session/disposed path is idempotent with this explicit catalog eviction.
+	await removeProjectionCache(persistenceRoot, id);
 	if (typeof ctx?.emit === "function") {
 		try { ctx.emit("api-session/removed", id); } catch { /* deletion already committed; notification is best effort */ }
 	}
