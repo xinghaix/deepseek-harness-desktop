@@ -420,6 +420,7 @@
   "bridge.session_delete_failed": "세션을 삭제할 수 없습니다: {0}",
   "bridge.session_delete_title": "세션을 삭제하시겠습니까?",
   "bridge.session_delete_cancel": "취소",
+  "bridge.session_delete_dismiss": "확인",
   "bridge.session_delete_action": "삭제",
   "bridge.archived_batch_select_all": "모두 선택",
   "bridge.archived_batch_selected": "선택됨: {0}",

@@ -318,6 +318,17 @@ function deleteSessionId(payload) {
 	return id;
 }
 
+function releaseLiveSessionRegistries(sessions, agents, id) {
+	const liveSession = typeof sessions?.get === "function" ? sessions.get(id) : undefined;
+	if (liveSession !== undefined && typeof sessions.liveEntryFor === "function" && typeof sessions.detachEntered === "function") {
+		try { sessions.detachEntered(sessions.liveEntryFor(liveSession)); } catch { /* already detached */ }
+	}
+	const agentEntry = typeof agents?.store?.get === "function" ? agents.store.get(id) : undefined;
+	if (agentEntry !== undefined && typeof agents.detachEntered === "function") {
+		try { agents.detachEntered(agentEntry); } catch { /* already detached */ }
+	}
+}
+
 async function waitForSessionRelease(ctx, id, timeoutMs = 5000) {
 	const sessions = typeof ctx?.get === "function" ? ctx.get("sessions") : undefined;
 	const agents = typeof ctx?.get === "function" ? ctx.get("agents") : undefined;
@@ -461,10 +472,23 @@ async function deleteSessionNow(ctx, id, options = {}) {
 		if (dispose === undefined) {
 			throw deleteSessionFailure("desktop-bridge/delete-unsupported", "This DSH version cannot safely close an active session");
 		}
+		// An open sidebar session is a live agent whose scope dispose does not
+		// unregister it. Stop the turn first, then drop the registries below.
+		if (typeof agent.cancel === "function") {
+			try { agent.cancel({ kind: "disposed" }); } catch { /* the turn is already stopping */ }
+		}
+		if (typeof agent.whenIdle === "function") {
+			await Promise.race([
+				Promise.resolve(agent.whenIdle()).then(() => {}, () => {}),
+				new Promise((resolve) => setTimeout(resolve, 5000)),
+			]);
+		}
 		await dispose();
-	} else if (typeof sessions?.get === "function" && sessions.get(id) !== undefined) {
-		throw deleteSessionFailure("desktop-bridge/delete-busy", "The session is still in use");
 	}
+	// scope.dispose() unwinds the agent fiber but leaves both registries and the
+	// write lease in place, so the following wait used to time out with
+	// "still in use" for the session currently open in the sidebar.
+	releaseLiveSessionRegistries(sessions, agents, id);
 	await waitForSessionRelease(ctx, id);
 	const latestArtifacts = await persistence.listArtifacts();
 	const latest = latestArtifacts.find((entry) => String(entry?.header?.id || "") === id);

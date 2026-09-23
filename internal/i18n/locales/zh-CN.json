@@ -420,6 +420,7 @@
   "bridge.session_delete_failed": "无法删除会话：{0}",
   "bridge.session_delete_title": "删除会话？",
   "bridge.session_delete_cancel": "取消",
+  "bridge.session_delete_dismiss": "知道了",
   "bridge.session_delete_action": "删除",
   "bridge.archived_batch_select_all": "全选",
   "bridge.archived_batch_selected": "已选 {0} 个",

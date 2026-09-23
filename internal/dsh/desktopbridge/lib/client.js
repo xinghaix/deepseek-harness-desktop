@@ -227,6 +227,7 @@ window.__ModuleLoader__.load({
 			"field.delete_session_actions_hint": "Show “Delete session” in the session actions menu for active and archived sessions. Deleting permanently removes the local session record from disk.",
 			"bridge.session_delete_title": "Delete session?",
 			"bridge.session_delete_cancel": "Cancel",
+			"bridge.session_delete_dismiss": "OK",
 			"bridge.session_delete_action": "Delete",
 			"bridge.archived_batch_select_all": "Select all",
 			"bridge.archived_batch_selected": "Selected {0}",
@@ -3326,7 +3327,8 @@ window.__ModuleLoader__.load({
 				submit.addEventListener("click", () => finish(true));
 				backdrop.addEventListener("click", (event) => { if (event.target === backdrop) finish(false); });
 				if (typeof window !== "undefined" && typeof window.addEventListener === "function") window.addEventListener("keydown", onKeydown);
-				actions.appendChild(cancel); actions.appendChild(submit);
+				if (options.dismissOnly !== true) actions.appendChild(cancel);
+				actions.appendChild(submit);
 				panel.appendChild(title); panel.appendChild(body); panel.appendChild(actions);
 				backdrop.appendChild(panel); host.appendChild(backdrop);
 				if (typeof submit.focus === "function") submit.focus();
@@ -3351,11 +3353,20 @@ window.__ModuleLoader__.load({
 			return svg;
 		}
 		function removeDeleteSessionMenuItem(item) { if (!item) return; const wrapper = item.parentElement?.hasAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE) ? item.parentElement : item; wrapper.remove(); }
+		async function releaseOpenSidebarSession(ctx, sessionId) {
+			const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+			if (uiWorkspace?.mainReference?.sessionId !== sessionId) return;
+			if (typeof uiWorkspace.clearMain === "function") uiWorkspace.clearMain();
+			else if (typeof uiWorkspace.mainReference?.release === "function") uiWorkspace.mainReference.release();
+			const sessions = typeof ctx?.get === "function" ? ctx.get("sessions") : undefined;
+			if (typeof sessions?.drainScopeDrops === "function") await sessions.drainScopeDrops();
+		}
 		async function deleteSessionFromMenu(item, ctx) {
 			const sessionId = item.getAttribute(DELETE_SESSION_MENU_VALUE_ATTRIBUTE) || "";
 			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
 			item.setAttribute("aria-disabled", "true");
 			try {
+				await releaseOpenSidebarSession(ctx, sessionId);
 				const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
 				if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; }
 				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
@@ -3365,7 +3376,7 @@ window.__ModuleLoader__.load({
 				removeDeleteSessionMenuItem(item);
 			} catch (error) {
 				const message = t("bridge.session_delete_failed", desktopErrorMessage(error));
-				if (typeof window.alert === "function") window.alert(message); else if (typeof console !== "undefined" && typeof console.error === "function") console.error(message, error);
+				await requestDeleteSessionConfirmation(message, { title: t("bridge.session_delete_title"), action: t("bridge.session_delete_dismiss"), danger: false, dismissOnly: true });
 				item.removeAttribute("aria-disabled");
 			}
 		}

@@ -420,6 +420,7 @@
   "bridge.session_delete_failed": "La session n’a pas pu être supprimée : {0}",
   "bridge.session_delete_title": "Supprimer la session ?",
   "bridge.session_delete_cancel": "Annuler",
+  "bridge.session_delete_dismiss": "OK",
   "bridge.session_delete_action": "Supprimer",
   "bridge.archived_batch_select_all": "Tout sélectionner",
   "bridge.archived_batch_selected": "Sélectionnées : {0}",

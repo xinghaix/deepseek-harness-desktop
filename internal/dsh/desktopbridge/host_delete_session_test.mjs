@@ -124,6 +124,35 @@ await assert.rejects(access(activeDeletePath));
 assert.equal(activeDisposed, true);
 assert.equal(detached, "session-active-delete", "active deletion must detach workspace membership before disposal invalidates it");
 
+const openViewPath = join(root, "project", "session-open-view", "session.jsonl");
+await mkdir(join(root, "project", "session-open-view"), { recursive: true });
+await writeFile(openViewPath, "open-view\n");
+artifacts = [{ header: { id: "session-open-view" }, path: openViewPath }];
+const openAgent = { id: "session-open-view", scope: { async dispose() {} } };
+const openStore = new Map([["session-open-view", { id: "session-open-view", agent: openAgent, announced: true }]]);
+let openSession = { id: "session-open-view" };
+services.agents = {
+  get(id) { return openStore.get(id)?.agent; },
+  store: openStore,
+  detachEntered(entry) { openStore.delete(entry.id); },
+};
+services.sessions = {
+  get(id) { return openSession?.id === id ? openSession : undefined; },
+  liveEntryFor(session) { return { id: session.id, session, announced: true }; },
+  detachEntered(entry) { if (openSession?.id === entry.id) openSession = undefined; },
+};
+services.workspaceRegistry = {
+  async unarchiveSession() {},
+  list() { return [{ sessionIds: ["session-open-view"], async detachSession() {} }]; },
+};
+emittedEvents.length = 0;
+const openViewDeleted = await request("session-open-view", "open-view");
+assert.equal(openViewDeleted.ok, true, openViewDeleted.error?.message || "open sidebar session was not deleted");
+await assert.rejects(access(openViewPath));
+assert.equal(openStore.has("session-open-view"), false, "the live agent registry entry must be released");
+assert.equal(openSession, undefined, "the live session registry entry must be released");
+assert.deepEqual(emittedEvents, [["api-session/removed", "session-open-view"]]);
+
 artifacts = [];
 services.agents.get = () => undefined;
 let staleUnarchived = "";

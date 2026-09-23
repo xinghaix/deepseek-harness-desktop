@@ -420,6 +420,7 @@
   "bridge.session_delete_failed": "セッションを削除できませんでした：{0}",
   "bridge.session_delete_title": "セッションを削除しますか？",
   "bridge.session_delete_cancel": "キャンセル",
+  "bridge.session_delete_dismiss": "了解",
   "bridge.session_delete_action": "削除",
   "bridge.archived_batch_select_all": "すべて選択",
   "bridge.archived_batch_selected": "選択中: {0}",
