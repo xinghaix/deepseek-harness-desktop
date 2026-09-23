@@ -191,6 +191,12 @@ window.__ModuleLoader__.load({
 		const PROMPT_OVERLAY_TIME_ATTR = "data-dsh-desktop-prompt-overlay-time";
 		const PROMPT_OVERLAY_ACTION_ATTR = "data-dsh-desktop-prompt-overlay-action";
 		const PROMPT_OVERLAY_ACTION_DONE_ATTR = "data-dsh-desktop-prompt-overlay-action-done";
+		// Stable per-control key. aria-label alone is not one: two "复制" buttons would share
+		// it, and the native control rewrites that label to "复制成功" while the check shows.
+		const PROMPT_OVERLAY_ACTION_KEY_ATTR = "data-dsh-desktop-prompt-overlay-action-key";
+		// Set on a strip that replaced an already-visible one, so the entrance animation
+		// does not replay under a resting pointer (that replay is the capsule flash).
+		const PROMPT_OVERLAY_STRIP_SETTLED_ATTR = "data-dsh-desktop-prompt-overlay-strip-settled";
 		// Marks the inline SVG inside an action button, so the stylesheet can size it and a test
 		// can read which official glyph is on screen.
 		const PROMPT_OVERLAY_GLYPH_ATTR = "data-dsh-desktop-prompt-overlay-glyph";
@@ -483,7 +489,15 @@ window.__ModuleLoader__.load({
 				// Hidden by default and expanded on hover/focus. It must be REMOVED from layout while
 				// hidden: an opacity-only hide still reserved its row inside the card, which showed up
 				// as a permanent blank band under the text.
-				overlay + ":hover" + toolbarSuffix + ", " + overlay + ":focus" + toolbarSuffix + ", " + overlay + ":focus-within" + toolbarSuffix + ", " + toolbar + ":focus-within { display: flex !important; animation: " + PROMPT_OVERLAY_STRIP_IN + " .12s ease !important; }",
+				// Hover, or keyboard focus. A pointer click focuses the button too, and bare
+				// :focus / :focus-within kept the capsule painted after the pointer left — the
+				// checks then sat on screen until something else blurred the control. Keyboard
+				// focus still reveals the strip via :focus-visible.
+				overlay + ":hover" + toolbarSuffix + ", " + overlay + ":focus-visible" + toolbarSuffix + ", " + overlay + ":has(:focus-visible)" + toolbarSuffix + " { display: flex !important; animation: " + PROMPT_OVERLAY_STRIP_IN + " .12s ease !important; }",
+				// A rebuild while the pointer is already on the card replaces this node and would
+				// restart the entrance, which reads as the capsule flashing. The settled flag is
+				// set only for that replacement; the first reveal still fades in.
+				overlay + ":hover" + toolbarSuffix + "[" + PROMPT_OVERLAY_STRIP_SETTLED_ATTR + "], " + overlay + ":focus-visible" + toolbarSuffix + "[" + PROMPT_OVERLAY_STRIP_SETTLED_ATTR + "], " + overlay + ":has(:focus-visible)" + toolbarSuffix + "[" + PROMPT_OVERLAY_STRIP_SETTLED_ATTR + "] { animation: none !important; }",
 				// Softens the strip's appearance: revealing it also grows the card, and a hard pop
 				// reads as a glitch where a short fade reads as the control sliding in.
 				"@keyframes " + PROMPT_OVERLAY_STRIP_IN + " { from { opacity: 0; } to { opacity: 1; } }",
@@ -1079,12 +1093,31 @@ window.__ModuleLoader__.load({
             const fallback = t("bridge.overlay_action");
             return normalizePreviewText(previewAttr(node, "aria-label") || previewAttr(node, "title") || previewAttr(node, "data-action") || previewAttr(node, "data-operation") || node?.textContent || fallback).slice(0, 48) || fallback;
         }
-        function operationSignature(node) {
-            for (const name of ["data-action", "data-operation", "data-testid", "aria-label", "title"]) {
+        // Copy confirmations collapse "复制" and the transient "复制成功" onto one token so a
+        // native re-render does not look like a different control. The ordinal keeps two
+        // same-labeled controls apart: without it, clicking one copy paints a check on both.
+        function canonicalActionLabel(node) {
+            const raw = previewAttr(node, "aria-label") || previewAttr(node, "title") || operationLabel(node);
+            return isCopyOperation(raw) ? "copy" : raw;
+        }
+        function operationSignature(node, source) {
+            for (const name of ["data-action", "data-operation", "data-testid"]) {
                 const value = previewAttr(node, name);
                 if (value) return name + ":" + value;
             }
-            return "text:" + operationLabel(node);
+            const aria = previewAttr(node, "aria-label");
+            const title = previewAttr(node, "title");
+            const label = canonicalActionLabel(node);
+            let ordinal = 0;
+            const root = source && source !== node ? source : null;
+            if (root) {
+                for (const candidate of collectNativeOperationControls(root)) {
+                    if (candidate === node) break;
+                    if (canonicalActionLabel(candidate) === label) ordinal += 1;
+                }
+            }
+            const key = aria ? "aria-label" : title ? "title" : "text";
+            return key + ":" + label + "#" + ordinal;
         }
         // Whether a native action is the copy control. Used to hide copy on an attachment-only
         // prompt: there is no text to copy, and official Chat does not offer it there either.
@@ -1152,7 +1185,7 @@ window.__ModuleLoader__.load({
             if (!descriptor || !state?.source) return null;
             const current = descriptor.target;
             if (current && isPreviewOperation(current) && !isPreviewAttachment(current) && (state.source.contains?.(current) || hasPromptRelation(current, state.source))) return current;
-            const matches = collectNativeOperationControls(state.source).filter((node) => operationSignature(node) === descriptor.signature);
+            const matches = collectNativeOperationControls(state.source).filter((node) => operationSignature(node, state.source) === descriptor.signature);
             return matches.length === 1 ? matches[0] : null;
         }
         // Confirmed actions are tracked per operation signature, not per button: proxying an
@@ -1161,6 +1194,9 @@ window.__ModuleLoader__.load({
         // button re-render already-confirmed, so one click is enough (no double-click needed).
         const promptActionConfirmations = new Map();
         let promptOverlayRefresh = null;
+        // Repaints the live buttons in place. Rebuilding the card here would restart the
+        // strip's entrance animation under a resting pointer.
+        let promptActionRepaint = null;
         function promptActionConfirmed(signature) {
             const until = promptActionConfirmations.get(signature);
             if (!until) return false;
@@ -1170,15 +1206,21 @@ window.__ModuleLoader__.load({
             }
             return true;
         }
+        function dismissPromptActionConfirmations(options) {
+            promptActionConfirmations.clear();
+            if (typeof promptActionRepaint === "function") promptActionRepaint(options || {});
+        }
         function markPromptActionDone(button, confirmLabel, signature) {
             if (signature) {
-                promptActionConfirmations.set(signature, Date.now() + PROMPT_OVERLAY_ACTION_DONE_MS);
+                const until = Date.now() + PROMPT_OVERLAY_ACTION_DONE_MS;
+                promptActionConfirmations.set(signature, until);
                 if (typeof setTimeout === "function") {
                     setTimeout(() => {
-                        if (promptActionConfirmations.get(signature) === undefined) return;
+                        // A newer click, or a pointer leave, replaced this deadline. Do not
+                        // clobber it, and do not rebuild the card — that flashes the capsule.
+                        if (promptActionConfirmations.get(signature) !== until) return;
                         promptActionConfirmations.delete(signature);
-                        // Rebuild so the button returns to its normal glyph.
-                        if (typeof promptOverlayRefresh === "function") promptOverlayRefresh();
+                        if (typeof promptActionRepaint === "function") promptActionRepaint();
                     }, PROMPT_OVERLAY_ACTION_DONE_MS);
                 }
             }
@@ -1288,8 +1330,9 @@ window.__ModuleLoader__.load({
                 button.setAttribute("type", "button");
                 button.setAttribute(PROMPT_OVERLAY_ACTION_ATTR, "");
                 button.setAttribute("aria-label", label);
-                const signature = operationSignature(target);
-                const confirmLabel = /复制|copy/i.test(label) ? t("bridge.overlay_copied") : "";
+                const signature = operationSignature(target, source);
+                button.setAttribute(PROMPT_OVERLAY_ACTION_KEY_ATTR, signature);
+                const confirmLabel = isCopyOperation(label) ? t("bridge.overlay_copied") : "";
                 // A rebuilt card must keep showing a confirmation that is still within its window.
                 if (confirmLabel && promptActionConfirmed(signature)) {
                     button.setAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR, confirmLabel);
@@ -1315,6 +1358,9 @@ window.__ModuleLoader__.load({
                     event.stopPropagation?.();
                     try { current.click(); } catch (_) { /* fail closed after an upstream rerender */ }
                     markPromptActionDone(button, confirmLabel, signature);
+                    // Pointer activation focuses the button. Blur it so a later pointer-leave
+                    // can hide the strip; a keyboard click (detail 0) keeps focus.
+                    if (Number(event.detail) > 0 && typeof button.blur === "function") button.blur();
                 });
                 toolbar.appendChild(button);
                 state.proxyDescriptors.push(descriptor);
@@ -1547,6 +1593,8 @@ window.__ModuleLoader__.load({
         }
 		function removeOverlayHost(state) {
 			if (!state || !state.host) return;
+			// The card is going away. A confirmation must not resurrect on the next one.
+			dismissPromptActionConfirmations({ clearHint: true });
 			detachOverlayEvents(state.host, state);
 			if (state.host.parentNode && typeof state.host.parentNode.removeChild === "function") state.host.parentNode.removeChild(state.host);
 			state.host = null;
@@ -1663,6 +1711,11 @@ window.__ModuleLoader__.load({
 				state.host = document.createElement("div");
 				state.host.setAttribute(PROMPT_OVERLAY_ATTR, "");
 				state.host.setAttribute("tabindex", "0");
+				// Leaving the card drops the check immediately. Re-entering must show the
+				// original glyph, not a confirmation that outlived the pointer.
+				state.host.addEventListener?.("pointerleave", () => {
+					dismissPromptActionConfirmations({ clearHint: true });
+				});
 				document.body.appendChild(state.host);
 			}
 			// Re-applied every paint: the host outlives a language switch, so a label set only
@@ -1693,6 +1746,8 @@ window.__ModuleLoader__.load({
 			// CSS resizes the existing cells without recreating thumbnails or losing focus.
 			const widthChanged = Boolean(layout && metrics && attachmentColumns(metrics.width, layout.tileWidth) !== layout.columns);
 			let restoreScrollTop = null;
+			// Same prompt, pointer already on the card: the replacement strip must not fade in again.
+			const preserveStripMotion = state.source === next && state.toolbar && overlayPointerResting(state.host);
 			if (state.source !== next || state.needsRefresh || !state.content || state.locale !== locale || state.maxLines !== maxLines || widthChanged) {
 				restoreScrollTop = state.source === next ? Number(state.body?.scrollTop) || 0 : 0;
 				clearElementChildren(state.host);
@@ -1705,6 +1760,9 @@ window.__ModuleLoader__.load({
 				if (state.content) state.host.appendChild(state.content);
 				// The toolbar is a sibling of the body, not a child, so it never scrolls with it.
 				if (state.toolbar) state.host.appendChild(state.toolbar);
+				if (preserveStripMotion && state.toolbar && typeof state.toolbar.setAttribute === "function") {
+					state.toolbar.setAttribute(PROMPT_OVERLAY_STRIP_SETTLED_ATTR, "");
+				}
 				state.needsRefresh = false;
 				state.locale = locale;
 				state.maxLines = maxLines;
@@ -1719,6 +1777,14 @@ window.__ModuleLoader__.load({
 			// Same reason: the strip is centred on a measured line box, so it can only be placed
 			// once the card has its final width and height.
 			positionOverlayStrip(state);
+		}
+		function overlayPointerResting(host) {
+			if (!host || typeof host.matches !== "function") return false;
+			try {
+				return host.matches(":hover") || host.matches(":focus-visible") || host.matches(":has(:focus-visible)");
+			} catch (_) {
+				return false;
+			}
 		}
 		function installHoverMessageActions(ctx) {
 			if (typeof document === "undefined") return () => {};
@@ -2037,6 +2103,45 @@ window.__ModuleLoader__.load({
 			};
 			// Lets a settled action confirmation rebuild the card to drop its ✓ again.
 			promptOverlayRefresh = () => schedule();
+			// Expiry and pointer-leave repaint the buttons that are already on screen.
+			// Scheduling a card rebuild here restarts the strip entrance and the capsule flashes.
+			promptActionRepaint = (options) => {
+				const toolbar = state.toolbar;
+				if (!toolbar || typeof toolbar.querySelectorAll !== "function") return;
+				const buttons = toolbar.querySelectorAll("[" + PROMPT_OVERLAY_ACTION_ATTR + "]");
+				const hint = typeof toolbar.getAttribute === "function" ? (toolbar.getAttribute(PROMPT_OVERLAY_HINT_ATTR) || "") : "";
+				let hintReplacement = "";
+				for (const button of buttons) {
+					const signature = button.getAttribute(PROMPT_OVERLAY_ACTION_KEY_ATTR) || "";
+					const label = button.getAttribute("aria-label") || "";
+					const confirmLabel = isCopyOperation(label) ? t("bridge.overlay_copied") : "";
+					const wasDone = button.getAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR) || "";
+					if (signature && confirmLabel && promptActionConfirmed(signature)) {
+						button.setAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR, confirmLabel);
+						setActionGlyph(button, { path: PROMPT_OVERLAY_ICON_CHECK, text: "✓" });
+						continue;
+					}
+					if (typeof button.removeAttribute === "function") button.removeAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR);
+					setActionGlyph(button, actionGlyph(label));
+					if (hint && wasDone && hint === wasDone) hintReplacement = label;
+				}
+				if (typeof toolbar.removeAttribute !== "function") return;
+				if (options && options.clearHint) {
+					toolbar.removeAttribute(PROMPT_OVERLAY_HINT_ATTR);
+					return;
+				}
+				if (!hint) return;
+				if (hintReplacement) {
+					toolbar.setAttribute(PROMPT_OVERLAY_HINT_ATTR, hintReplacement);
+					return;
+				}
+				let live = false;
+				for (const button of buttons) {
+					const shown = button.getAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR) || button.getAttribute("aria-label") || "";
+					if (shown === hint) live = true;
+				}
+				if (!live) toolbar.removeAttribute(PROMPT_OVERLAY_HINT_ATTR);
+			};
 			const syncOverlay = () => {
 				if (state.syncing) {
 					state.pending = true;

@@ -363,6 +363,7 @@ const document = {
 
 const window = {
   innerHeight: 800,
+  __bridgeTimers: [],
   addEventListener(name, fn, _opts) {
     const list = windowListeners.get(name) || [];
     list.push(fn);
@@ -419,7 +420,13 @@ vm.runInNewContext(source, {
   navigator: { platform: "MacIntel", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" },
   requestAnimationFrame: (fn) => { fn(); return 0; },
   cancelAnimationFrame: () => {},
-  setTimeout: () => 0,
+  // Recorded, not fired. Confirmation expiry is asserted by flushing a delay explicitly;
+  // leaving these queued matches the old no-op stub for every earlier assertion.
+  setTimeout: (fn, delay) => {
+    const id = window.__bridgeTimers.length + 1;
+    window.__bridgeTimers.push({ id, fn, delay: Number(delay) || 0, fired: false });
+    return id;
+  },
   clearTimeout: () => {},
   console,
 }, { filename: "desktop-bridge-sticky-prompt.js" });
@@ -574,9 +581,15 @@ assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-too
 assert.match(hoverStyle.textContent, /data-dsh-desktop-hover-message-actions\] \[data-dsh-desktop-prompt-overlay\]:hover \[data-dsh-desktop-prompt-overlay-toolbar\][^}]*display: flex !important/);
 assert.match(hoverStyle.textContent, /@keyframes dsh-desktop-prompt-overlay-strip-in \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
 assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-encounter-older\]\s+\[data-dsh-desktop-prompt-overlay-toolbar\] \{ display: flex !important; animation: none !important; \}/, "the pinned load-older capsule does not replay the hover fade");
-for (const trigger of [":focus", ":focus-within"]) {
-  assert.ok(hoverStyle.textContent.includes("data-dsh-desktop-prompt-overlay\]" + trigger + " [data-dsh-desktop-prompt-overlay-toolbar\]"), "the strip is reachable via " + trigger);
-}
+// Mouse click focuses a button. Bare :focus / :focus-within would pin the capsule
+// open after the pointer leaves, so only keyboard focus (:focus-visible) may reveal it.
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay\]:focus-visible \[data-dsh-desktop-prompt-overlay-toolbar\]/);
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay\]:has\(:focus-visible\) \[data-dsh-desktop-prompt-overlay-toolbar\]/);
+assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay\]:focus \[data-dsh-desktop-prompt-overlay-toolbar\]/);
+assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay\]:focus-within \[data-dsh-desktop-prompt-overlay-toolbar\]/);
+assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-toolbar\]:focus-within \{ display: flex/);
+// Rebuilding the strip while the pointer is already on it must not replay the entrance.
+assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-toolbar\]\[data-dsh-desktop-prompt-overlay-strip-settled\] \{ animation: none !important; \}/);
 // The action button is BARE while idle. A permanently drawn hairline circle put TWO nested
 // outlines inside the pill; official Chat only paints a disc while the control is hovered or
 // pressed, which is the reference the design was matched against.
@@ -888,6 +901,11 @@ assert.ok(rebuiltCopy, "rebuild re-creates the copy proxy");
 assert.notEqual(rebuiltCopy, copyProxy, "the rebuild really replaced the button node");
 assert.equal(officialGlyphPath(rebuiltCopy), officialCheckPath, "the copy confirmation survives the rebuild");
 assert.equal(rebuiltCopy.getAttribute("data-dsh-desktop-prompt-overlay-action-done"), "已复制", "the rebuilt button keeps its confirmation label");
+// Two native controls can share the label "复制". The confirmation is per control:
+// one click must not turn every same-labeled proxy into a green check.
+const rebuiltCopies = [...rebuiltToolbar.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]")].filter((button) => button.getAttribute("aria-label") === "复制");
+assert.equal(rebuiltCopies.length, 2, "the card proxies every native copy control");
+assert.equal(rebuiltCopies.filter((button) => button.getAttribute("data-dsh-desktop-prompt-overlay-action-done")).length, 1, "one click checks only the control that was clicked");
 
 // Re-query: the forced rebuild above replaced these nodes, which is itself the point.
 const liveToolbar = overlay.querySelector("[data-dsh-desktop-prompt-overlay-toolbar]");
@@ -947,6 +965,52 @@ doneButton.dispatchEvent({ type: "mouseenter" });
 assert.equal(hintOf(doneButton), doneButton.getAttribute("data-dsh-desktop-prompt-overlay-action-done"), "a confirmed action advertises its confirmation");
 doneButton.dispatchEvent({ type: "mouseleave" });
 assert.equal(hintOf(doneButton), null, "leaving the confirmed action clears the tooltip");
+
+// The check is feedback for the click under the pointer, not a sticky mode.
+// Leaving the card drops it immediately; coming back must show the original glyph.
+const leaveTarget = overlay.querySelector("[data-dsh-desktop-prompt-overlay-action-done]");
+assert.ok(leaveTarget, "a confirmation is still showing before pointer leave");
+const leaveLabel = leaveTarget.getAttribute("aria-label");
+overlay.dispatchEvent({ type: "pointerleave" });
+const afterLeave = [...overlay.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]")].filter((button) => button.getAttribute("aria-label") === leaveLabel);
+assert.ok(afterLeave.length > 0, "the action is still in the strip after pointer leave");
+assert.equal(afterLeave.filter((button) => button.getAttribute("data-dsh-desktop-prompt-overlay-action-done")).length, 0, "pointer leave unchecks immediately");
+assert.ok(afterLeave.every((button) => officialGlyphPath(button) !== officialCheckPath), "pointer leave restores the copy glyph");
+window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__ = 11;
+window.dispatchEvent(new CustomEvent("scroll"));
+const returnedCopies = [...overlay.querySelectorAll("[data-dsh-desktop-prompt-overlay-action]")].filter((button) => button.getAttribute("aria-label") === "复制");
+assert.equal(returnedCopies.filter((button) => button.getAttribute("data-dsh-desktop-prompt-overlay-action-done")).length, 0, "hovering back does not restore a cleared check");
+assert.ok(returnedCopies.every((button) => officialGlyphPath(button) !== officialCheckPath), "hovering back shows the copy glyph");
+
+// While the pointer stays, the check still expires on its own and the button is repainted
+// in place — a full card rebuild is what made the capsule flash.
+const staying = returnedCopies[0];
+let blurred = 0;
+staying.blur = () => { blurred += 1; };
+staying.dispatchEvent({ type: "click", detail: 1 });
+assert.equal(blurred, 1, "a pointer click blurs the action so focus cannot pin the capsule");
+assert.equal(staying.getAttribute("data-dsh-desktop-prompt-overlay-action-done"), "已复制", "the click still confirms while the pointer remains");
+for (const timer of window.__bridgeTimers) {
+  if (timer.fired || timer.delay !== 1400) continue;
+  timer.fired = true;
+  timer.fn();
+}
+assert.equal(staying.getAttribute("data-dsh-desktop-prompt-overlay-action-done"), null, "the check clears when its window ends, without rebuilding the card");
+assert.notEqual(officialGlyphPath(staying), officialCheckPath, "the expired check is drawn back as the copy glyph");
+staying.dispatchEvent({ type: "click", detail: 0 });
+assert.equal(blurred, 1, "a keyboard click does not blur the action");
+
+// A rebuild while the pointer is already over the card must not replay the strip entrance.
+overlay.matches = (selector) => selector === ":hover" || selector === ":focus-visible";
+const stripBeforeSettle = overlay.querySelector("[data-dsh-desktop-prompt-overlay-toolbar]");
+window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__ = 12;
+window.dispatchEvent(new CustomEvent("scroll"));
+const stripAfterSettle = overlay.querySelector("[data-dsh-desktop-prompt-overlay-toolbar]");
+assert.notEqual(stripAfterSettle, stripBeforeSettle, "the hovered rebuild still replaces the strip");
+assert.equal(stripAfterSettle.getAttribute("data-dsh-desktop-prompt-overlay-strip-settled"), "", "a hovered rebuild marks the strip settled so the entrance does not replay");
+delete overlay.matches;
+window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__ = 8;
+window.dispatchEvent(new CustomEvent("scroll"));
 
 // The fade is state, not decoration: it must appear only while the body can still scroll
 // down, and disappear at the bottom so it never advertises content that is already visible.
