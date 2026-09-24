@@ -458,6 +458,96 @@ const desktopExternalJSTemplate = `
     const external = resolveExternal(href);
     if (external) callDesktop("OpenExternalURL", external);
   };
+  const installClipboardFallback = () => {
+    if (typeof navigator === "undefined" || window.__DSH_CLIPBOARD_FALLBACK_INSTALLED__) return;
+    window.__DSH_CLIPBOARD_FALLBACK_INSTALLED__ = true;
+    const nav = navigator;
+    const originalWriteText = nav.clipboard && typeof nav.clipboard.writeText === "function"
+      ? nav.clipboard.writeText.bind(nav.clipboard)
+      : null;
+
+    const execCopy = (text) => {
+      if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
+      const str = text == null ? "" : String(text);
+      let success = false;
+      const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+      const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      try {
+        const area = document.createElement("textarea");
+        area.value = str;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        area.style.top = "0";
+        area.style.opacity = "0";
+        (document.body || document.documentElement).appendChild(area);
+        area.focus({ preventScroll: true });
+        area.select();
+        area.setSelectionRange(0, area.value.length);
+        success = document.execCommand("copy");
+        area.remove();
+      } catch (_) {
+        success = false;
+      }
+      if (selectedRange && selection) {
+        try {
+          selection.removeAllRanges();
+          selection.addRange(selectedRange);
+        } catch (_) {}
+      }
+      return success;
+    };
+
+    const robustWriteText = async (text) => {
+      const str = text == null ? "" : String(text);
+      if (execCopy(str)) {
+        return;
+      }
+      if (originalWriteText) {
+        try {
+          await originalWriteText(str);
+          return;
+        } catch (_) {}
+      }
+      const nativeCopy = window.__DSH_DESKTOP_COPY_TEXT__;
+      if (typeof nativeCopy === "function") {
+        try {
+          await nativeCopy(str);
+          return;
+        } catch (_) {}
+      }
+      if (execCopy(str)) {
+        return;
+      }
+      throw new DOMException("Failed to copy text to clipboard", "NotAllowedError");
+    };
+
+    if (typeof Clipboard !== "undefined" && Clipboard.prototype) {
+      try { Clipboard.prototype.writeText = robustWriteText; } catch (_) {}
+    }
+    if (nav.clipboard) {
+      try { nav.clipboard.writeText = robustWriteText; } catch (_) {
+        try {
+          Object.defineProperty(nav.clipboard, "writeText", {
+            value: robustWriteText,
+            configurable: true,
+            writable: true,
+          });
+        } catch (_) {}
+      }
+    } else {
+      try {
+        Object.defineProperty(nav, "clipboard", {
+          value: { writeText: robustWriteText },
+          configurable: true,
+          writable: true,
+        });
+      } catch (_) {
+        try { nav.clipboard = { writeText: robustWriteText }; } catch (_) {}
+      }
+    }
+  };
+  installClipboardFallback();
   document.addEventListener("click", routeLinkClick);
   document.addEventListener("auxclick", routeLinkClick);
   // On macOS WebKit, mouse clicks on <button> inside a popup menu do not transfer

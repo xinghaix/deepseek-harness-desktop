@@ -343,6 +343,7 @@
   "err.bridge_endpoint_write": "写入桌面桥接端点文件失败",
   "err.bridge_panic": "桌面桥接处理发生异常",
   "err.bridge_method": "桌面桥接不支持该 HTTP 方法",
+  "err.clipboard_write_failed": "写入系统剪贴板失败",
   "err.bridge_body_too_large": "桌面桥接请求体过大",
   "tray.tooltip": "托盘中的 Deepseek Harness Desktop",
   "tray.tooltip_running": "有任务正在运行",

@@ -52,6 +52,17 @@ func (h *externalURLBridgeHost) OpenExternalURL(url string) error {
 	return h.err
 }
 
+type clipboardBridgeHost struct {
+	routeTestBridgeHost
+	texts []string
+	err   error
+}
+
+func (h *clipboardBridgeHost) WriteClipboard(text string) error {
+	h.texts = append(h.texts, text)
+	return h.err
+}
+
 func TestDesktopBridgeOpenExternalURL(t *testing.T) {
 	host := &externalURLBridgeHost{}
 	owner := New()
@@ -136,6 +147,54 @@ func TestDesktopBridgeOpenExternalURLFailureAndLegacyHost(t *testing.T) {
 				t.Fatalf("legacy status failed: %d", res.Code)
 			}
 		})
+	}
+}
+
+func TestDesktopBridgeWriteClipboard(t *testing.T) {
+	host := &clipboardBridgeHost{}
+	owner := New()
+	owner.SetBridgeHost(host)
+	bridge := &desktopBridge{owner: owner, token: "test-token"}
+
+	// Valid POST
+	req := httptest.NewRequest("POST", "/v1/write-clipboard", strings.NewReader(`{"text":"hello world"}`))
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res := httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	if len(host.texts) != 1 || host.texts[0] != "hello world" {
+		t.Fatalf("expected ['hello world'], got %v", host.texts)
+	}
+
+	// Method not allowed
+	req = httptest.NewRequest("GET", "/v1/write-clipboard", nil)
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res = httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", res.Code)
+	}
+
+	// Host error
+	host.err = errors.New("clipboard locked")
+	req = httptest.NewRequest("POST", "/v1/write-clipboard", strings.NewReader(`{"text":"fail"}`))
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res = httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusConflict || !strings.Contains(res.Body.String(), "clipboard locked") {
+		t.Fatalf("expected 409 conflict, got %d: %s", res.Code, res.Body.String())
+	}
+
+	// Legacy host without ClipboardHost
+	owner.SetBridgeHost(&routeTestBridgeHost{})
+	req = httptest.NewRequest("POST", "/v1/write-clipboard", strings.NewReader(`{"text":"legacy"}`))
+	req.Header.Set(desktopBridgeTokenHeader, "test-token")
+	res = httptest.NewRecorder()
+	bridge.serveHTTP(res, req)
+	if res.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for legacy host, got %d", res.Code)
 	}
 }
 

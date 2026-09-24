@@ -18,6 +18,18 @@ var _ dsh.BridgeHost = bridgeHostAdapter{}
 var _ dsh.ExternalURLHost = bridgeHostAdapter{}
 var _ dsh.ChatWindowActionHost = bridgeHostAdapter{}
 var _ dsh.ChatContextMenuHost = bridgeHostAdapter{}
+var _ dsh.ClipboardHost = bridgeHostAdapter{}
+
+func (a bridgeHostAdapter) WriteClipboard(text string) error {
+	app, err := desktopApp()
+	if err != nil {
+		return err
+	}
+	if !app.Clipboard.SetText(text) {
+		return i18n.ErrorfActive("err.clipboard_write_failed")
+	}
+	return nil
+}
 
 func (a bridgeHostAdapter) OpenExternalURL(url string) error {
 	return openExternalURL(url)

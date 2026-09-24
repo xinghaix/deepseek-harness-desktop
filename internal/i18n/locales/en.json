@@ -343,6 +343,7 @@
   "err.bridge_endpoint_write": "failed to write desktop bridge endpoint file",
   "err.bridge_panic": "desktop bridge handler panicked",
   "err.bridge_method": "desktop bridge method not allowed",
+  "err.clipboard_write_failed": "Failed to copy to clipboard",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop in the tray",
   "tray.tooltip_running": "Tasks are running",

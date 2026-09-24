@@ -79,6 +79,12 @@ type ExternalURLHost interface {
 	OpenExternalURL(string) error
 }
 
+// ClipboardHost is optional; implementations write plain text directly to the
+// system clipboard, providing a native fallback when browser APIs are blocked.
+type ClipboardHost interface {
+	WriteClipboard(text string) error
+}
+
 type PrefsHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
@@ -550,6 +556,33 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := external.OpenExternalURL(body.URL); err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case "/v1/write-clipboard":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Text string `json:"text"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		clipboardHost, ok := host.(ClipboardHost)
+		if !ok {
+			writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		if err := clipboardHost.WriteClipboard(body.Text); err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return
 		}

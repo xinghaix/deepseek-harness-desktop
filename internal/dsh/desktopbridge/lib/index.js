@@ -56,7 +56,8 @@ const routes = Object.freeze({
 	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" }),
 	clearLastSession: Object.freeze({ method: "POST", path: "/v1/clear-last-session" }),
 	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" }),
-	deleteSession: Object.freeze({ method: "POST", path: "/v1/delete-session" })
+	deleteSession: Object.freeze({ method: "POST", path: "/v1/delete-session" }),
+	writeClipboard: Object.freeze({ method: "POST", path: "/v1/write-clipboard" })
 });
 
 /** Host-side sticky tray errors (turn/end error|interrupted + api-session/error). */

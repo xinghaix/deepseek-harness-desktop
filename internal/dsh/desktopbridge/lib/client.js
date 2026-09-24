@@ -26,6 +26,97 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		function installClipboardFallback() {
+			if (typeof navigator === "undefined" || (typeof window !== "undefined" && window.__DSH_CLIPBOARD_FALLBACK_INSTALLED__)) return;
+			if (typeof window !== "undefined") window.__DSH_CLIPBOARD_FALLBACK_INSTALLED__ = true;
+			const nav = navigator;
+			const originalWriteText = nav.clipboard && typeof nav.clipboard.writeText === "function"
+				? nav.clipboard.writeText.bind(nav.clipboard)
+				: null;
+
+			const execCopy = (text) => {
+				if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
+				const str = text == null ? "" : String(text);
+				let success = false;
+				const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+				const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+				try {
+					const area = document.createElement("textarea");
+					area.value = str;
+					area.setAttribute("readonly", "");
+					area.style.position = "fixed";
+					area.style.left = "-9999px";
+					area.style.top = "0";
+					area.style.opacity = "0";
+					(document.body || document.documentElement).appendChild(area);
+					area.focus({ preventScroll: true });
+					area.select();
+					area.setSelectionRange(0, area.value.length);
+					success = document.execCommand("copy");
+					area.remove();
+				} catch (_) {
+					success = false;
+				}
+				if (selectedRange && selection) {
+					try {
+						selection.removeAllRanges();
+						selection.addRange(selectedRange);
+					} catch (_) {}
+				}
+				return success;
+			};
+
+			const robustWriteText = async (text) => {
+				const str = text == null ? "" : String(text);
+				if (execCopy(str)) {
+					return;
+				}
+				if (originalWriteText) {
+					try {
+						await originalWriteText(str);
+						return;
+					} catch (_) {}
+				}
+				const nativeCopy = typeof window !== "undefined" ? window.__DSH_DESKTOP_COPY_TEXT__ : null;
+				if (typeof nativeCopy === "function") {
+					try {
+						await nativeCopy(str);
+						return;
+					} catch (_) {}
+				}
+				if (execCopy(str)) {
+					return;
+				}
+				throw new DOMException("Failed to copy text to clipboard", "NotAllowedError");
+			};
+
+			if (typeof Clipboard !== "undefined" && Clipboard.prototype) {
+				try { Clipboard.prototype.writeText = robustWriteText; } catch (_) {}
+			}
+			if (nav.clipboard) {
+				try { nav.clipboard.writeText = robustWriteText; } catch (_) {
+					try {
+						Object.defineProperty(nav.clipboard, "writeText", {
+							value: robustWriteText,
+							configurable: true,
+							writable: true,
+						});
+					} catch (_) {}
+				}
+			} else {
+				try {
+					Object.defineProperty(nav, "clipboard", {
+						value: { writeText: robustWriteText },
+						configurable: true,
+						writable: true,
+					});
+				} catch (_) {
+					try { nav.clipboard = { writeText: robustWriteText }; } catch (_) {}
+				}
+			}
+		}
+		installClipboardFallback();
+
 		function callDesktopRPCRaw(connection, endpoint, payload, signal) {
 			try {
 				return Promise.resolve(connection.rpc.call(CHANNEL, endpoint, payload || {}, signal));
@@ -3257,22 +3348,66 @@ window.__ModuleLoader__.load({
 		function copySessionIdFromMenuItem(item) {
 			const sessionId = item.getAttribute(COPY_SESSION_ID_VALUE_ATTRIBUTE) || "";
 			const labels = item.__dshCopySessionIdLabels || SESSION_MENU_LABELS.zh;
-			if (!sessionId || typeof navigator === "undefined" || !navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+			if (!sessionId) {
 				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
 				return;
 			}
-			let result;
-			try {
-				result = navigator.clipboard.writeText(sessionId);
-			} catch (_) {
-				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-				return;
-			}
-			Promise.resolve(result).then(() => {
+			const copyViaExec = () => {
+				if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
+				let success = false;
+				const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+				const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+				try {
+					const area = document.createElement("textarea");
+					area.value = sessionId;
+					area.setAttribute("readonly", "");
+					area.style.position = "fixed";
+					area.style.left = "-9999px";
+					area.style.top = "0";
+					area.style.opacity = "0";
+					(document.body || document.documentElement).appendChild(area);
+					area.focus({ preventScroll: true });
+					area.select();
+					area.setSelectionRange(0, area.value.length);
+					success = document.execCommand("copy");
+					area.remove();
+				} catch (_) {
+					success = false;
+				}
+				if (selectedRange && selection) {
+					try {
+						selection.removeAllRanges();
+						selection.addRange(selectedRange);
+					} catch (_) {}
+				}
+				return success;
+			};
+			if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+				let result;
+				try {
+					result = navigator.clipboard.writeText(sessionId);
+				} catch (_) {
+					if (copyViaExec()) {
+						showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
+						return;
+					}
+					showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
+					return;
+				}
+				Promise.resolve(result).then(() => {
+					showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
+				}).catch(() => {
+					if (copyViaExec()) {
+						showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
+						return;
+					}
+					showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
+				});
+			} else if (copyViaExec()) {
 				showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
-			}).catch(() => {
+			} else {
 				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-			});
+			}
 		}
 
 		function removeCopySessionIdMenuItem(item) {
@@ -5090,6 +5225,7 @@ window.__ModuleLoader__.load({
 					__DSH_DESKTOP_OPEN_EXTERNAL_URL__: (url) => invokeNative("openExternalURL", { url }),
 					__DSH_DESKTOP_WINDOW_ACTION__: (action) => invokeNative("chatWindowAction", { action }),
 					__DSH_DESKTOP_CONTEXT_MENU__: (payload) => invokeNative("showChatContextMenu", payload),
+					__DSH_DESKTOP_COPY_TEXT__: (text) => invokeNative("writeClipboard", { text }),
 				};
 				for (const [name, handler] of Object.entries(actions)) window[name] = handler;
 				ctx.effect(() => () => {

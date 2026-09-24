@@ -343,6 +343,7 @@
   "err.bridge_endpoint_write": "failed to write desktop bridge endpoint file",
   "err.bridge_panic": "desktop bridge handler panicked",
   "err.bridge_method": "desktop bridge method not allowed",
+  "err.clipboard_write_failed": "Échec de la copie dans le presse-papiers",
   "err.bridge_body_too_large": "desktop bridge request body too large",
   "tray.tooltip": "Deepseek Harness Desktop dans la barre",
   "tray.tooltip_running": "Des tâches sont en cours",

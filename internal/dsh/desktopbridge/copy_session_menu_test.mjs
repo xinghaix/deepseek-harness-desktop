@@ -414,6 +414,22 @@ copyItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation()
 await flushMicrotasks();
 assert.equal(copyItem().querySelector("[data-dsh-copy-session-id-label]").textContent, "复制失败");
 
+// When clipboard.writeText rejects but document.execCommand succeeds, fallback must copy and show success
+let execCommandCalled = false;
+sandbox.document.execCommand = (cmd) => {
+  if (cmd === "copy") {
+    execCommandCalled = true;
+    return true;
+  }
+  return false;
+};
+clipboardRejects = true;
+copyItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await flushMicrotasks();
+assert.equal(execCommandCalled, true, "execCommand fallback must be attempted when clipboard rejects");
+assert.equal(copyItem().querySelector("[data-dsh-copy-session-id-label]").textContent, "已复制");
+delete sandbox.document.execCommand;
+
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: false });
 assert.equal(copyItem(), null, "disabled preference must remove the injected item");
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });

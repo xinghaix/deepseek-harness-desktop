@@ -85,6 +85,9 @@ assert.match(source, /setRestoreLastSession/, "setRestoreLastSession setter miss
 assert.match(source, /setRememberWindowSize/, "setRememberWindowSize setter missing");
 assert.match(source, /t\("field\.restore_last_session"\)/, "restore_last_session label missing");
 assert.match(source, /t\("field\.remember_window_size"\)/, "remember_window_size label missing");
+assert.match(source, /installClipboardFallback/, "clipboard fallback installer missing");
+assert.match(source, /__DSH_DESKTOP_COPY_TEXT__/, "native clipboard bridge action missing");
+assert.match(source, /document.execCommand/, "document.execCommand fallback missing");
 assert.match(source, /statusOpen/, "status card collapsible state missing");
 assert.match(source, /dshDesktopBridgeStatusHeader/, "collapsible status card header missing");
 assert.match(source, /dshDesktopBridgePill/, "status pill badge missing");
