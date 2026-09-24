@@ -45,6 +45,11 @@ Error: invalid escalation: justification is only valid together with sandbox_per
 
 插件只作为 bundle layer 安装到目标 profile，不修改 DSH 安装目录。
 
+## 兼容性
+
+- **0.2.2+**：`peerDependencies` 声明为 `^0.1.7-rc.1`（及 `@deepseek-ai/cordis` `^4.0.4`），可在 DSH `0.1.7-rc.1` 上原生通过兼容性检查，无需 `dsh plugin allow-version`。
+- **0.2.1**：peers 精确钉在 `0.1.6-alpha.1`，与 `0.1.7-rc.1` 不兼容（DSH 会跳过 bundle）。
+
 ## 安装或更新
 
 安装本仓库的二次修改版本请使用以下 GitHub 地址，而不是 npm 包名；npm 发布版本不保证包含这里的修改。
