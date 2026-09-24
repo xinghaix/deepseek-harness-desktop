@@ -8,9 +8,14 @@ import (
 )
 
 const (
-	// 紧凑统一标题栏比默认 unified 少一段垂直留白；注入层与它共用 36px
-	// 安全区，保证交通灯与侧栏内容的定位基准一致。
+	// InvisibleTitleBarHeight / native drag strip. Keep this for the macOS
+	// titlebar hit area; changing it does not move traffic lights, but
+	// shrinking it too far makes the drag/hit band feel cramped.
 	desktopNativeTopInset = 36
+	// Sidebar/logo clearance under UnifiedCompact traffic lights only.
+	// Intentionally below desktopNativeTopInset so we do not stack a full
+	// drag-strip of empty pixels under the lights. Traffic light x/y stay put.
+	desktopNativeContentInset = 22
 	desktopCustomTopInset = 48
 )
 
@@ -159,8 +164,9 @@ body > .app-shell {
 .dsh-window-sidebar,
 #root [data-slot="sidebar"] > :first-child {
   box-sizing: border-box !important;
-  /* DSH SidebarRoot 的展开态原生 top padding 是 6px；只叠加窗口安全区。 */
-  padding-top: calc(var(--dsh-window-top-inset, 36px) + 6px) !important;
+  /* DSH SidebarRoot 展开态原生 top padding 是 6px；只叠加紧凑交通灯净空，
+     不用 InvisibleTitleBarHeight(36) 整段拖条高度，避免灯下再堆空带。 */
+  padding-top: calc(var(--dsh-window-content-inset, 22px) + 6px) !important;
 }
 #root [data-sidebar-collapsed][data-details-collapsed],
 #root [data-sidebar-collapsed].dsh-window-wide-rail {
@@ -171,7 +177,7 @@ body > .app-shell {
 }
 #root [data-sidebar-collapsed] [data-slot="sidebar"] > :first-child {
   /* 折叠态原生 top padding 是 18px，保留与展开态相同的首元素基线。 */
-  padding-top: calc(var(--dsh-window-top-inset, 36px) + 18px) !important;
+  padding-top: calc(var(--dsh-window-content-inset, 22px) + 18px) !important;
   padding-left: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
   padding-right: calc((var(--dsh-window-collapsed-rail-width, 84px) - 36px) / 2) !important;
 }
@@ -194,6 +200,7 @@ const desktopNativeWindowInsetJS = `
 (() => {
   const isManagement = Boolean(document.querySelector("body > .app-shell"));
   const topInset = %d;
+  const contentInset = %d;
   const chromeStyleId = "dsh-window-inset-style";
   let pageContent = null;
   let observedFrame = null;
@@ -214,6 +221,7 @@ const desktopNativeWindowInsetJS = `
     content.classList.add("dsh-window-content");
     if (isManagement) content.classList.add("dsh-window-management");
     content.style.setProperty("--dsh-window-top-inset", topInset + "px");
+    content.style.setProperty("--dsh-window-content-inset", contentInset + "px");
     if (!isManagement) {
       const sidebarSlot = content.querySelector("[data-slot='sidebar']");
       const sidebar = sidebarSlot?.firstElementChild;
@@ -224,6 +232,7 @@ const desktopNativeWindowInsetJS = `
       const frame = findFrame(content);
       sidebar.classList.add("dsh-window-sidebar");
       sidebar.style.setProperty("--dsh-window-top-inset", topInset + "px");
+      sidebar.style.setProperty("--dsh-window-content-inset", contentInset + "px");
       if (frame && frame !== observedFrame) {
         frameObserver?.disconnect();
         observedFrame = frame;
@@ -622,7 +631,7 @@ func desktopChromeScript(nativeMac bool) string {
 func desktopChromeBodyScript(nativeMac bool) string {
 	external := desktopExternalJS(!nativeMac)
 	if nativeMac {
-		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + external
+		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, desktopNativeContentInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + external
 	}
 	return fmt.Sprintf(
 		desktopChromeJS,

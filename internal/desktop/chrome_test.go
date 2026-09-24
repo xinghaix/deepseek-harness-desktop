@@ -54,14 +54,17 @@ func TestDesktopChromeScriptNativeMacReservesTransparentTitlebarInset(t *testing
 	if !strings.Contains(desktopSidebarTransitionCSS, "transition: none !important") {
 		t.Fatal("Chat sidebar 拖拽和减少动效状态必须禁用过渡")
 	}
-	if !strings.Contains(script, "dsh-window-sidebar") || !strings.Contains(script, "data-slot='sidebar'") || !strings.Contains(script, "firstElementChild") || !strings.Contains(script, "const topInset = 36") {
+	if !strings.Contains(script, "dsh-window-sidebar") || !strings.Contains(script, "data-slot='sidebar'") || !strings.Contains(script, "firstElementChild") || !strings.Contains(script, "const topInset = 36") || !strings.Contains(script, "const contentInset = 22") {
 		t.Fatal("macOS 左侧 sidebar 未预留原生标题栏安全区")
 	}
-	if !strings.Contains(desktopNativeWindowInsetCSS, "#root [data-slot=\"sidebar\"] > :first-child") || !strings.Contains(desktopNativeWindowInsetCSS, "84px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-top-inset, 36px)") {
+	if !strings.Contains(desktopNativeWindowInsetCSS, "#root [data-slot=\"sidebar\"] > :first-child") || !strings.Contains(desktopNativeWindowInsetCSS, "84px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-content-inset, 22px)") {
 		t.Fatal("macOS sidebar 缺少不依赖异步脚本的 CSS 兜底选择器")
 	}
-	if !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-top-inset, 36px) + 6px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-top-inset, 36px) + 18px") {
-		t.Fatal("macOS sidebar 未保留 DSH 展开/折叠原生顶部节奏")
+	if !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-content-inset, 22px) + 6px") || !strings.Contains(desktopNativeWindowInsetCSS, "var(--dsh-window-content-inset, 22px) + 18px") {
+		t.Fatal("macOS sidebar 未保留 DSH 展开/折叠原生顶部节奏（紧凑交通灯净空）")
+	}
+	if desktopNativeContentInset >= desktopNativeTopInset {
+		t.Fatal("sidebar content inset must stay below InvisibleTitleBarHeight so the logo gap tightens without moving traffic lights")
 	}
 	if !strings.Contains(script, "dsh-window-wide-rail") || !strings.Contains(script, "gridTemplateColumns") || !strings.Contains(script, "84px") || strings.Contains(script, "dsh-native-sidebar-cap") {
 		t.Fatal("macOS 原生折叠轨道未对齐交通灯安全区")
