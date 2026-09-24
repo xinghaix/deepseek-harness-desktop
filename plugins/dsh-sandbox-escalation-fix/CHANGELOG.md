@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.3] - 2026-09-24
+
+### Added
+
+- 新增插件图标 `icon.svg`（`package.json` 顶层 `icon` 字段），样式对齐官方 DSH 插件卡 36×36 矢量图标：沙箱 U 形边界 + 审批表单票据 + 向上 clearance 台阶，表达提权审批而非通用盾牌。
+
 ## [0.2.2] - 2026-09-24
 
 ### Changed

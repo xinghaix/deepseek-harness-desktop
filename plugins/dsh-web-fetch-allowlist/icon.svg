@@ -1,0 +1,23 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- host allow-strip / URL chip -->
+  <path d="M6.8 12.8H20.4C23.27 12.8 25.6 15.13 25.6 18C25.6 20.87 23.27 23.2 20.4 23.2H6.8C6.08 23.2 5.5 22.62 5.5 21.9V14.1C5.5 13.38 6.08 12.8 6.8 12.8Z" fill="url(#wf_chip)"/>
+  <!-- chip inner track -->
+  <path d="M8.1 15.55H18.55V20.45H8.1V15.55Z" fill="#FFFFFF" fill-opacity="0.9"/>
+  <!-- allow-gate crescent (right of chip) -->
+  <path d="M25.6 18C25.6 15.13 23.27 12.8 20.4 12.8V15.7C21.67 15.7 22.7 16.73 22.7 18C22.7 19.27 21.67 20.3 20.4 20.3V23.2C23.27 23.2 25.6 20.87 25.6 18Z" fill="#45D9E7"/>
+  <!-- fetch shaft + arrowhead through gate -->
+  <path d="M21.2 16.55H28.35V19.45H21.2V16.55Z" fill="url(#wf_arrow)"/>
+  <path d="M27.1 13.85L32.5 18L27.1 22.15V13.85Z" fill="url(#wf_arrow)"/>
+  <!-- web origin arc above chip -->
+  <path d="M9.2 10.35C12.05 9.35 15.15 9.35 18 10.35L17.2 12.55C15.05 11.8 12.75 11.8 10.6 12.55L9.2 10.35Z" fill="#F2AF63"/>
+  <defs>
+    <linearGradient id="wf_chip" x1="5.5" y1="12.8" x2="25.6" y2="23.2" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CB7FF"/>
+      <stop offset="1" stop-color="#145AF3"/>
+    </linearGradient>
+    <linearGradient id="wf_arrow" x1="21.2" y1="13.85" x2="32.5" y2="22.15" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE"/>
+      <stop offset="1" stop-color="#3F77D8"/>
+    </linearGradient>
+  </defs>
+</svg>

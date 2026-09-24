@@ -5,6 +5,7 @@
 
 ## 兼容性
 
+- **0.2.1+**：新增 `icon.svg` 插件图标（Plugin Manager 卡片/详情）。
 - **0.2.0+**：适配 DSH `0.1.7-rc.1`。客户端注入由已移除的 `settingsScope` 改为 `configForms`；Host 端不再调用已删除的 `settings.installSection`，改为对 `hosts` 使用 Schemastery `.volatile()` 读取 live 配置。`peerDependencies` 声明为 `^0.1.7-rc.1`，可在该版本上原生通过兼容性检查，无需 `dsh plugin allow-version`。
 - **0.1.2**：面向 `0.1.6-alpha.x`（`settingsScope` + `installSection`），在 `0.1.7-rc.1` 上会卡在 `pending (waiting for service: settingsScope)`。
 
@@ -32,6 +33,12 @@ dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#main&path:/plugi
 完整文件：[CHANGELOG.md](./CHANGELOG.md)
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [0.2.1] - 2026-09-24
+
+### Added
+
+- 新增插件图标 `icon.svg`（`package.json` 顶层 `icon` 字段），样式对齐官方 DSH 插件卡 36×36 矢量图标：主机 allow-strip / URL chip + 通行闸口 + fetch 箭头，表达白名单拉取而非通用地球/对勾。
 
 ## [0.2.0] - 2026-09-24
 

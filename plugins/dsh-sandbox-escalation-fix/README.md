@@ -13,6 +13,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.3] - 2026-09-24
+
+### Added
+
+- 新增插件图标 `icon.svg`（`package.json` 顶层 `icon` 字段），样式对齐官方 DSH 插件卡 36×36 矢量图标：沙箱 U 形边界 + 审批表单票据 + 向上 clearance 台阶，表达提权审批而非通用盾牌。
+
 ## [0.2.2] - 2026-09-24
 
 ### Changed
@@ -79,6 +85,7 @@ Error: invalid escalation: justification is only valid together with sandbox_per
 
 ## 兼容性
 
+- **0.2.3+**：新增 `icon.svg` 插件图标（Plugin Manager 卡片/详情）。
 - **0.2.2+**：`peerDependencies` 声明为 `^0.1.7-rc.1`（及 `@deepseek-ai/cordis` `^4.0.4`），可在 DSH `0.1.7-rc.1` 上原生通过兼容性检查，无需 `dsh plugin allow-version`。
 - **0.2.1**：peers 精确钉在 `0.1.6-alpha.1`，与 `0.1.7-rc.1` 不兼容（DSH 会跳过 bundle）。
 

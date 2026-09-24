@@ -1,0 +1,20 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- sandbox U-frame: left, bottom, right walls -->
+  <path d="M9 10.5H12.2V25.5H9V10.5ZM12.2 22.3H23.8V25.5H12.2V22.3ZM23.8 10.5H27V25.5H23.8V10.5Z" fill="url(#se_frame)"/>
+  <!-- form ticket (approval slip) sitting in / rising from sandbox -->
+  <path d="M13.4 9.2H22.6C23.37 9.2 24 9.83 24 10.6V20.1C24 20.87 23.37 21.5 22.6 21.5H13.4C12.63 21.5 12 20.87 12 20.1V10.6C12 9.83 12.63 9.2 13.4 9.2Z" fill="url(#se_ticket)"/>
+  <!-- ticket field bars -->
+  <path d="M14.35 12.1H21.65V14.05H14.35V12.1ZM14.35 15.85H19.4V17.8H14.35V15.85Z" fill="#FFFFFF" fill-opacity="0.92"/>
+  <!-- stepped clearance lifts escaping the open top -->
+  <path d="M15.1 8.35H17.55V6.1H15.1V8.35ZM18.45 8.35H20.9V4.85H18.45V8.35Z" fill="#F2AF63"/>
+  <defs>
+    <linearGradient id="se_frame" x1="9" y1="10.5" x2="27" y2="25.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE"/>
+      <stop offset="1" stop-color="#3F77D8"/>
+    </linearGradient>
+    <linearGradient id="se_ticket" x1="12" y1="9.2" x2="24" y2="21.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CB7FF"/>
+      <stop offset="1" stop-color="#145AF3"/>
+    </linearGradient>
+  </defs>
+</svg>

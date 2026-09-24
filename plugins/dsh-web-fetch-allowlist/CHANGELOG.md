@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-09-24
+
+### Added
+
+- 新增插件图标 `icon.svg`（`package.json` 顶层 `icon` 字段），样式对齐官方 DSH 插件卡 36×36 矢量图标：主机 allow-strip / URL chip + 通行闸口 + fetch 箭头，表达白名单拉取而非通用地球/对勾。
+
 ## [0.2.0] - 2026-09-24
 
 ### Changed

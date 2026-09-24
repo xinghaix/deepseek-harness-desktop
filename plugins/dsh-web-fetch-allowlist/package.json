@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-fetch-allowlist",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Allowlisted native web_fetch through Surge/Clash Fake-IP (198.18.0.0/15) without replacing the http fetch provider.",
   "type": "module",
   "main": "./lib/index.js",
@@ -10,6 +10,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "icon.svg",
     "lib/",
     "cordis.patch.yml"
   ],
@@ -48,5 +49,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "^3.18.4"
-  }
+  },
+  "icon": "./icon.svg"
 }
