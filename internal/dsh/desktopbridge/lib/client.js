@@ -3047,6 +3047,55 @@ window.__ModuleLoader__.load({
 					font-size: 13px !important;
 					line-height: 26px !important;
 				}
+
+				.dshDesktopArchivedSection {
+					width: 100%; max-width: 760px; color: var(--dsw-alias-label-primary);
+					flex-direction: column; gap: 12px; display: flex;
+				}
+				.dshDesktopArchivedStatus {
+					color: var(--dsw-alias-label-tertiary); margin: 0; font-size: 13px; line-height: 20px;
+				}
+				.dshDesktopArchivedSearch {
+					width: 100%; color: var(--dsw-alias-label-tertiary); align-items: center; display: flex; position: relative;
+				}
+				.dshDesktopArchivedSearch > svg { pointer-events: none; position: absolute; left: 12px; }
+				.dshDesktopArchivedSearch input {
+					border: .5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base);
+					width: 100%; height: 32px; color: var(--dsw-alias-label-primary); font: inherit;
+					border-radius: 8px; padding: 0 12px 0 36px;
+				}
+				.dshDesktopArchivedBatch {
+					display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+					min-height: 36px; margin: 0; padding: 6px 8px;
+					border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .08));
+					border-radius: 8px; background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, .025));
+					color: var(--dsw-alias-label-secondary, #5f6368); font-size: 12px;
+				}
+				.dshDesktopArchivedList {
+					flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; display: flex;
+				}
+				.dshDesktopArchivedRow {
+					border-radius: 8px; align-items: center; gap: 12px; padding: 8px 10px; display: flex;
+				}
+				.dshDesktopArchivedRow:hover { background: var(--dsw-alias-bg-layer-1); }
+				.dshDesktopArchivedIdentity {
+					flex-direction: column; flex: 1; gap: 2px; min-width: 0; display: flex;
+				}
+				.dshDesktopArchivedTitle {
+					text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; overflow: hidden;
+				}
+				.dshDesktopArchivedMeta {
+					color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px;
+				}
+				.dshDesktopArchivedAction {
+					height: 28px; padding: 0 10px; border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .1));
+					border-radius: 7px; background: var(--dsw-alias-bg-base, #fff);
+					color: var(--dsw-alias-label-primary, #1f2329); font: inherit; font-size: 12px; cursor: pointer;
+					flex: none;
+				}
+				.dshDesktopArchivedAction:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, .06)); }
+				.dshDesktopArchivedAction:disabled { cursor: default; opacity: .45; }
+				.dshDesktopArchivedActionDanger { color: var(--dsw-alias-state-error-primary, #c93c42) !important; }
 				[data-dsh-archived-batch] {
 					display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
 					min-height: 36px; margin: 2px 0 8px; padding: 6px 8px;
@@ -3720,6 +3769,45 @@ window.__ModuleLoader__.load({
 			const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
 			return () => { document.removeEventListener("pointerdown", rememberSessionAction, true); document.removeEventListener("click", rememberSessionAction, true); window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const menu of document.querySelectorAll("[role='menu']")) menu.removeAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE); for (const item of document.querySelectorAll("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]")) removeDeleteSessionMenuItem(item); };
 		}
+		const ARCHIVED_SESSIONS_NS = "settings.archivedSessions";
+		const ARCHIVED_SESSIONS_SECTION_ID = "archived-sessions";
+		const ARCHIVED_SESSIONS_PAGE_ATTRIBUTE = "data-dsh-archived-sessions-page";
+		const ARCHIVED_SESSIONS_ROW_ATTRIBUTE = "data-dsh-archived-session-row";
+		const ARCHIVED_SESSIONS_ZH = Object.freeze({
+			nav: "已归档会话",
+			search: "搜索已归档会话",
+			loading: "正在读取会话…",
+			empty: "暂无已归档会话。",
+			unavailable: "这里没有可恢复的已归档会话。",
+			emptySearch: "没有匹配的会话。",
+			unarchive: "取消归档",
+			unarchiveNamed: "取消归档 {title}",
+			ungrouped: "未分组",
+			"time.now": "刚刚",
+			"time.minutes": "{n}分钟",
+			"time.hours": "{n}小时",
+			"time.days": "{n}天",
+			"time.months": "{n}个月",
+			"time.years": "{n}年"
+		});
+		const ARCHIVED_SESSIONS_EN = Object.freeze({
+			nav: "Archived sessions",
+			search: "Search archived sessions",
+			loading: "Reading sessions…",
+			empty: "No archived sessions.",
+			unavailable: "No archived session here can be restored.",
+			emptySearch: "No matching sessions.",
+			unarchive: "Unarchive",
+			unarchiveNamed: "Unarchive {title}",
+			ungrouped: "Ungrouped",
+			"time.now": "now",
+			"time.minutes": "{n}min",
+			"time.hours": "{n}h",
+			"time.days": "{n}d",
+			"time.months": "{n}mo",
+			"time.years": "{n}y"
+		});
+
 		const ARCHIVED_DELETE_SESSION_ATTRIBUTE = "data-dsh-delete-archived-session";
 		function likelySessionId(value) { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/.test(value) && !/^(row|item|archived|session|undefined|null)$/i.test(value); }
 		function archivedSessionIdFromElement(element) {
@@ -3751,7 +3839,7 @@ window.__ModuleLoader__.load({
 		function installArchivedSessionDelete(ctx) {
 			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
 			let enabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false; let scheduled = false;
-			const decorate = () => { const injected = document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]"); if (!enabled) { for (const button of injected) button.remove(); return; } for (const row of document.querySelectorAll("li")) { if (row.querySelector("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) continue; const unarchive = archivedUnarchiveButton(row); if (!unarchive) continue; const sessionId = archivedSessionIdFromElement(row); if (!sessionId) continue; const button = makeArchivedDeleteButton(unarchive, sessionId, row, ctx); (unarchive.parentElement || row).appendChild(button); } };
+			const decorate = () => { const injected = document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]"); if (!enabled) { for (const button of injected) button.remove(); return; } for (const row of document.querySelectorAll("li")) { if (row.closest?.("[" + ARCHIVED_SESSIONS_PAGE_ATTRIBUTE + "]")) continue; if (row.querySelector("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) continue; const unarchive = archivedUnarchiveButton(row); if (!unarchive) continue; const sessionId = archivedSessionIdFromElement(row); if (!sessionId) continue; const button = makeArchivedDeleteButton(unarchive, sessionId, row, ctx); (unarchive.parentElement || row).appendChild(button); } };
 			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
 			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); }; window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
 			return () => { window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const button of document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) button.remove(); };
@@ -3777,6 +3865,8 @@ window.__ModuleLoader__.load({
 		function archivedBatchRows() {
 			const rows = [];
 			for (const row of document.querySelectorAll("li")) {
+				// First-class Archived Sessions page owns its own batch/select/delete UI.
+				if (row.closest?.("[" + ARCHIVED_SESSIONS_PAGE_ATTRIBUTE + "]")) continue;
 				if (!archivedUnarchiveButton(row)) continue;
 				const id = archivedSessionIdFromElement(row);
 				if (!id) continue;
@@ -4102,6 +4192,342 @@ window.__ModuleLoader__.load({
 			if (event.shiftKey) parts.push("Shift");
 			parts.push(keyToken);
 			return { accel: parts.join("+") };
+		}
+
+
+		function archivedRelativeTime(updatedAt, now) {
+			const MIN = 6e4, HOUR = 36e5, DAY = 864e5;
+			const diff = Math.max(0, now - updatedAt);
+			if (diff < MIN) return { unit: "now", n: 0 };
+			if (diff < HOUR) return { unit: "minutes", n: Math.floor(diff / MIN) };
+			if (diff < DAY) return { unit: "hours", n: Math.floor(diff / HOUR) };
+			if (diff < 30 * DAY) return { unit: "days", n: Math.floor(diff / DAY) };
+			if (diff < 365 * DAY) return { unit: "months", n: Math.floor(diff / (30 * DAY)) };
+			return { unit: "years", n: Math.floor(diff / (365 * DAY)) };
+		}
+		function archivedTimeLabel(updatedAt, now, sectionT) {
+			const { unit, n } = archivedRelativeTime(updatedAt, now);
+			return unit === "now" ? sectionT("time.now") : sectionT("time." + unit, { n });
+		}
+		function archivedMatches(row, normalizedQuery) {
+			return normalizedQuery.length === 0
+				|| row.title.toLowerCase().includes(normalizedQuery)
+				|| row.workspace.toLowerCase().includes(normalizedQuery);
+		}
+		function archivedSearchIcon() {
+			return jsx("svg", {
+				width: "16",
+				height: "16",
+				viewBox: "0 0 16 16",
+				fill: "none",
+				"aria-hidden": "true",
+				children: jsx("path", {
+					d: "M11.5 11.5L14.5 14.5M7 12A5 5 0 1 1 7 2a5 5 0 0 1 0 10Z",
+					stroke: "currentColor",
+					strokeWidth: "1.5",
+					strokeLinecap: "round"
+				})
+			});
+		}
+
+		/**
+		 * First-class Archived Sessions settings page (replaces the dropped
+		 * @deepseek-ai/dsh-client-ui-settings-unarchive-sessions on 0.1.7).
+		 * Official list/search/unarchive UX plus desktop-bridge batch select /
+		 * unarchive / delete — one coherent page, same data-* hooks tests rely on.
+		 */
+		function ArchivedSessionsSection(props) {
+			const sectionT = typeof props.t === "function" ? props.t : ((key, vars) => {
+				let text = ARCHIVED_SESSIONS_EN[key] || key;
+				if (vars && typeof vars === "object") {
+					for (const [name, value] of Object.entries(vars)) {
+						text = String(text).split("{" + name + "}").join(value == null ? "" : String(value));
+					}
+				}
+				return text;
+			});
+			const useSessions = typeof props.useSessions === "function" ? props.useSessions : null;
+			const useWorkspaces = typeof props.useWorkspaces === "function" ? props.useWorkspaces : null;
+			const unarchive = typeof props.unarchive === "function" ? props.unarchive : async () => {};
+			const deleteOne = typeof props.deleteSession === "function" ? props.deleteSession : null;
+			const sessions = useSessions ? useSessions((state) => state) : { phase: "ready", byId: {} };
+			const workspaces = useWorkspaces ? useWorkspaces((state) => state.items) : [];
+			const archivedSessionIds = useWorkspaces ? useWorkspaces((state) => state.archivedSessionIds) : [];
+			const [query, setQuery] = react.useState("");
+			const [selected, setSelected] = react.useState(() => new Set());
+			const [busy, setBusy] = react.useState(false);
+			const [deleteEnabled, setDeleteEnabled] = react.useState(
+				typeof window === "undefined" ? true : window[DELETE_SESSION_ACTIONS_GLOBAL] !== false
+			);
+			react.useEffect(() => {
+				if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined;
+				const onChange = (event) => setDeleteEnabled(event.detail !== false);
+				window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onChange);
+				return () => window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onChange);
+			}, []);
+			const ungrouped = sectionT("ungrouped");
+			const summaries = sessions?.byId || {};
+			const rows = react.useMemo(() => {
+				const owners = new Map();
+				for (const workspace of workspaces || []) {
+					for (const id of workspace.sessionIds || []) owners.set(id, workspace.title || workspace.name || workspace.path || "");
+				}
+				const ids = Array.isArray(archivedSessionIds) ? archivedSessionIds : [...(archivedSessionIds || [])];
+				return [...ids].reverse().flatMap((id) => {
+					const summary = summaries[id];
+					if (summary === void 0) return [];
+					return [{
+						id,
+						title: summary.displayTitle || summary.title || id,
+						workspace: owners.get(id) || ungrouped,
+						updatedAt: summary.updatedAt || 0
+					}];
+				});
+			}, [archivedSessionIds, workspaces, summaries, ungrouped]);
+			const visible = react.useMemo(
+				() => rows.filter((row) => archivedMatches(row, query.trim().toLowerCase())),
+				[rows, query]
+			);
+			react.useEffect(() => {
+				const visibleIds = new Set(visible.map((row) => row.id));
+				setSelected((prev) => {
+					let changed = false;
+					const next = new Set();
+					for (const id of prev) {
+						if (visibleIds.has(id) || rows.some((row) => row.id === id)) next.add(id);
+						else changed = true;
+					}
+					return changed ? next : prev;
+				});
+			}, [visible, rows]);
+
+			const toggleOne = (id, checked) => {
+				setSelected((prev) => {
+					const next = new Set(prev);
+					if (checked) next.add(id);
+					else next.delete(id);
+					return next;
+				});
+			};
+			const toggleAllVisible = (checked) => {
+				setSelected((prev) => {
+					const next = new Set(prev);
+					for (const row of visible) {
+						if (checked) next.add(row.id);
+						else next.delete(row.id);
+					}
+					return next;
+				});
+			};
+			const selectedInListOrder = () => {
+				const rank = new Map(visible.map((row, index) => [row.id, index]));
+				return [...selected].filter((id) => rank.has(id)).sort((a, b) => rank.get(a) - rank.get(b));
+			};
+
+			const runBatch = async (kind) => {
+				if (busy) return;
+				const ids = selectedInListOrder();
+				if (ids.length === 0) return;
+				const deleting = kind === "delete";
+				if (deleting && !deleteOne) return;
+				const confirmed = await requestDeleteSessionConfirmation(
+					deleting ? t("bridge.archived_batch_delete_confirm", ids.length) : t("bridge.archived_batch_unarchive_confirm", ids.length),
+					{
+						title: deleting ? t("bridge.archived_batch_delete_title") : t("bridge.archived_batch_unarchive_title"),
+						action: deleting ? t("bridge.archived_batch_delete") : t("bridge.archived_batch_unarchive"),
+						danger: deleting
+					}
+				);
+				if (!confirmed) return;
+				setBusy(true);
+				const progress = archivedBatchProgress(kind, ids.length);
+				const failed = [];
+				let completed = 0;
+				const titleOf = (id) => rows.find((row) => row.id === id)?.title || id;
+				for (const [index, id] of ids.entries()) {
+					const title = titleOf(id);
+					progress.update(index, title);
+					try {
+						if (deleting) await deleteOne(id);
+						else await unarchive(id);
+						completed += 1;
+						setSelected((prev) => {
+							const next = new Set(prev);
+							next.delete(id);
+							return next;
+						});
+					} catch (error) {
+						failed.push({ id, title, error });
+						if (deleting && error?.code === "desktop-bridge/delete-not-found") {
+							setSelected((prev) => {
+								const next = new Set(prev);
+								next.delete(id);
+								return next;
+							});
+						}
+					}
+					progress.update(index + 1, title);
+				}
+				setBusy(false);
+				progress.finish(completed, failed);
+			};
+
+			const onUnarchiveOne = (row) => {
+				unarchive(row.id).catch((reason) => {
+					console.warn("session unarchive rejected:", reason);
+				});
+			};
+			const onDeleteOne = async (row) => {
+				if (!deleteOne || busy) return;
+				if (!(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
+				setBusy(true);
+				try {
+					await deleteOne(row.id);
+					setSelected((prev) => {
+						const next = new Set(prev);
+						next.delete(row.id);
+						return next;
+					});
+				} catch (error) {
+					const message = t("bridge.session_delete_failed", desktopErrorMessage(error));
+					await requestDeleteSessionConfirmation(message, {
+						title: t("bridge.session_delete_title"),
+						action: t("bridge.session_delete_dismiss"),
+						danger: false,
+						dismissOnly: true
+					});
+				} finally {
+					setBusy(false);
+				}
+			};
+
+			if (!useSessions || sessions.phase !== "ready") {
+				return jsx("p", { className: "dshDesktopArchivedStatus", children: sectionT("loading") });
+			}
+			const now = Date.now();
+			const archived = (Array.isArray(archivedSessionIds) ? archivedSessionIds.length : (archivedSessionIds?.length || 0)) > 0;
+			const selectedCount = selected.size;
+			const selectedVisible = visible.filter((row) => selected.has(row.id)).length;
+			const allVisibleSelected = visible.length > 0 && selectedVisible === visible.length;
+			const someVisibleSelected = selectedVisible > 0 && selectedVisible < visible.length;
+			const deleteLabel = (() => {
+				const deleteLocale = localeCode === "zh-CN" ? "zh" : (DELETE_SESSION_MENU_LABELS[localeCode] ? localeCode : "en");
+				return DELETE_SESSION_MENU_LABELS[deleteLocale] || DELETE_SESSION_MENU_LABELS.en;
+			})();
+
+			return jsxs("div", {
+				className: "dshDesktopArchivedSection",
+				[ARCHIVED_SESSIONS_PAGE_ATTRIBUTE]: "",
+				children: [
+					jsxs("div", {
+						className: "dshDesktopArchivedSearch",
+						children: [
+							archivedSearchIcon(),
+							jsx("input", {
+								type: "search",
+								value: query,
+								placeholder: sectionT("search"),
+								"aria-label": sectionT("search"),
+								onChange: (event) => setQuery(event.currentTarget.value)
+							})
+						]
+					}),
+					visible.length > 0 ? jsxs("div", {
+						className: "dshDesktopArchivedBatch",
+						[ARCHIVED_BATCH_ATTRIBUTE]: "",
+						children: [
+							jsxs("label", {
+								children: [
+									jsx("input", {
+										type: "checkbox",
+										[ARCHIVED_BATCH_SELECT_ALL_ATTRIBUTE]: "",
+										"aria-label": t("bridge.archived_batch_select_all"),
+										checked: allVisibleSelected,
+										ref: (node) => { if (node) node.indeterminate = someVisibleSelected; },
+										disabled: busy || visible.length === 0,
+										onChange: (event) => toggleAllVisible(event.target.checked)
+									}),
+									jsx("span", { children: t("bridge.archived_batch_select_all") })
+								]
+							}),
+							jsx("span", {
+								[ARCHIVED_BATCH_COUNT_ATTRIBUTE]: "",
+								children: t("bridge.archived_batch_selected", selectedCount)
+							}),
+							jsxs("div", {
+								"data-dsh-archived-batch-actions": "",
+								children: [
+									jsx("button", {
+										type: "button",
+										[ARCHIVED_BATCH_UNARCHIVE_ATTRIBUTE]: "",
+										disabled: busy || selectedCount === 0,
+										onClick: () => { void runBatch("unarchive"); },
+										children: t("bridge.archived_batch_unarchive")
+									}),
+									deleteEnabled ? jsx("button", {
+										type: "button",
+										[ARCHIVED_BATCH_DELETE_ATTRIBUTE]: "",
+										disabled: busy || selectedCount === 0,
+										onClick: () => { void runBatch("delete"); },
+										children: t("bridge.archived_batch_delete")
+									}) : null
+								]
+							})
+						]
+					}) : null,
+					!archived ? jsx("p", { className: "dshDesktopArchivedStatus", children: sectionT("empty") }) : null,
+					archived && rows.length === 0 ? jsx("p", { className: "dshDesktopArchivedStatus", children: sectionT("unavailable") }) : null,
+					rows.length > 0 && visible.length === 0 ? jsx("p", { className: "dshDesktopArchivedStatus", children: sectionT("emptySearch") }) : null,
+					visible.length > 0 ? jsx("ul", {
+						className: "dshDesktopArchivedList",
+						children: visible.map((row) => jsxs("li", {
+							className: "dshDesktopArchivedRow",
+							[ARCHIVED_SESSIONS_ROW_ATTRIBUTE]: "",
+							"data-session-id": row.id,
+							children: [
+								jsx("input", {
+									type: "checkbox",
+									[ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE]: "",
+									[ARCHIVED_BATCH_ROW_SELECT_ID_ATTRIBUTE]: row.id,
+									"aria-label": row.id,
+									checked: selected.has(row.id),
+									disabled: busy,
+									onClick: (event) => event.stopPropagation(),
+									onChange: (event) => toggleOne(row.id, event.target.checked)
+								}),
+								jsxs("span", {
+									className: "dshDesktopArchivedIdentity",
+									children: [
+										jsx("span", { className: "dshDesktopArchivedTitle", children: row.title }),
+										jsx("span", {
+											className: "dshDesktopArchivedMeta",
+											children: [row.workspace, archivedTimeLabel(row.updatedAt, now, sectionT)].join(" · ")
+										})
+									]
+								}),
+								jsx("button", {
+									type: "button",
+									className: "dshDesktopArchivedAction",
+									"aria-label": sectionT("unarchiveNamed", { title: row.title }),
+									disabled: busy,
+									onClick: () => onUnarchiveOne(row),
+									children: sectionT("unarchive")
+								}),
+								deleteEnabled && deleteOne ? jsx("button", {
+									type: "button",
+									className: "dshDesktopArchivedAction dshDesktopArchivedActionDanger",
+									[ARCHIVED_DELETE_SESSION_ATTRIBUTE]: "",
+									"data-dsh-delete-archived-id": row.id,
+									"aria-label": deleteLabel,
+									disabled: busy,
+									onClick: () => { void onDeleteOne(row); },
+									children: deleteLabel
+								}) : null
+							]
+						}, row.id))
+					}) : null
+				]
+			});
 		}
 
 		function DesktopSettingsTab({ connection }) {
@@ -5261,7 +5687,7 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
-		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout"];
+		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout", "locale"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
 		const OPEN_SESSION_FAST_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION__";
@@ -5366,8 +5792,73 @@ window.__ModuleLoader__.load({
 					label: () => t("tray.open_settings")
 				}, () => jsx(DesktopSettingsTab, { connection: ctx.connection })));
 			};
+
 			registerDesktopNav();
 			onLocaleChange(() => registerDesktopNav());
+
+			// First-class 「已归档会话」— replaces dropped dsh-client-ui-settings-unarchive-sessions
+			// on 0.1.7 while keeping id archived-sessions so data-dsh-archived-batch* hooks stay valid.
+			let disposeArchivedSessionsNav = null;
+			let archivedSessionsDictRegistered = false;
+			if (typeof ctx.locale?.register === "function" && typeof ctx.effect === "function") {
+				try {
+					ctx.effect(() => ctx.locale.register(ARCHIVED_SESSIONS_NS, {
+						zh: ARCHIVED_SESSIONS_ZH,
+						en: ARCHIVED_SESSIONS_EN
+					}), "desktop-bridge: archived-sessions dictionaries");
+					archivedSessionsDictRegistered = true;
+				} catch (_) { /* locale optional in tests */ }
+			}
+			const registerArchivedSessionsNav = () => {
+				if (typeof disposeArchivedSessionsNav === "function") {
+					try { disposeArchivedSessionsNav(); } catch (_) { /* re-register below */ }
+				}
+				const sectionT = typeof ctx.locale?.bind === "function" && archivedSessionsDictRegistered
+					? ctx.locale.bind(ARCHIVED_SESSIONS_NS)
+					: ((key, vars) => {
+						const dict = (localeCode || "").startsWith("zh") ? ARCHIVED_SESSIONS_ZH : ARCHIVED_SESSIONS_EN;
+						let text = dict[key] || ARCHIVED_SESSIONS_EN[key] || key;
+						if (vars && typeof vars === "object") {
+							for (const [name, value] of Object.entries(vars)) {
+								text = String(text).split("{" + name + "}").join(value == null ? "" : String(value));
+							}
+						}
+						return text;
+					});
+				const deleteSession = async (sessionId) => {
+					const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+					const isCurrent = uiWorkspace?.mainReference?.sessionId === sessionId;
+					const workspaceId = isCurrent ? currentWorkspaceIdForSession(uiWorkspace, sessionId) : undefined;
+					if (isCurrent) await releaseOpenSidebarSession(ctx, sessionId);
+					const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
+					if (!result?.ok) {
+						const error = new Error(result?.error?.message || t("bridge.session_delete_failed", ""));
+						error.code = result?.error?.code || "desktop-bridge/delete-failed";
+						throw error;
+					}
+					if (isCurrent && typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(workspaceId);
+				};
+				disposeArchivedSessionsNav = ctx.slots.inject("settings.section", () => ctx.slots.register({
+					name: "settings.section",
+					id: ARCHIVED_SESSIONS_SECTION_ID,
+					order: 25,
+					label: () => sectionT("nav"),
+					locale: ARCHIVED_SESSIONS_NS,
+					inject: () => ({
+						unarchive: (sessionId) => {
+							const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+							if (typeof uiWorkspace?.unarchiveSession !== "function") {
+								return Promise.reject(new Error("unarchive unavailable"));
+							}
+							return uiWorkspace.unarchiveSession(sessionId);
+						},
+						deleteSession
+					})
+				}, (slotProps) => jsx(ArchivedSessionsSection, { ...slotProps })));
+			};
+			registerArchivedSessionsNav();
+			onLocaleChange(() => registerArchivedSessionsNav());
+
 
 			// Official busy signal: SessionSummary.running from api-session-controller
 			// (api-session/status). Push to the desktop loopback for Cmd+Q confirm.

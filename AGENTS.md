@@ -52,7 +52,7 @@
 | WebView boot | `internal/dsh/webviewboot*`               | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/webview-boot/` 的 `--patch`；解决 WKWebView 长 combo `/plugins/??…` 与 HTTP 431       |
 | 更新         | `internal/update`                         | 查 GitHub Release、下载、平台 apply；不自动静默安装                                                                                    |
 | 版本         | `internal/version`                        | `Version` 默认源码为 `"dev"`；本地构建经 `scripts/app-version.sh` 打成 `{最新发布}-dev`（如 `0.1.1-dev`）；发布包用 `-ldflags` 从 tag 注入 |
-| 桌面桥接     | `internal/dsh/desktopbridge*`             | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/desktop-bridge/` 的 `--patch`；Chat 设置左侧一级「桌面设置」（`settings.section`）；与 webview-boot 并列 |
+| 桌面桥接     | `internal/dsh/desktopbridge*`             | 每次启动写入 `DSH_HOME/.deepseek-harness-desktop/desktop-bridge/` 的 `--patch`；Chat 设置左侧一级「桌面设置」与「已归档会话」（`settings.section`；后者在 0.1.7 承接已移除的 `dsh-client-ui-settings-unarchive-sessions`）；与 webview-boot 并列 |
 | 构建         | `scripts/build.sh`、`Makefile`            | 本地/CI 打包与自签名；`make build` 包装脚本，CI 也可直接调 `scripts/build.sh`                                                            |
 
 ### 进程与数据边界
@@ -198,7 +198,7 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 ## 桥接插件（实现要点）
 
 - 每次由本应用拉起的 `dsh web` 经 Cordis `--patch` 注入 `desktop-bridge`（与 `webview-boot` 同类），**不改用户 profile**。
-- Chat「设置 → 桌面设置」注册为 `settings.section`（一级导航）。
+- Chat「设置 → 桌面设置」与「已归档会话」注册为 `settings.section`（一级导航；归档页 id `archived-sessions`，内置批量取消归档/删除与多选，不依赖已从 0.1.7 移除的 `@deepseek-ai/dsh-client-ui-settings-unarchive-sessions`）。
 - 控制面仅 `127.0.0.1`；白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面、日志、`desktop-state.json` 或普通 status/capability 响应；它只存在于权限为 0600 的 `desktop-bridge-endpoint.json` 以供受控插件重连；无任意 shell。
 - BridgeHost 由 Window/Path/Prefs/Session/Update capability interfaces 组合；路由依赖最小接口，不把 Wails 或完整 Service 引入 `internal/dsh`。
 - 认证 bridge 首次提供 `/v1/capabilities` 与 `/v1/handshake`；不兼容或旧 patch 继续走 loopback HTTP fallback，不阻塞既有 RPC。

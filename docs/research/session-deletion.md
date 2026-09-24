@@ -23,11 +23,15 @@ Scope: inspected the five requested installed DSH bundles and repository `intern
 - The lifecycle disposer is memoized and registered before publication. It aborts setup, waits for in-flight publication/driver construction, calls `machine.cancel({ kind: "disposed" })`, waits for `machine.whenIdle()`, awaits `machine.scope.dispose()`, closes the persistence handle, detaches agent and session registrations, then untracks the disposer. [dsh-agent-loop/lib/index.js:L1619-L1679](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js#L1619-L1679)
 - The owner effect yields `machine.scope.rawDispose`; owner teardown aborts setup and calls the same disposer. Factory teardown also stops accepting work and awaits every live-agent disposer and startup task. [dsh-agent-loop/lib/index.js:L1680-L1691](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js#L1680-L1691) [dsh-agent-loop/lib/index.js:L1387-L1392](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js#L1387-L1392)
 
-## Official archived-session page
+## Archived-session settings page (desktop-bridge)
 
-- The page reads `workspaces.items`, global `archivedSessionIds`, and `sessions.byId`. It reverses archive order, skips ids with no summary, and creates each row as `{ id, title: summary.displayTitle, workspace: owners.get(id) ?? ungrouped, updatedAt: summary.updatedAt }`. [ui-settings-unarchive-sessions/lib/client.js:L32-L77](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-unarchive-sessions/lib/client.js#L32-L77)
-- Markup is an `<ul>` of `<li class=row>` rows. Each row has an identity span containing title and a meta span showing `workspace · relative-time`, followed by one outline small `Button` with `aria-label=Unarchive {title}`; its click calls `unarchive(row.id)`, and visible text is `Unarchive`. Missing summaries produce no row/action. [ui-settings-unarchive-sessions/lib/client.js:L79-L137](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-unarchive-sessions/lib/client.js#L79-L137)
-- The injected action is the official `ctx.uiWorkspace.unarchiveSession(sessionId)` service call. [ui-settings-unarchive-sessions/lib/client.js:L183-L207](/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-unarchive-sessions/lib/client.js#L183-L207)
+As of DSH `0.1.7-rc.1`, `@deepseek-ai/dsh-client-ui-settings-unarchive-sessions` is no longer shipped in `dsh-web-app` (last published npm: `0.1.6-alpha.2`). Desktop-bridge owns the page instead:
+
+- Registers `settings.section` id `archived-sessions` (order 25, locale `settings.archivedSessions`, zh nav 「已归档会话」) via the same `ctx.slots.inject("settings.section", …)` API still used by official settings packages on 0.1.7.
+- Reads `useWorkspaces` → `items` + `archivedSessionIds` and `useSessions` → `byId` (GlobalStandardProps). Newest archive first; ids without a loaded summary produce no row.
+- First-class UI: search, empty / unavailable / emptySearch states, per-row Unarchive, plus desktop batch select / select-all / batch unarchive / batch delete / per-row delete (`data-dsh-archived-batch*`, `data-dsh-delete-archived-session`). MutationObserver decoration still enhances a foreign Unarchive list if one appears, but skips `[data-dsh-archived-sessions-page]`.
+- Writes: `ctx.uiWorkspace.unarchiveSession` and desktop RPC `deleteSession` (same host path as the session-menu delete).
+- Reference unpack of the dropped package (do not npm-install into global dsh): `@deepseek-ai/dsh-client-ui-settings-unarchive-sessions@0.1.6-alpha.2`.
 
 ## Attachments / ownership
 

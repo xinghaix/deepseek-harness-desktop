@@ -545,7 +545,13 @@ client.apply({
   // Mirrors ctx.slots.inject(slotName, callback) -> disposer.
   slots: {
     inject(_name, callback) { navRegistrations += 1; return callback(); },
-    register(config, render) { lastNavConfig = config; lastNavRender = render; return () => {}; },
+    register(config, render) {
+      if (config?.id === "deepseek-harness-desktop") {
+        lastNavConfig = config;
+        lastNavRender = render;
+      }
+      return () => {};
+    },
   },
   effect(fn) {
     const cleanup = fn();
