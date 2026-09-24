@@ -443,12 +443,21 @@ window.__ModuleLoader__.load({
 		// Only a fallback: when nothing is measurable the card still needs a sane width.
 		const PROMPT_OVERLAY_MAX_WIDTH_PX = 760;
 		// Sticky shelf horizontal extent (dsh-client-ui-conversation / chat):
-		// 1) [data-width-handle=left|right] outer edges (zero gap — shelf may cover the
-		//    handles; users still drag in the empty space below).
-		// 2) Chat message column (max-width: var(--dsh-chat-content-width)).
-		// 3) [data-conversation-content] / scroll pane with a small clamp inset.
+		// 1) CSS var --dsh-chat-content-width on the conversation content / column /
+		//    scroll root (official column is max-width:var(...); margin:0 auto).
+		// 2) Width-handle inner (then outer) span when the var is missing.
+		// 3) Chat message column walk.
+		// 4) Last resort: conversation pane with a clear inset — never treat pane−inset
+		//    as the happy path when the var is present but unparsable (avoids full-bleed).
+		const PROMPT_OVERLAY_EXPAND_PX = 20;
 		const PROMPT_OVERLAY_PANE_INSET_PX = 8;
 		const PROMPT_OVERLAY_EPSILON = 1;
+		const CHAT_CONTENT_WIDTH_VAR = "--dsh-chat-content-width";
+		const CHAT_USER_WIDTH_VAR = "--dsh-chat-user-width";
+		const CONVERSATION_COLUMN_WIDTH_VAR = "--dsh-conversation-column-width";
+		// When expand alone would push the shelf past ~95% of the pane while the content
+		// width itself is narrower, shrink expand so the shelf does not read edge-flush.
+		const PROMPT_OVERLAY_NEAR_FULL_RATIO = 0.95;
 		// Prompt-line budget for the card. Mirrors the desktop pref bounds; clamped here too so
 		// a stale value can never produce an unusable card.
 		const PROMPT_OVERLAY_MIN_LINES = 2;
@@ -785,20 +794,121 @@ window.__ModuleLoader__.load({
 			if (!(width > 0) || !(height > 0)) return null;
 			return { left, right, width, height, element: node };
 		}
-		// Transcript WidthHandles (data-width-handle). Outer edges span the content-width region
-		// the user sets by dragging; CSS places them at ±(content-width/2 + 24px) from center.
+		function cssVarRaw(node, name) {
+			if (!node || typeof getComputedStyle !== "function") return "";
+			try {
+				const style = getComputedStyle(node);
+				if (!style) return "";
+				if (typeof style.getPropertyValue === "function") {
+					return String(style.getPropertyValue(name) || "").trim();
+				}
+				return String(style[name] || "").trim();
+			} catch {
+				return "";
+			}
+		}
+		function parseCssLengthPx(raw, fontSizePx) {
+			const s = String(raw || "").trim();
+			if (!s) return null;
+			const m = /^(-?[\d.]+)\s*(px|rem|em)?$/i.exec(s);
+			if (!m) return null;
+			const n = Number(m[1]);
+			if (!Number.isFinite(n) || !(n > 0)) return null;
+			const unit = (m[2] || "px").toLowerCase();
+			if (unit === "px") return n;
+			const fs = Number(fontSizePx);
+			const base = Number.isFinite(fs) && fs > 0 ? fs : 16;
+			return n * base;
+		}
+		// Matches dsh-client-ui-conversation resolveContentWidth(column, null).
+		function defaultContentWidthFromColumn(columnWidthPx) {
+			const col = Number(columnWidthPx);
+			if (!Number.isFinite(col) || !(col > 0)) return null;
+			return Math.max(680, Math.min(col * 0.64, 920));
+		}
+		function hostFontSizePx(node) {
+			if (!node || typeof getComputedStyle !== "function") return 16;
+			try {
+				const fs = Number.parseFloat(getComputedStyle(node).fontSize);
+				return Number.isFinite(fs) && fs > 0 ? fs : 16;
+			} catch {
+				return 16;
+			}
+		}
+		// Read --dsh-chat-content-width (and helpers) from conversation content / column / scroll.
+		// Returns { width, declared }. declared means the var was present even if unparsable —
+		// callers must not treat pane−inset as success in that case.
+		function readChatContentWidth(hosts, paneWidth) {
+			const list = (Array.isArray(hosts) ? hosts : [hosts]).filter(Boolean);
+			let declared = false;
+			for (const host of list) {
+				const fontSize = hostFontSizePx(host);
+				const contentRaw = cssVarRaw(host, CHAT_CONTENT_WIDTH_VAR);
+				if (contentRaw) declared = true;
+				const direct = parseCssLengthPx(contentRaw, fontSize);
+				if (direct != null) return { width: direct, declared: true };
+				const userPx = parseCssLengthPx(cssVarRaw(host, CHAT_USER_WIDTH_VAR), fontSize);
+				if (userPx != null) return { width: userPx, declared: true };
+				const colPx = parseCssLengthPx(cssVarRaw(host, CONVERSATION_COLUMN_WIDTH_VAR), fontSize);
+				if (colPx != null) {
+					const fromCol = defaultContentWidthFromColumn(colPx);
+					if (fromCol != null) return { width: fromCol, declared: true };
+				}
+				// Embedded body: min(calc(100% - 32px), 920px) — resolve against the pane.
+				if (contentRaw && /100\s*%/.test(contentRaw) && paneWidth > 0) {
+					const insetMatch = contentRaw.match(/100\s*%\s*-\s*([\d.]+)\s*px/i);
+					const side = insetMatch ? Number(insetMatch[1]) : 32;
+					const capMatch = contentRaw.match(/min\s*\([^,]+,\s*([\d.]+)\s*px/i)
+						|| contentRaw.match(/,\s*([\d.]+)\s*px/i);
+					const cap = capMatch ? Number(capMatch[1]) : 920;
+					if (Number.isFinite(side) && Number.isFinite(cap) && side >= 0 && cap > 0) {
+						return { width: Math.min(Math.max(1, paneWidth - side), cap), declared: true };
+					}
+				}
+			}
+			return { width: null, declared };
+		}
+		// Center content-width in the pane (official column uses margin:0 auto), then expand.
+		function boundsFromContentWidth(paneBox, contentWidth, expand, element) {
+			if (!paneBox || !(contentWidth > 0)) return null;
+			const paneW = paneBox.width;
+			let useExpand = Math.max(0, Number(expand) || 0);
+			if (paneW > 0
+				&& contentWidth + useExpand * 2 > paneW * PROMPT_OVERLAY_NEAR_FULL_RATIO
+				&& contentWidth <= paneW * PROMPT_OVERLAY_NEAR_FULL_RATIO) {
+				useExpand = Math.max(0, Math.floor((paneW * PROMPT_OVERLAY_NEAR_FULL_RATIO - contentWidth) / 2));
+			}
+			const width = contentWidth + useExpand * 2;
+			const left = paneBox.left + (paneW - width) / 2;
+			return { left, width: Math.max(1, width), element: element || paneBox.element || null };
+		}
+		// Transcript WidthHandles: CSS places them at ±(content-width/2 + 24px) from center.
+		// Inner span ≈ content-width + 48; prefer that, then outer edges.
 		function conversationWidthHandleBounds(pane) {
 			if (!pane || typeof pane.querySelector !== "function") return null;
 			const leftHandle = elementBox(pane.querySelector("[data-width-handle=left], [data-width-handle='left']"));
 			const rightHandle = elementBox(pane.querySelector("[data-width-handle=right], [data-width-handle='right']"));
 			if (!leftHandle || !rightHandle) return null;
-			if (!(leftHandle.left < rightHandle.right)) return null;
-			return {
-				left: leftHandle.left,
-				width: Math.max(1, rightHandle.right - leftHandle.left),
-				element: rightHandle.element,
-				handles: [leftHandle.element, rightHandle.element],
-			};
+			const handles = [leftHandle.element, rightHandle.element].filter(Boolean);
+			if (leftHandle.right < rightHandle.left) {
+				return {
+					left: leftHandle.right,
+					width: Math.max(1, rightHandle.left - leftHandle.right),
+					element: rightHandle.element || leftHandle.element,
+					handles,
+					kind: "inner",
+				};
+			}
+			if (leftHandle.left < rightHandle.right) {
+				return {
+					left: leftHandle.left,
+					width: Math.max(1, rightHandle.right - leftHandle.left),
+					element: rightHandle.element || leftHandle.element,
+					handles,
+					kind: "outer",
+				};
+			}
+			return null;
 		}
 		// Chat message column: width:100%; max-width: var(--dsh-chat-content-width); margin:0 auto.
 		// Class name is hashed, so discover it by walking up from a flow node under the scrollport.
@@ -810,6 +920,7 @@ window.__ModuleLoader__.load({
 				: null);
 			if (!probe) return null;
 			let best = null;
+			let bestFromMax = null;
 			let el = probe.parentElement;
 			while (el && el !== scrollRoot && el !== pane && el !== document.documentElement && el !== document.body) {
 				const box = elementBox(el);
@@ -817,11 +928,22 @@ window.__ModuleLoader__.load({
 					// Prefer the widest ancestor that is still within the pane — that is the centered column.
 					if (!best || box.width >= best.width) best = box;
 				}
+				// Used width may be nearly full pane while max-width still carries content-width.
+				try {
+					const maxRaw = typeof getComputedStyle === "function" ? getComputedStyle(el).maxWidth : "";
+					const maxPx = parseCssLengthPx(maxRaw, hostFontSizePx(el));
+					if (maxPx != null && maxPx >= 40 && (paneWidth <= 0 || maxPx <= paneWidth + PROMPT_OVERLAY_EPSILON)) {
+						if (!bestFromMax || maxPx >= bestFromMax.width) {
+							bestFromMax = { left: paneBox ? paneBox.left + (paneWidth - maxPx) / 2 : box?.left || 0, width: maxPx, element: el };
+						}
+					}
+				} catch {}
 				el = el.parentElement;
 			}
+			if (bestFromMax) return bestFromMax;
 			if (!best) return null;
 			// Reject a "column" that is effectively the full pane — that is not content-width.
-			if (paneWidth > 0 && best.width > paneWidth * 0.95) return null;
+			if (paneWidth > 0 && best.width > paneWidth * PROMPT_OVERLAY_NEAR_FULL_RATIO) return null;
 			return { left: best.left, width: best.width, element: best.element };
 		}
 		function clampOverlayHoriz(left, width, paneBox, inset) {
@@ -929,8 +1051,8 @@ window.__ModuleLoader__.load({
 			if (!root || typeof root.getBoundingClientRect !== "function") return null;
 			const rootRect = root.getBoundingClientRect();
 			let top = Math.max(0, Number(rootRect.top) || 0);
-			// TOP stays on the scroll root. WIDTH spans the content-width region the user sets
-			// with [data-width-handle] (fallback: chat column, then the conversation pane).
+			// TOP stays on the scroll root. WIDTH prefers --dsh-chat-content-width (centered like
+			// the official column), then width-handle span, then column walk; pane−inset last.
 			const pane = conversationPaneRoot(root) || root;
 			const paneBox = elementBox(pane) || {
 				left: Number(rootRect.left) || 0,
@@ -939,33 +1061,53 @@ window.__ModuleLoader__.load({
 				element: pane,
 			};
 			const inset = PROMPT_OVERLAY_PANE_INSET_PX;
-			const handleBounds = conversationWidthHandleBounds(pane);
-			const columnBounds = handleBounds ? null : conversationColumnBounds(root, pane);
+			const expand = PROMPT_OVERLAY_EXPAND_PX;
+			const columnBounds = conversationColumnBounds(root, pane);
+			const widthHosts = [
+				pane,
+				root,
+				columnBounds?.element,
+				typeof document !== "undefined" ? document.documentElement : null,
+			].filter(Boolean);
+			const contentWidthInfo = readChatContentWidth(widthHosts, paneBox.width);
+			const handleBounds = contentWidthInfo.width != null ? null : conversationWidthHandleBounds(pane);
 			let left;
 			let width;
 			let widthTarget;
 			const observeExtras = [];
-			if (handleBounds) {
-				left = handleBounds.left;
-				width = handleBounds.width;
+			if (contentWidthInfo.width != null) {
+				const fromVar = boundsFromContentWidth(paneBox, contentWidthInfo.width, expand, pane);
+				left = fromVar.left;
+				width = fromVar.width;
+				widthTarget = columnBounds?.element || pane;
+			} else if (handleBounds) {
+				// Inner span ≈ content + 48; derive content-width and center+expand like the var path.
+				const derived = handleBounds.kind === "inner"
+					? Math.max(1, handleBounds.width - 48)
+					: handleBounds.width;
+				const fromHandle = boundsFromContentWidth(paneBox, derived, handleBounds.kind === "inner" ? expand : 0, handleBounds.element);
+				if (fromHandle) {
+					left = fromHandle.left;
+					width = fromHandle.width;
+				} else {
+					left = handleBounds.left;
+					width = handleBounds.width;
+				}
 				widthTarget = columnBounds?.element || handleBounds.element;
 				if (handleBounds.handles) observeExtras.push(...handleBounds.handles);
 			} else if (columnBounds) {
-				left = columnBounds.left;
-				width = columnBounds.width;
+				left = columnBounds.left - expand;
+				width = columnBounds.width + expand * 2;
 				widthTarget = columnBounds.element;
 			} else {
+				// Last resort only — clear inset so a missing var does not look edge-flush.
 				left = paneBox.left + inset;
 				width = Math.max(1, paneBox.width - inset * 2);
 				widthTarget = pane;
 			}
-			// Always discover the column when possible so ResizeObserver tracks live width-handle
-			// drags (handles only move; the column's used width is what actually changes).
-			const columnForObserve = columnBounds || conversationColumnBounds(root, pane);
-			if (columnForObserve?.element) {
-				widthTarget = columnForObserve.element;
-				observeExtras.push(columnForObserve.element);
-			}
+			// Observe column + pane: width-handle drags rewrite --dsh-chat-user-width / column
+			// used width; ResizeObserver + style MutationObserver keep the shelf tracking.
+			if (columnBounds?.element) observeExtras.push(columnBounds.element);
 			observeExtras.push(pane);
 			const clamped = clampOverlayHoriz(left, width, paneBox, inset);
 			left = clamped.left;
