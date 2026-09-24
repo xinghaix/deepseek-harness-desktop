@@ -440,15 +440,14 @@ window.__ModuleLoader__.load({
 			if (typeof promptOverlayRefresh === "function") promptOverlayRefresh();
 		}
 		const PROMPT_OVERLAY_TOP_PROTECTION_PX = 56;
-		// Only a fallback: when nothing is measurable the card still needs a sane width. The
-		// live width follows the message column so it keeps matching the bubble when the DSH
-		// web pane is expanded.
+		// Only a fallback: when nothing is measurable the card still needs a sane width.
 		const PROMPT_OVERLAY_MAX_WIDTH_PX = 760;
-		// The card matches the official Chat composer's horizontal extent, so it lines up with the
-		// input box the user reads it beside. The message column is only a fallback for the rare
-		// case where no composer is mounted. An earlier "mirror the column plus a symmetric
-		// slack" rule was wrong: DSH's column is not centred in its pane, so the extra width had
-		// to come out of the left gutter and spilled past the column's left edge.
+		// Sticky shelf horizontal extent (dsh-client-ui-conversation / chat):
+		// 1) [data-width-handle=left|right] outer edges (zero gap — shelf may cover the
+		//    handles; users still drag in the empty space below).
+		// 2) Chat message column (max-width: var(--dsh-chat-content-width)).
+		// 3) [data-conversation-content] / scroll pane with a small clamp inset.
+		const PROMPT_OVERLAY_PANE_INSET_PX = 8;
 		const PROMPT_OVERLAY_EPSILON = 1;
 		// Prompt-line budget for the card. Mirrors the desktop pref bounds; clamped here too so
 		// a stale value can never produce an unusable card.
@@ -733,6 +732,13 @@ window.__ModuleLoader__.load({
 			const probe = promptNodes()[0] || (typeof document.querySelector === "function"
 				? document.querySelector("[data-chat-flow-key], [data-chat-flow-kind]")
 				: null);
+			// Prefer DSH's stable scrollport attribute (dsh-client-ui-conversation) when the
+			// probe lives under it — more reliable than an overflow-y walk that can stop on a
+			// nested scroller inside a message.
+			if (probe && typeof probe.closest === "function") {
+				const marked = probe.closest("[data-conversation-scroll]");
+				if (marked && overflowYScrolls(marked)) return marked;
+			}
 			let el = probe && probe.parentElement;
 			while (el && el !== document.documentElement) {
 				if (overflowYScrolls(el)) return el;
@@ -743,6 +749,89 @@ window.__ModuleLoader__.load({
 				: null;
 			if (page && overflowYScrolls(page)) return page;
 			return document.scrollingElement || document.documentElement;
+		}
+		// [data-conversation-content]: AppFrame center body; hosts WidthHandles and the scrollport.
+		function conversationPaneRoot(scrollRoot) {
+			if (!scrollRoot) return null;
+			if (typeof scrollRoot.closest === "function") {
+				const content = scrollRoot.closest("[data-conversation-content]");
+				if (content) return content;
+			}
+			const parent = scrollRoot.parentElement;
+			if (parent && typeof parent.hasAttribute === "function" && parent.hasAttribute("data-conversation-content")) {
+				return parent;
+			}
+			if (typeof document !== "undefined" && typeof document.querySelector === "function") {
+				const page = document.querySelector("[data-conversation-content]");
+				if (page) return page;
+			}
+			return scrollRoot;
+		}
+		function elementBox(node) {
+			if (!node || typeof node.getBoundingClientRect !== "function") return null;
+			try {
+				const computed = typeof getComputedStyle === "function" ? getComputedStyle(node) : null;
+				if (computed && (computed.display === "none" || computed.visibility === "hidden")) return null;
+			} catch {}
+			const rect = node.getBoundingClientRect();
+			const left = Number(rect.left) || 0;
+			const right = Number(rect.right) || left;
+			const width = Number(rect.width) || Math.max(0, right - left);
+			const height = Number(rect.height) || Math.max(0, (Number(rect.bottom) || 0) - (Number(rect.top) || 0));
+			if (!(width > 0) || !(height > 0)) return null;
+			return { left, right, width, height, element: node };
+		}
+		// Transcript WidthHandles (data-width-handle). Outer edges span the content-width region
+		// the user sets by dragging; CSS places them at ±(content-width/2 + 24px) from center.
+		function conversationWidthHandleBounds(pane) {
+			if (!pane || typeof pane.querySelector !== "function") return null;
+			const leftHandle = elementBox(pane.querySelector("[data-width-handle=left], [data-width-handle='left']"));
+			const rightHandle = elementBox(pane.querySelector("[data-width-handle=right], [data-width-handle='right']"));
+			if (!leftHandle || !rightHandle) return null;
+			if (!(leftHandle.left < rightHandle.right)) return null;
+			return {
+				left: leftHandle.left,
+				width: Math.max(1, rightHandle.right - leftHandle.left),
+				element: rightHandle.element,
+				handles: [leftHandle.element, rightHandle.element],
+			};
+		}
+		// Chat message column: width:100%; max-width: var(--dsh-chat-content-width); margin:0 auto.
+		// Class name is hashed, so discover it by walking up from a flow node under the scrollport.
+		function conversationColumnBounds(scrollRoot, pane) {
+			const paneBox = elementBox(pane) || elementBox(scrollRoot);
+			const paneWidth = paneBox ? paneBox.width : 0;
+			const probe = promptNodes()[0] || (scrollRoot && typeof scrollRoot.querySelector === "function"
+				? scrollRoot.querySelector("[data-chat-flow-kind], [data-chat-flow-key]")
+				: null);
+			if (!probe) return null;
+			let best = null;
+			let el = probe.parentElement;
+			while (el && el !== scrollRoot && el !== pane && el !== document.documentElement && el !== document.body) {
+				const box = elementBox(el);
+				if (box && box.width >= 40 && (paneWidth <= 0 || box.width <= paneWidth + PROMPT_OVERLAY_EPSILON)) {
+					// Prefer the widest ancestor that is still within the pane — that is the centered column.
+					if (!best || box.width >= best.width) best = box;
+				}
+				el = el.parentElement;
+			}
+			if (!best) return null;
+			// Reject a "column" that is effectively the full pane — that is not content-width.
+			if (paneWidth > 0 && best.width > paneWidth * 0.95) return null;
+			return { left: best.left, width: best.width, element: best.element };
+		}
+		function clampOverlayHoriz(left, width, paneBox, inset) {
+			const pad = Math.max(0, Number(inset) || 0);
+			if (!paneBox) return { left, width: Math.max(1, width) };
+			const minLeft = paneBox.left + pad;
+			const maxRight = paneBox.right - pad;
+			let nextLeft = Math.max(left, minLeft);
+			let nextRight = Math.min(left + width, maxRight);
+			if (nextRight <= nextLeft) {
+				nextLeft = minLeft;
+				nextRight = Math.max(minLeft + 1, maxRight);
+			}
+			return { left: nextLeft, width: Math.max(1, nextRight - nextLeft) };
 		}
 		function promptScrolledPast(node, top) {
 			if (!node || typeof node.getBoundingClientRect !== "function") return false;
@@ -778,28 +867,6 @@ window.__ModuleLoader__.load({
 			if (candidate && visible.some(({ node }) => node === candidate)) return null;
 			return candidate;
 		}
-		function overlayColumnBounds(root, node) {
-			if (!root || typeof root.getBoundingClientRect !== "function") return null;
-			let best = null;
-			const peers = typeof root.querySelectorAll === "function" ? root.querySelectorAll("[data-chat-flow-kind=assistant]") : [];
-			for (const peer of peers || []) {
-				if (!peer || typeof peer.getBoundingClientRect !== "function") continue;
-				const rect = peer.getBoundingClientRect();
-				const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-				if (width < 40) continue;
-				if (!best || width > best.width) best = { left: Number(rect.left) || 0, width, element: peer };
-			}
-			if (best) return best;
-			const parent = node && node.parentElement;
-			if (parent) {
-				const rect = typeof parent.getBoundingClientRect === "function" ? parent.getBoundingClientRect() : null;
-				const width = Number(parent.clientWidth) || (rect ? Math.max(0, Number(rect.right) - Number(rect.left)) : 0);
-				if (width >= 40) return { left: rect ? Number(rect.left) || 0 : 0, width, element: parent };
-			}
-			const rect = root.getBoundingClientRect();
-			const width = Number(root.clientWidth) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-			return width >= 40 ? { left: Number(rect.left) || 0, width, element: root } : null;
-		}
 		// The card must never cover the Chat composer, so the composer's top edge is the floor
 		// for the card height. Walking up a few levels keeps its padding and toolbar in view.
 		function composerTopEdge() {
@@ -823,34 +890,6 @@ window.__ModuleLoader__.load({
 				if (Number.isFinite(candidate)) edge = Math.min(edge, candidate);
 			}
 			return Number.isFinite(edge) ? edge : null;
-		}
-		// The composer's horizontal extent: the box the user sees around the input field. The
-		// field itself is only the inner area, so walk up a few levels and take the widest box
-		// that is still narrower than the pane — an ancestor at pane width is the scroll
-		// container, not the composer.
-		function composerBounds(root) {
-			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
-			let paneWidth = 0;
-			if (root && typeof root.getBoundingClientRect === "function") {
-				const rect = root.getBoundingClientRect();
-				paneWidth = Number(root.clientWidth) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-			}
-			let best = null;
-			for (const area of document.querySelectorAll("textarea, [contenteditable='true']")) {
-				if (!area) continue;
-				let node = area;
-				for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
-					if (typeof node.getBoundingClientRect !== "function") continue;
-					const rect = node.getBoundingClientRect();
-					if (!rect) continue;
-					// A fake/empty box has no width field, so fall back to the edges.
-					const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-					if (width < 40) continue;
-					if (paneWidth > 0 && width > paneWidth * 0.95) continue;
-					if (!best || width > best.width) best = { left: Number(rect.left) || 0, width, element: node };
-				}
-			}
-			return best;
 		}
 		// DSH owns the older-history control. Find it structurally instead of matching one locale's
 		// label, so the overlay can reserve its lane without replacing or duplicating the native UI.
@@ -886,41 +925,58 @@ window.__ModuleLoader__.load({
 			if (!root || typeof root.getBoundingClientRect !== "function") return null;
 			const rootRect = root.getBoundingClientRect();
 			let top = Math.max(0, Number(rootRect.top) || 0);
-			const paneLeft = Number(rootRect.left) || 0;
-			const paneWidth = Number(root.clientWidth) || Math.max(0, Number(rootRect.right) - paneLeft) || 0;
-			const inset = 8;
-			const available = Math.max(1, paneWidth - inset * 2);
-			const maxWidth = available;
-			const paneRight = paneLeft + paneWidth - inset;
-			// Prefer the composer: matching the input box keeps the card aligned with the control
-			// the user is looking at, and follows the pane when it is widened or compacted.
-			const composerBox = composerBounds(root);
-			const column = composerBox ? null : overlayColumnBounds(root, node);
+			// TOP stays on the scroll root. WIDTH spans the content-width region the user sets
+			// with [data-width-handle] (fallback: chat column, then the conversation pane).
+			const pane = conversationPaneRoot(root) || root;
+			const paneBox = elementBox(pane) || {
+				left: Number(rootRect.left) || 0,
+				right: Number(rootRect.right) || 0,
+				width: Number(root.clientWidth) || Math.max(0, (Number(rootRect.right) || 0) - (Number(rootRect.left) || 0)),
+				element: pane,
+			};
+			const inset = PROMPT_OVERLAY_PANE_INSET_PX;
+			const handleBounds = conversationWidthHandleBounds(pane);
+			const columnBounds = handleBounds ? null : conversationColumnBounds(root, pane);
 			let left;
 			let width;
-			if (composerBox) {
-				left = composerBox.left;
-				width = composerBox.width;
-			} else if (column) {
-				left = column.left;
-				width = column.width;
+			let widthTarget;
+			const observeExtras = [];
+			if (handleBounds) {
+				left = handleBounds.left;
+				width = handleBounds.width;
+				widthTarget = columnBounds?.element || handleBounds.element;
+				if (handleBounds.handles) observeExtras.push(...handleBounds.handles);
+			} else if (columnBounds) {
+				left = columnBounds.left;
+				width = columnBounds.width;
+				widthTarget = columnBounds.element;
 			} else {
-				left = paneLeft + inset;
-				width = available;
+				left = paneBox.left + inset;
+				width = Math.max(1, paneBox.width - inset * 2);
+				widthTarget = pane;
 			}
-			const minLeft = paneLeft + inset;
-			left = Math.max(left, minLeft);
-			width = Math.min(Math.max(1, width), available);
-			// Keep the left anchor and give back width instead: moving the card left is exactly the
-			// overflow this function exists to avoid. Only a column wider than the whole pane can
-			// reach here, and then a narrower card is the correct degradation.
-			if (left + width > paneRight) width = Math.max(1, paneRight - left);
+			// Always discover the column when possible so ResizeObserver tracks live width-handle
+			// drags (handles only move; the column's used width is what actually changes).
+			const columnForObserve = columnBounds || conversationColumnBounds(root, pane);
+			if (columnForObserve?.element) {
+				widthTarget = columnForObserve.element;
+				observeExtras.push(columnForObserve.element);
+			}
+			observeExtras.push(pane);
+			const clamped = clampOverlayHoriz(left, width, paneBox, inset);
+			left = clamped.left;
+			width = clamped.width;
+			const maxWidth = Math.max(1, paneBox.width - inset * 2);
 			const viewportHeight = typeof window !== "undefined" && Number(window.innerHeight) > 0 ? Number(window.innerHeight) : Math.max(1, Number(rootRect.bottom) || 1);
 			const composer = composerTopEdge();
 			const floor = composer !== null && composer > top ? composer : viewportHeight;
 			const encounterOlder = isOfficialLoadOlderEncountered(root, rootRect, left, width, top, floor);
 			const availHeight = Math.max(1, floor - top - 8);
-			return { top, left, width, maxWidth, availHeight, encounterOlder, widthTarget: composerBox?.element || column?.element || root };
+			return {
+				top, left, width, maxWidth, availHeight, encounterOlder,
+				widthTarget,
+				widthObserve: observeExtras,
+			};
 		}
 		function applyOverlayStyle(host, metrics, extras) {
 			if (!host || !host.style || !metrics) return;
@@ -1693,6 +1749,7 @@ window.__ModuleLoader__.load({
 			state.toolbar = null;
 			state.source = null;
 			state.widthTarget = null;
+			state.widthObserve = [];
 			state.attachmentLayout = null;
 			state.proxyDescriptors = [];
 		}
@@ -1816,6 +1873,7 @@ window.__ModuleLoader__.load({
 			// width, so the width has to be known before the body is built.
 			const metrics = computeOverlayMetrics(root, next);
 			state.widthTarget = metrics?.widthTarget || null;
+			state.widthObserve = Array.isArray(metrics?.widthObserve) ? metrics.widthObserve.filter(Boolean) : [];
 			const encounterOlder = Boolean(metrics?.encounterOlder);
 			state.encounterOlder = encounterOlder;
 			const showOlder = shouldShowLoadOlder(next, state);
@@ -2256,8 +2314,8 @@ window.__ModuleLoader__.load({
 					const boundaryWidth = Number(root?.clientWidth) || (rootRect ? Math.max(0, Number(rootRect.right) - boundaryLeft) : 0);
 					const boundaryFloor = rootRect && Number(rootRect.bottom) > boundaryTop ? Number(rootRect.bottom) : boundaryTop;
 					// Probe the native boundary before choosing a candidate. This is deliberately cheaper than
-					// computeOverlayMetrics(): composer measurement scans the whole document and is not needed
-					// to decide whether DSH's own load-older control is currently in the conversation lane.
+					// computeOverlayMetrics(): a full metrics pass is not needed to decide whether DSH's
+					// own load-older control is currently in the conversation lane.
 					const encounterOlder = Boolean(root && rootRect && isOfficialLoadOlderEncountered(root, rootRect, boundaryLeft, boundaryWidth, boundaryTop, boundaryFloor));
 					const protectedPrompt = promptNodes().some((node) => {
 						const rect = node?.getBoundingClientRect?.();
@@ -2374,7 +2432,9 @@ window.__ModuleLoader__.load({
 					attributeFilter: [
 						"data-chat-flow-kind", "data-chat-flow-key", "data-chat-turn", "data-message-key", "data-session-id",
 						"data-attachment", "data-filename", "data-file-name", "data-file-path", "data-mime",
-						"title", "alt", "src", "aria-label", "aria-describedby", "aria-current", "role", "hidden", "aria-hidden"
+						"title", "alt", "src", "aria-label", "aria-describedby", "aria-current", "role", "hidden", "aria-hidden",
+						// ConversationWidthControls writes --dsh-chat-user-width on the content host while dragging.
+						"style", "data-width-handle", "data-dragging"
 					]
 				});
 			}
@@ -2383,7 +2443,7 @@ window.__ModuleLoader__.load({
 			observeLayout = () => {
 				if (typeof ResizeObserver !== "function") return;
 				const root = conversationScrollRoot();
-                const targets = new Set(enabled ? [root, root?.parentElement, state.source, state.host, state.widthTarget].filter(Boolean) : []);
+                const targets = new Set(enabled ? [root, root?.parentElement, state.source, state.host, state.widthTarget, ...(state.widthObserve || [])].filter(Boolean) : []);
                 // Re-observing sends another initial notification in real browsers. Keep the
                 // subscriptions stable so a settled resize does not turn into an endless RAF loop.
                 if (targets.size === resizeTargets.size && [...targets].every((node) => resizeTargets.has(node))) return;

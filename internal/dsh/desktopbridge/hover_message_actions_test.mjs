@@ -7,9 +7,17 @@ assert.match(source, /installHoverMessageActions/);
 assert.match(source, /pickStickyPrompt/);
 assert.match(source, /data-dsh-desktop-prompt-overlay/);
 assert.match(source, /PROMPT_OVERLAY_MAX_WIDTH_PX/);
+assert.match(source, /PROMPT_OVERLAY_PANE_INSET_PX/);
+assert.match(source, /function conversationPaneRoot/);
+assert.match(source, /function conversationWidthHandleBounds/);
+assert.match(source, /function conversationColumnBounds/);
+assert.match(source, /data-conversation-content/);
+assert.match(source, /data-width-handle/);
 assert.match(source, /markPromptActionDone/);
 assert.doesNotMatch(source, /syncStickyColumnWidth/);
 assert.doesNotMatch(source, /STICKY_PROMPT_FLOAT_ATTR/);
+assert.doesNotMatch(source, /function composerBounds/);
+assert.doesNotMatch(source, /function overlayColumnBounds/);
 // The overlay and the settings section both take their label from the shared catalog.
 assert.match(source, /t\("bridge\.enhanced_hover_title"\)/);
 assert.match(source, /t\("bridge\.overlay_label"\)/);
@@ -179,12 +187,35 @@ function matchOne(node, part) {
 const documentElement = new FakeElement("html");
 const head = new FakeElement("head");
 const body = new FakeElement("body");
+// Mirrors dsh-client-ui-conversation / chat:
+// [data-conversation-content] hosts WidthHandles + scrollport;
+// scroll contains the centered message column (max-width: --dsh-chat-content-width).
+const conversationContent = new FakeElement("div");
+conversationContent.setAttribute("data-conversation-content", "");
+conversationContent.rect = { top: 80, bottom: 800, left: 0, right: 800 };
 const scroll = new FakeElement("div");
+scroll.setAttribute("data-conversation-scroll", "");
 scroll.overflowY = "auto";
 scroll.rect = { top: 80, bottom: 800, left: 0, right: 800 };
+// Content width 720 centered in pane 0..800 → column 40..760.
+// Handles sit just outside (CSS: ±(C/2+24) from center): left 6..16, right 784..794.
+const messageColumn = new FakeElement("div");
+messageColumn.rect = { top: 80, bottom: 700, left: 40, right: 760 };
+const widthHandleLeft = new FakeElement("div");
+widthHandleLeft.setAttribute("data-width-handle", "left");
+widthHandleLeft.setAttribute("data-side", "left");
+widthHandleLeft.rect = { top: 80, bottom: 800, left: 6, right: 16 };
+const widthHandleRight = new FakeElement("div");
+widthHandleRight.setAttribute("data-width-handle", "right");
+widthHandleRight.setAttribute("data-side", "right");
+widthHandleRight.rect = { top: 80, bottom: 800, left: 784, right: 794 };
 documentElement.appendChild(head);
 documentElement.appendChild(body);
-body.appendChild(scroll);
+body.appendChild(conversationContent);
+conversationContent.appendChild(scroll);
+conversationContent.appendChild(widthHandleLeft);
+conversationContent.appendChild(widthHandleRight);
+scroll.appendChild(messageColumn);
 // Official DSH renders this control at the top of the conversation when older history exists.
 const olderSlot = new FakeElement("div");
 olderSlot.setAttribute("class", "OfficialHash_older");
@@ -199,8 +230,8 @@ function addFlow(kind, top, bottom) {
   const el = new FakeElement("div");
   el.setAttribute("data-chat-flow-kind", kind);
   el.setAttribute("data-chat-flow-key", kind + "-" + top);
-  el.rect = { top, bottom, left: 0, right: 400 };
-  scroll.appendChild(el);
+  el.rect = { top, bottom, left: 40, right: 400 };
+  messageColumn.appendChild(el);
   return el;
 }
 
@@ -882,8 +913,10 @@ composer.rect = savedComposer;
 // assertion still sees the default rather than a value this block happened to leave behind.
 delete window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__;
 window.dispatchEvent(new CustomEvent("resize"));
-// Shared grid: two 48px rows + 6px row gap + 8px separation from the body = 110px.
-assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-extra"], "110px", "the combined attachment block gets one height budget");
+// Shared grid at full-pane width (784px): six attachments fit in one 48px row + 8px
+// separation from the body = 56px. (At the old composer width of 720px this needed two
+// rows / 110px; the wider shelf is intentional.)
+assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-extra"], "56px", "the combined attachment block gets one height budget");
 assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-lines"], "5", "the default line budget is applied");
 
 // A single click confirms immediately (no second click needed) and stays confirmed.
@@ -1045,17 +1078,55 @@ assert.ok(registrationsBefore >= 1, "the settings nav registers during apply");
 // The line budget is a live pref: the rebuilt card reports the new value.
 assert.equal(overlay.style._props["--dsh-desktop-prompt-overlay-lines"], "8", "line budget follows the published pref");
 
-// The card matches the official composer box (fixture: pane 0..800, composer 40..760) so it
-// lines up with the input the user reads it beside, and never exceeds the pane.
+// Shelf spans [data-width-handle] OUTER edges (fixture handles 6..794 → 788px), then
+// clamped inside the conversation content (0..800) with inset 8 → left 8, width 784.
 const paneWidth = 800;
 const paneInset = 8;
-const composerLeft = 40;
-const composerWidth = 720;
+const handleLeft = 6;
+const handleRight = 794;
+const expectedLeft = Math.max(handleLeft, paneInset);
+const expectedRight = Math.min(handleRight, paneWidth - paneInset);
+const expectedWidth = expectedRight - expectedLeft;
 const cardWidth = Number.parseFloat(overlay.style.width);
 const cardLeft = Number.parseFloat(overlay.style.left);
-assert.equal(cardLeft, composerLeft, "the card's left edge matches the composer");
-assert.equal(cardWidth, composerWidth, "the card's width matches the composer");
+assert.equal(cardLeft, expectedLeft, "the card's left edge is the left width-handle outer edge (clamped)");
+assert.equal(cardWidth, expectedWidth, "the card spans to the right width-handle outer edge (clamped)");
 assert.ok(cardWidth <= paneWidth - paneInset * 2, "the card still stays inside the pane");
+
+// Scrollport gutter must not change handle-based width.
+const gutterScroll = { ...scroll.rect };
+scroll.rect = { ...scroll.rect, left: 8, right: 792 };
+window.dispatchEvent(new CustomEvent("resize"));
+assert.equal(Number.parseFloat(overlay.style.left), expectedLeft, "guttered scrollport does not pull the shelf");
+assert.equal(Number.parseFloat(overlay.style.width), expectedWidth, "shelf still tracks width handles");
+scroll.rect = gutterScroll;
+window.dispatchEvent(new CustomEvent("resize"));
+
+// Live drag: moving the handles (and the column they control) updates the shelf.
+const draggedLeft = { ...widthHandleLeft.rect };
+const draggedRight = { ...widthHandleRight.rect };
+const draggedCol = { ...messageColumn.rect };
+widthHandleLeft.rect = { ...widthHandleLeft.rect, left: 100, right: 110 };
+widthHandleRight.rect = { ...widthHandleRight.rect, left: 690, right: 700 };
+messageColumn.rect = { ...messageColumn.rect, left: 124, right: 676 };
+window.dispatchEvent(new CustomEvent("resize"));
+assert.equal(Number.parseFloat(overlay.style.left), 100, "shelf left follows dragged left handle outer edge");
+assert.equal(Number.parseFloat(overlay.style.width), 600, "shelf width follows both handle outer edges while dragging");
+widthHandleLeft.rect = draggedLeft;
+widthHandleRight.rect = draggedRight;
+messageColumn.rect = draggedCol;
+window.dispatchEvent(new CustomEvent("resize"));
+
+// When handles are hidden/zero-size, fall back to the message column rect.
+const hiddenHandles = { left: { ...widthHandleLeft.rect }, right: { ...widthHandleRight.rect } };
+widthHandleLeft.rect = { top: 80, bottom: 80, left: 0, right: 0 };
+widthHandleRight.rect = { top: 80, bottom: 80, left: 0, right: 0 };
+window.dispatchEvent(new CustomEvent("resize"));
+assert.equal(Number.parseFloat(overlay.style.left), 40, "without handles the shelf uses the message column left");
+assert.equal(Number.parseFloat(overlay.style.width), 720, "without handles the shelf uses the message column width");
+widthHandleLeft.rect = hiddenHandles.left;
+widthHandleRight.rect = hiddenHandles.right;
+window.dispatchEvent(new CustomEvent("resize"));
 
 // The grid must measure the CARD, not the native bubble it mirrors. A narrow bubble inside a
 // wide card must still fill its row, or the +N cell would appear while space is available.
@@ -1072,10 +1143,18 @@ window.__DSH_DESKTOP_PROMPT_OVERLAY_MAX_LINES__ = 8;
 window.dispatchEvent(new CustomEvent("scroll"));
 
 // A cramped pane can only fit one thumbnail per row, so a 4-image prompt must cap at 2 rows:
-// one visible tile plus a +N cell occupying the second row's cell. Width now comes from the
-// assistant column, so the pane AND every assistant peer must narrow together.
-const wideRects = { scroll: { ...scroll.rect }, a1: { ...a1.rect }, a2: { ...a2.rect }, composer: { ...composer.rect } };
+// one visible tile plus a +N cell occupying the second row's cell. Width comes from the
+// scroll pane, so narrowing the pane is enough to force the single-column layout.
+const wideRects = {
+  scroll: { ...scroll.rect }, content: { ...conversationContent.rect }, column: { ...messageColumn.rect },
+  hl: { ...widthHandleLeft.rect }, hr: { ...widthHandleRight.rect },
+  a1: { ...a1.rect }, a2: { ...a2.rect }, composer: { ...composer.rect },
+};
 scroll.rect = { top: 80, bottom: 800, left: 0, right: 100 };
+conversationContent.rect = { top: 80, bottom: 800, left: 0, right: 100 };
+messageColumn.rect = { top: 80, bottom: 700, left: 8, right: 92 };
+widthHandleLeft.rect = { top: 80, bottom: 800, left: 0, right: 0 };
+widthHandleRight.rect = { top: 80, bottom: 800, left: 0, right: 0 };
 a1.rect = { ...a1.rect, left: 0, right: 84 };
 a2.rect = { ...a2.rect, left: 0, right: 84 };
 composer.rect = { ...composer.rect, left: 4, right: 96 };
@@ -1095,6 +1174,10 @@ assert.equal(narrowRow.childNodes.length, 2, "one-column mixed grid has only two
 // Restore the fixture so later geometry assertions see the original layout. The wide-card
 // media rendering is already covered by the assertions above.
 scroll.rect = wideRects.scroll;
+conversationContent.rect = wideRects.content;
+messageColumn.rect = wideRects.column;
+widthHandleLeft.rect = wideRects.hl;
+widthHandleRight.rect = wideRects.hr;
 a1.rect = wideRects.a1;
 a2.rect = wideRects.a2;
 composer.rect = wideRects.composer;
@@ -1110,6 +1193,11 @@ assert.deepEqual([...u2.attributes.entries()], originalAttrs, "source attributes
 const initialLeft = overlay.style.left;
 const initialWidth = overlay.style.width;
 scroll.rect = { top: 100, bottom: 800, left: 40, right: 540 };
+conversationContent.rect = { top: 100, bottom: 800, left: 40, right: 540 };
+// Content-width 420 centered in pane 40..540 → column 100..520; handles just outside.
+messageColumn.rect = { top: 100, bottom: 700, left: 100, right: 520 };
+widthHandleLeft.rect = { top: 100, bottom: 800, left: 66, right: 76 };
+widthHandleRight.rect = { top: 100, bottom: 800, left: 504, right: 514 };
 a1.rect = { top: -110, bottom: 40, left: 100, right: 460 };
 a2.rect = { top: 30, bottom: 900, left: 100, right: 460 };
 composer.rect = { top: 720, bottom: 800, left: 80, right: 500 };
@@ -1117,17 +1205,16 @@ window.dispatchEvent(new CustomEvent("resize"));
 assert.notEqual(overlay.style.left, initialLeft, "resize updates overlay left position");
 assert.notEqual(overlay.style.width, initialWidth, "resize updates overlay width");
 
-// This fixture models the real DSH geometry: the assistant column is NOT centred in the pane
-// (pane 40..540, column 100..460), so the left gutter is narrower than the right one.
-// The card must stay wider than the column but must never cross the column's LEFT edge —
-// a symmetric expansion used to do exactly that and spilled into the official left rail.
+// After resize, shelf tracks width-handle outer edges (66..514), clamped in pane 40..540 inset 8.
+const asyPaneLeft = 40;
 const asyPaneRight = 540;
-const asyComposerLeft = 80;
-const asyComposerRight = 500;
+const asyInset = 8;
+const asyHandleLeft = 66;
+const asyHandleRight = 514;
 const asyCardLeft = Number.parseFloat(overlay.style.left);
 const asyCardWidth = Number.parseFloat(overlay.style.width);
-assert.equal(asyCardLeft, asyComposerLeft, "in an asymmetric pane the card still tracks the composer's left edge");
-assert.equal(asyCardLeft + asyCardWidth, asyComposerRight, "and its right edge");
+assert.equal(asyCardLeft, Math.max(asyHandleLeft, asyPaneLeft + asyInset), "after resize the card tracks the left width-handle");
+assert.equal(asyCardLeft + asyCardWidth, Math.min(asyHandleRight, asyPaneRight - asyInset), "and the right width-handle");
 assert.ok(asyCardLeft + asyCardWidth <= asyPaneRight, "the card stays inside the pane on the right");
 
 u2.rect = { top: 200, bottom: 260, left: 0, right: 400 };
@@ -1378,19 +1465,38 @@ for (const [imageCount, fileCount] of [[0, 0], [20, 0], [0, 20], [2, 8], [2, 9],
   } else assert.equal(items.length, total);
   assert.equal(grid.style._props["--dsh-desktop-attachment-height"], imageCount ? "48px" : "30px");
 }
-// Resize the SAME live prompt; no preference toggles, text mutations or source replacement.
-const responsiveRects = { scroll: { ...scroll.rect }, composer: { ...composer.rect }, textarea: { ...textarea.rect } };
-scroll.rect = { ...scroll.rect, right: 1500 };
+// Resize the SAME live prompt via width-handles + message column (content-width drag).
+// ResizeObserver on the column must fire so the shelf tracks live handle drags.
+const responsiveRects = {
+  scroll: { ...scroll.rect },
+  content: { ...conversationContent.rect },
+  column: { ...messageColumn.rect },
+  hl: { ...widthHandleLeft.rect },
+  hr: { ...widthHandleRight.rect },
+  composer: { ...composer.rect },
+  textarea: { ...textarea.rect },
+};
+const paneInsetLive = 8;
+// Wide host pane so clamp never binds; shelf width = handle span.
+conversationContent.rect = { ...conversationContent.rect, left: 0, right: 2000 };
+scroll.rect = { ...scroll.rect, left: 0, right: 2000 };
 const liveNodes = [fixtureImage(0), fixtureImage(1), ...Array.from({ length: 10 }, () => fixtureFile(longName))];
 const responsiveCard = replayAttachments(liveNodes);
-const resizeCard = (width, target) => {
-  composer.rect = { ...composer.rect, left: 40, right: 40 + width };
-  textarea.rect = { ...textarea.rect, left: 56, right: 40 + width - 16 };
-  if (target) target.trigger(composer);
+const resizeCard = (cardWidth, target) => {
+  // Place handles so OUTER edges (left.left .. right.right) span exactly cardWidth.
+  const mid = 1000;
+  const left = mid - cardWidth / 2;
+  const right = mid + cardWidth / 2;
+  widthHandleLeft.rect = { top: 80, bottom: 800, left: left, right: left + 10 };
+  widthHandleRight.rect = { top: 80, bottom: 800, left: right - 10, right: right };
+  // Column matches content-width (slightly inside handles, as in real DSH).
+  messageColumn.rect = { top: 80, bottom: 700, left: left + 24, right: right - 24 };
+  if (target) target.trigger(messageColumn);
   else window.dispatchEvent(new CustomEvent("resize"));
   const grid = responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-attachments]");
-  const expectedColumns = Math.max(1, Math.floor((width - 25 + 6) / 126));
-  assert.equal(Number.parseFloat(responsiveCard.style.width), width, "overlay follows the live composer width");
+  const expectedColumns = Math.max(1, Math.floor((cardWidth - 25 + 6) / 126));
+  assert.equal(Number.parseFloat(responsiveCard.style.width), cardWidth, "overlay follows live width-handle outer span");
+  assert.equal(Number.parseFloat(responsiveCard.style.left), left, "overlay left tracks left handle outer edge");
   assert.equal(Number(grid.style._props["--dsh-desktop-attachment-columns"]), expectedColumns, "column capacity updates even on a 1px threshold crossing");
   const expectedVisible = 12 <= expectedColumns * 2 ? 12 : expectedColumns * 2 - 1;
   assert.equal(grid.querySelectorAll("[data-dsh-desktop-prompt-overlay-item]").length, expectedVisible);
@@ -1400,24 +1506,28 @@ const resizeCard = (width, target) => {
   return grid;
 };
 for (const width of [270, 271, 396, 397, 775, 1040, 271, 270]) resizeCard(width);
-const liveResizeObserver = ResizeObserver.instances.find((item) => item.targets.has(scroll));
-assert.ok(liveResizeObserver?.targets.has(composer), "observe composer-only resizing, not just window/pane resize");
+const liveResizeObserver = ResizeObserver.instances.find((item) => item.targets.has(messageColumn) || item.targets.has(conversationContent));
+assert.ok(liveResizeObserver?.targets.has(messageColumn), "observe the message column so content-width drags update the shelf");
 resizeCard(775, liveResizeObserver);
 const stableGrid = resizeCard(780, liveResizeObserver);
 assert.equal(resizeCard(782, liveResizeObserver), stableGrid, "reuse grid within a column band rather than recreate thumbnails each pixel");
 const observationCount = liveResizeObserver.observeCalls;
 const disconnectCount = liveResizeObserver.disconnectCalls;
-liveResizeObserver.trigger(composer);
+liveResizeObserver.trigger(messageColumn);
 assert.equal(liveResizeObserver.observeCalls, observationCount, "settled resize does not re-observe unchanged nodes");
 assert.equal(liveResizeObserver.disconnectCalls, disconnectCount, "avoid a perpetual initial-notification resize loop");
 responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-body]").scrollTop = 40;
 resizeCard(270, liveResizeObserver);
 assert.equal(responsiveCard.querySelector("[data-dsh-desktop-prompt-overlay-body]").scrollTop, 40, "retain preview reading position across capacity changes");
 scroll.rect = responsiveRects.scroll;
+conversationContent.rect = responsiveRects.content;
+messageColumn.rect = responsiveRects.column;
+widthHandleLeft.rect = responsiveRects.hl;
+widthHandleRight.rect = responsiveRects.hr;
 composer.rect = responsiveRects.composer;
 textarea.rect = responsiveRects.textarea;
 window.dispatchEvent(new CustomEvent("resize"));
-console.log("ok - live width expansion, collapse, column thresholds and stable observation");
+console.log("ok - live width-handle expansion, collapse, column thresholds and stable observation");
 console.log("ok - mixed attachments share two rows and one icon-based overflow tile");
 console.log("ok - attachment identity, prose classification, long names and inert labels");
 
