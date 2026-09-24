@@ -12,7 +12,8 @@ export const inject = ["web"];
 export const SETTINGS_NS = "web-fetch-allowlist";
 
 export const Config = z.object({
-	hosts: z.string().default(""),
+	// Volatile: Host commits allowlist edits in place (DSH 0.1.7+); no installSection.
+	hosts: z.string().default("").volatile(),
 });
 
 const blocked = new BlockList();
@@ -88,17 +89,9 @@ function wrapHttpProvider(provider, getAllowlist) {
 }
 
 export function apply(ctx, config) {
-	let current = () => config;
-	ctx.inject(["settings"], (settingsCtx) => {
-		settingsCtx.settings.installSection(ctx, SETTINGS_NS, Config, config, {
-			setSource: (source) => {
-				current = source;
-			},
-			onChange: () => {},
-		});
-	});
-
-	const getAllowlist = () => parseHostsText(current().hosts ?? "");
+	// Entry config is the settings document (id web-fetch-allowlist). Live edits
+	// arrive via Schemastery volatile refs — installSection was removed in 0.1.7.
+	const getAllowlist = () => parseHostsText(config.hosts.get() ?? "");
 	const wrap = (provider) => wrapHttpProvider(provider, getAllowlist);
 
 	wrap(ctx.web.fetchProviders.get("http"));

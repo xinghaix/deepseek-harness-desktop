@@ -22,8 +22,8 @@ function harness() {
   const scope = {
     getSnapshot: () => snapshot,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    async set(key, value) { if (resolvedRejection) return; if (failSave) throw new Error("rejected"); writes.push(["set", key, value]); snapshot = { ...snapshot, value: { hosts: value }, user: { hosts: value } }; listeners.forEach(fn => fn()); },
-    async unset(key) { if (resolvedRejection) return; writes.push(["unset", key]); snapshot = { ...snapshot, value: snapshot.base, user: {} }; listeners.forEach(fn => fn()); },
+    async set(key, value) { if (resolvedRejection) return false; if (failSave) throw new Error("rejected"); writes.push(["set", key, value]); snapshot = { ...snapshot, value: { hosts: value }, user: { hosts: value } }; listeners.forEach(fn => fn()); return true; },
+    async unset(key) { if (resolvedRejection) return false; writes.push(["unset", key]); snapshot = { ...snapshot, value: snapshot.base, user: {} }; listeners.forEach(fn => fn()); return true; },
   };
   const jsx = (type, props) => ({ type, props });
   vm.runInNewContext(source, {
@@ -38,7 +38,7 @@ function harness() {
   const ctx = {
     effect(fn) { const off = fn(); if (typeof off === "function") disposers.push(off); },
     locale: { register: () => () => {} },
-    settingsScope: { bind(spec) { assert.equal(spec.namespace, "web-fetch-allowlist"); return scope; } },
+    configForms: { get(ns) { assert.equal(ns, "web-fetch-allowlist"); return scope; } },
     slots: {
       inject(name, fn) { waiting.push({ name, fn }); },
       register(spec, component) { entries.set(spec.key, { spec, component }); return () => entries.delete(spec.key); },
@@ -133,7 +133,7 @@ test("resolved rejected writes keep drafts, including reset overrides", async ()
     if (reset) props.resetField(); else props.editRow(0, "example.org");
     await props.save();
     const state = props.hooks.allowlistCard.getSnapshot();
-    assert.equal(state.failed, true, "settingsScope can resolve after a rejected remote write");
+    assert.equal(state.failed, true, "configForms can resolve false after a rejected remote write");
     assert.equal(state.dirty, true);
     assert.equal(state.hosts.text, reset ? "" : "example.org");
   }

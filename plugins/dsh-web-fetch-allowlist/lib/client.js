@@ -10,7 +10,7 @@ window.__ModuleLoader__.load({
 
 		const SETTINGS_NS = "web-fetch-allowlist";
 		const LOCALE_NS = "settings.web-fetch-allowlist";
-		const inject = ["slots", "locale", "settingsScope"];
+		const inject = ["slots", "locale", "configForms"];
 
 		const en = {
 			title: "Web fetch allowlist",
@@ -137,10 +137,13 @@ window.__ModuleLoader__.load({
 				try {
 					const text = (this.staged ?? "").trim();
 					const clearing = this.clear || text === "";
-					if (clearing) await this.scope.unset("hosts");
-					else await this.scope.set("hosts", text);
-					// Scope writes also resolve after a rejected response and recovery.
-					// Only discard the draft when the authoritative user layer accepted it.
+					// configForms.set/unset resolve to false after a refused write + recovery.
+					const ok = clearing ? await this.scope.unset("hosts") : await this.scope.set("hosts", text);
+					if (!ok) {
+						this.failed = true;
+						return;
+					}
+					// Belt-and-suspenders: confirm the mirrored user layer matches.
 					const accepted = this.scope.getSnapshot();
 					if (accepted.status !== "ready" || (clearing
 						? userHasHosts(this.scope)
@@ -225,7 +228,7 @@ window.__ModuleLoader__.load({
 				() => ctx.locale.register(LOCALE_NS, { zh, en }),
 				"web-fetch-allowlist: copy dictionaries",
 			);
-			const controller = new AllowlistCardController(ctx.settingsScope.bind({ namespace: SETTINGS_NS }));
+			const controller = new AllowlistCardController(ctx.configForms.get(SETTINGS_NS));
 			ctx.effect(() => () => controller.unsubscribe(), "web-fetch-allowlist: settings subscription");
 			const face = controller.inject();
 			ctx.slots.inject("plugins.bundle.config", () => ctx.slots.register(

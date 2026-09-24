@@ -2,9 +2,15 @@
 
 为经本地 Fake-IP / TUN（例如 Surge / Clash 的 `198.18.0.0/15`）解析的白名单域名提供原生 `web_fetch` 支持。插件包装内置 `http` fetch provider，不改变 `dsh-web.fetchProvider`。
 
+
+## 兼容性
+
+- **0.2.0+**：适配 DSH `0.1.7-rc.1`。客户端注入由已移除的 `settingsScope` 改为 `configForms`；Host 端不再调用已删除的 `settings.installSection`，改为对 `hosts` 使用 Schemastery `.volatile()` 读取 live 配置。`peerDependencies` 声明为 `^0.1.7-rc.1`，可在该版本上原生通过兼容性检查，无需 `dsh plugin allow-version`。
+- **0.1.2**：面向 `0.1.6-alpha.x`（`settingsScope` + `installSection`），在 `0.1.7-rc.1` 上会卡在 `pending (waiting for service: settingsScope)`。
+
 ## 安装或更新
 
-需要已安装的 DSH（`>=0.1.6-alpha.2`，提供新版主侧栏插件管理页）和 Node.js 20 或更高版本，以及 DSH Host 提供的 settings / web 插件。
+需要已安装的 DSH（`>=0.1.7-rc.1`，提供新版主侧栏插件管理页）和 Node.js 20 或更高版本，以及 DSH Host 提供的 settings / web 插件。
 
 直接从 GitHub 安装，无需先克隆仓库或发布到 npm。以下命令可在任意目录执行，适用于 macOS / Linux 和 Windows PowerShell（需已安装 pnpm 和 Git）：
 
