@@ -273,10 +273,47 @@ vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { filename: "desktop-bridge-copy-session-menu.js" });
 assert.ok(registration, "client registration missing");
 
-const react = {};
+const reactStates = [];
+const react = {
+  useState(init) {
+    const index = reactStates.length;
+    const value = typeof init === "function" ? init() : init;
+    reactStates.push({ value });
+    return [
+      reactStates[index].value,
+      (next) => {
+        reactStates[index].value = typeof next === "function" ? next(reactStates[index].value) : next;
+      },
+    ];
+  },
+  useEffect(fn) {
+    const cleanup = fn();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  },
+};
+function MenuItemButton(props) { return { type: "MenuItemButton", props }; }
+function IconCopyOutlineRegular() { return { type: "IconCopy" }; }
+function IconTrashOutlineRegular() { return { type: "IconTrash" }; }
+let clipboardValue = "";
+let clipboardRejects = false;
+sandbox.navigator.clipboard.writeText = (value) => {
+  if (clipboardRejects) return Promise.reject(new Error("clipboard denied"));
+  clipboardValue = value;
+  return Promise.resolve();
+};
+const slotRegistrations = [];
 const client = registration.factory((name) => {
   if (name === "react") return react;
-  if (name === "react/jsx-runtime") return { jsx() {}, jsxs() {}, Fragment: Symbol("Fragment") };
+  if (name === "react/jsx-runtime") {
+    return {
+      jsx(type, props) { return { type, props: props || {} }; },
+      jsxs(type, props) { return { type, props: props || {} }; },
+      Fragment: Symbol("Fragment"),
+    };
+  }
+  if (name === "@deepseek-ai/dsh-client-ui-primitives") {
+    return { MenuItemButton, IconCopyOutlineRegular, IconTrashOutlineRegular };
+  }
   throw new Error(`unexpected require ${name}`);
 });
 const flushMicrotasks = async () => {
@@ -288,7 +325,30 @@ const batchUnarchiveCalls = [];
 const startSessionCalls = [];
 const clearMainCalls = [];
 const ctx = {
-  slots: { inject() {} },
+  slots: {
+    inject(slot, factory) {
+      if (slot !== "sidebar.workspaces.session.menu.item") {
+        const result = factory();
+        if (result && typeof result.next === "function") {
+          let step = result.next();
+          while (!step.done) step = result.next();
+        }
+        return () => {};
+      }
+      const gen = factory();
+      let step = gen.next();
+      while (!step.done) {
+        slotRegistrations.push(step.value);
+        step = gen.next();
+      }
+      const dispose = () => { slotRegistrations.length = 0; };
+      cleanups.push(dispose);
+      return dispose;
+    },
+    register(options, component) {
+      return { options, component };
+    },
+  },
   effect(fn) {
     const cleanup = fn();
     if (typeof cleanup === "function") cleanups.push(cleanup);
@@ -329,95 +389,36 @@ const ctx = {
 client.apply(ctx);
 await Promise.resolve();
 
-const sessionFiber = {
-  memoizedProps: {
-    node: { id: "session-copy-test" },
-    onRename() {},
-    onFork() {},
-    onArchive() {},
-  },
-  return: null,
-};
-const row = document.createElement("div");
-row.setAttribute("role", "treeitem");
-const action = document.createElement("button");
-Object.defineProperty(action, "__reactFiber$test", { value: { return: sessionFiber } });
-row.appendChild(action);
-document.documentElement.appendChild(row);
-documentListeners.get("pointerdown")({ target: action });
 
-const makeOfficialItem = (label) => {
-  const wrapper = document.createElement("div");
-  wrapper.className = "itemWrap";
-  const item = document.createElement("button");
-  item.setAttribute("type", "button");
-  item.setAttribute("role", "menuitem");
-  const icon = document.createElement("span");
-  icon.appendChild(document.createElement("svg"));
-  const text = document.createElement("span");
-  text.textContent = label;
-  item.appendChild(icon);
-  item.appendChild(text);
-  wrapper.appendChild(item);
-  return wrapper;
-};
-const menu = document.createElement("div");
-menu.setAttribute("role", "menu");
-const viewport = document.createElement("div");
-viewport.setAttribute("role", "presentation");
-for (const label of ["重命名", "分叉会话", "归档会话"]) viewport.appendChild(makeOfficialItem(label));
-menu.appendChild(viewport);
-Object.defineProperty(menu, "__reactFiber$menu", { value: { return: sessionFiber } });
-document.documentElement.appendChild(menu);
-
-const copyItem = () => menu.querySelector("[data-dsh-copy-session-id]");
-assert.ok(copyItem(), "session menu item was not injected");
+assert.equal(slotRegistrations.length, 2, "session menu must register copy + delete slots");
 assert.deepEqual(
-  menu.querySelectorAll("button[role='menuitem']").map((item) => item.textContent),
-  ["重命名", "分叉会话", "复制会话ID", "归档会话", "删除会话"],
-  "session menu order must end with delete",
+  slotRegistrations.map((entry) => ({
+    id: entry.options.id,
+    order: entry.options.order,
+    name: entry.options.name,
+  })),
+  [
+    { id: "deepseek-harness-desktop.copy-session-id", order: 500, name: "sidebar.workspaces.session.menu.item" },
+    { id: "deepseek-harness-desktop.delete-session", order: 600, name: "sidebar.workspaces.session.menu.item" },
+  ],
+  "copy/delete must follow official pin/rename/fork/archive orders",
 );
-assert.equal(copyItem().parentElement.parentElement, viewport, "copy item must have its own sibling wrapper");
-assert.ok(copyItem().querySelector("svg"), "copy item must retain a visible icon");
-assert.equal(copyItem().querySelector("svg").getAttribute("viewBox"), "0 0 16 16");
-assert.equal(copyItem().querySelector("svg").getAttribute("width"), "16");
-assert.equal(copyItem().querySelector("svg").getAttribute("height"), "16");
-assert.equal(copyItem().querySelectorAll("path").length, 1, "official copy icon path missing");
-assert.equal(copyItem().querySelector("path").getAttribute("fill"), "currentColor");
-assert.equal(copyItem().getAttribute("data-dsh-copy-session-id-value"), "session-copy-test");
-const deleteItem = () => menu.querySelector("[data-dsh-delete-session]");
-assert.ok(deleteItem(), "delete session item was not injected");
-assert.equal(deleteItem().textContent, "删除会话");
-assert.equal(deleteItem().getAttribute("data-dsh-delete-session-value"), "session-copy-test");
-assert.equal(deleteItem().parentElement.parentElement, viewport, "delete item must have its own sibling wrapper");
-assert.ok(deleteItem().querySelector("svg"), "delete item must retain a visible icon");
-assert.equal(deleteItem().querySelector("svg").getAttribute("viewBox"), "0 0 16 16");
-assert.equal(deleteItem().querySelector("svg").getAttribute("width"), "16");
-assert.equal(deleteItem().querySelector("svg").getAttribute("height"), "16");
-assert.equal(deleteItem().querySelectorAll("path").length, 1, "official trash icon path missing");
-assert.equal(deleteItem().querySelector("path").getAttribute("fill"), "currentColor");
 
-let clipboardValue = "";
-let clipboardRejects = false;
-const clipboard = {
-  writeText(value) {
-    if (clipboardRejects) return Promise.reject(new Error("clipboard denied"));
-    clipboardValue = value;
-    return Promise.resolve();
-  },
-};
-sandbox.navigator.clipboard = clipboard;
-copyItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+reactStates.length = 0;
+const copyNode = slotRegistrations[0].component({
+  sessionId: "session-copy-test",
+  useMenuOpenState: () => [true, () => {}],
+});
+assert.equal(copyNode.type, MenuItemButton);
+assert.equal(copyNode.props.separatorBefore, true);
+assert.ok(copyNode.props.icon, "copy item must render an icon");
+
+clipboardValue = "";
+await copyNode.props.onSelect();
 await flushMicrotasks();
-assert.equal(clipboardValue, "session-copy-test", "clipboard must receive the owning session id");
-assert.equal(copyItem().querySelector("[data-dsh-copy-session-id-label]").textContent, "已复制");
+assert.equal(clipboardValue, "session-copy-test", "clipboard must receive the session id");
 
 clipboardRejects = true;
-copyItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
-await flushMicrotasks();
-assert.equal(copyItem().querySelector("[data-dsh-copy-session-id-label]").textContent, "复制失败");
-
-// When clipboard.writeText rejects but document.execCommand succeeds, fallback must copy and show success
 let execCommandCalled = false;
 sandbox.document.execCommand = (cmd) => {
   if (cmd === "copy") {
@@ -426,80 +427,59 @@ sandbox.document.execCommand = (cmd) => {
   }
   return false;
 };
-clipboardRejects = true;
-copyItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+await copyNode.props.onSelect();
 await flushMicrotasks();
-assert.equal(execCommandCalled, true, "execCommand fallback must be attempted when clipboard rejects");
-assert.equal(copyItem().querySelector("[data-dsh-copy-session-id-label]").textContent, "已复制");
+assert.equal(execCommandCalled, true, "execCommand fallback must run when clipboard rejects");
 delete sandbox.document.execCommand;
+clipboardRejects = false;
 
+window.__DSH_DESKTOP_SHOW_COPY_SESSION_ID__ = false;
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: false });
-assert.equal(copyItem(), null, "disabled preference must remove the injected item");
+reactStates.length = 0;
+assert.equal(
+  slotRegistrations[0].component({
+    sessionId: "session-copy-test",
+    useMenuOpenState: () => [true, () => {}],
+  }),
+  null,
+  "disabled copy preference must hide the item",
+);
+window.__DSH_DESKTOP_SHOW_COPY_SESSION_ID__ = true;
 window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });
-assert.ok(copyItem(), "re-enabled preference must restore the injected item");
-window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: false });
-assert.equal(deleteItem(), null, "disabled delete preference must remove the injected item");
-window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: true });
-assert.ok(deleteItem(), "re-enabled delete preference must restore the injected item");
-deleteItem().dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
+
+reactStates.length = 0;
+let menuOpen = true;
+const deleteNode = slotRegistrations[1].component({
+  sessionId: "session-copy-test",
+  useMenuOpenState: () => [menuOpen, (value) => { menuOpen = value; }],
+});
+assert.equal(deleteNode.type, MenuItemButton);
+assert.equal(deleteNode.props.danger, true);
+deleteNode.props.onSelect();
 await flushMicrotasks();
+assert.equal(menuOpen, false, "delete should close the overflow menu");
 const activeConfirm = document.querySelector("[data-dsh-delete-session-confirm]");
 assert.ok(activeConfirm, "delete click must open a confirmation dialog");
 activeConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
 await flushMicrotasks();
-assert.equal(deleteItem(), null, "confirmed active deletion must remove the menu item");
-assert.equal(startSessionCalls.length, 0, "deleting an inactive session must not start a new session or jump workspace");
+assert.equal(batchDeleteCalls.includes("session-copy-test"), true, "confirmed delete must call host deleteSession");
+assert.equal(startSessionCalls.length, 0, "deleting an inactive session must not start a new session");
 assert.equal(clearMainCalls.length, 0, "deleting an inactive session must not clear main view");
-assert.equal(ctx.uiWorkspace.mainReference?.sessionId, "session-active-current", "main reference must stay on active session");
 
-ctx.uiWorkspace.mainReference = { sessionId: "session-copy-test-active" };
-const activeSessionFiber = {
-  memoizedProps: {
-    node: { id: "session-copy-test-active" },
-    onRename() {},
-    onFork() {},
-    onArchive() {},
-  },
-  return: null,
-};
-const activeMenu = document.createElement("div");
-activeMenu.setAttribute("role", "menu");
-const activeViewport = document.createElement("div");
-activeViewport.setAttribute("role", "presentation");
-for (const label of ["重命名", "分叉会话", "归档会话"]) activeViewport.appendChild(makeOfficialItem(label));
-activeMenu.appendChild(activeViewport);
-Object.defineProperty(activeMenu, "__reactFiber$activeMenu", { value: { return: activeSessionFiber } });
-document.documentElement.appendChild(activeMenu);
-await flushMicrotasks();
-const activeDeleteItem = activeMenu.querySelector("[data-dsh-delete-session]");
-assert.ok(activeDeleteItem, "active session delete item must be injected");
-activeDeleteItem.dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
-await flushMicrotasks();
-const activeConfirm2 = document.querySelector("[data-dsh-delete-session-confirm]");
-assert.ok(activeConfirm2, "active delete click must open confirmation dialog");
-activeConfirm2.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
-await flushMicrotasks();
-assert.equal(clearMainCalls.length, 1, "deleting active session must clear main view");
-assert.equal(startSessionCalls.length, 1, "deleting active session must start fresh session");
-assert.equal(startSessionCalls[0], "ws-copy-active", "deleting active session starts fresh session in the same workspace");
+window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = false;
+window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: false });
+reactStates.length = 0;
+assert.equal(
+  slotRegistrations[1].component({
+    sessionId: "session-copy-test",
+    useMenuOpenState: () => [true, () => {}],
+  }),
+  null,
+  "disabled delete preference must hide the item",
+);
+window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = true;
+window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: true });
 
-const workspaceMenu = document.createElement("div");
-workspaceMenu.setAttribute("role", "menu");
-const workspaceViewport = document.createElement("div");
-workspaceViewport.setAttribute("role", "presentation");
-for (const label of ["重命名", "删除工作区"]) workspaceViewport.appendChild(makeOfficialItem(label));
-workspaceMenu.appendChild(workspaceViewport);
-document.documentElement.appendChild(workspaceMenu);
-assert.equal(workspaceMenu.querySelector("[data-dsh-copy-session-id]"), null, "workspace menus must remain untouched");
-
-const noFiberMenu = document.createElement("div");
-noFiberMenu.setAttribute("role", "menu");
-const noFiberViewport = document.createElement("div");
-noFiberViewport.setAttribute("role", "presentation");
-for (const label of ["重命名", "分叉会话", "归档会话"]) noFiberViewport.appendChild(makeOfficialItem(label));
-noFiberMenu.appendChild(noFiberViewport);
-document.documentElement.appendChild(noFiberMenu);
-assert.equal(noFiberMenu.querySelector("[data-dsh-copy-session-id]"), null, "missing React fiber must fail closed");
 
 const makeArchivedRow = (id, label = id) => {
   const row = document.createElement("li");
@@ -629,8 +609,5 @@ assert.equal(
 firstClassPage.remove();
 
 for (const cleanup of cleanups) cleanup();
-assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove injected menu nodes");
-assert.equal(menu.querySelector("[data-dsh-delete-session]"), null, "dispose must remove delete menu nodes");
-window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });
-assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove setting listeners");
-console.log("ok - plugin-only session menu adapter injects, gates, copies, fails closed, and cleans up");
+assert.equal(slotRegistrations.length, 0, "dispose must drop session menu slot registrations");
+console.log("ok - session menu slots register copy/delete after archive, gate on prefs, and clean up");

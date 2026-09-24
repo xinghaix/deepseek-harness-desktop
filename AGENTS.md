@@ -199,6 +199,8 @@ GOOS=darwin GOARCH=arm64 ./scripts/build.sh 0.1.1
 
 - 每次由本应用拉起的 `dsh web` 经 Cordis `--patch` 注入 `desktop-bridge`（与 `webview-boot` 同类），**不改用户 profile**。
 - Chat「设置 → 桌面设置」与「已归档会话」注册为 `settings.section`（一级导航；归档页 id `archived-sessions`，内置批量取消归档/删除与多选，不依赖已从 0.1.7 移除的 `@deepseek-ai/dsh-client-ui-settings-unarchive-sessions`）。
+
+- 侧边栏会话「…」菜单的「复制会话ID」「删除会话」通过官方 0.1.7 列表槽 `sidebar.workspaces.session.menu.item` 注册（order 500 / 600，紧跟 pin/rename/fork/archive）；不再使用针对旧版 DOM/`onRename` fiber 的刮取注入。
 - 控制面仅 `127.0.0.1`；白名单 RPC + 随机令牌（常量时间比较）；令牌不进页面、日志、`desktop-state.json` 或普通 status/capability 响应；它只存在于权限为 0600 的 `desktop-bridge-endpoint.json` 以供受控插件重连；无任意 shell。
 - BridgeHost 由 Window/Path/Prefs/Session/Update capability interfaces 组合；路由依赖最小接口，不把 Wails 或完整 Service 引入 `internal/dsh`。
 - 认证 bridge 首次提供 `/v1/capabilities` 与 `/v1/handshake`；不兼容或旧 patch 继续走 loopback HTTP fallback，不阻塞既有 RPC。

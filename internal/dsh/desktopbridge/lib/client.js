@@ -3341,294 +3341,24 @@ window.__ModuleLoader__.load({
 		}
 
 
-		// The official workspace package has no session-menu slot. Keep this extension
-		// in our plugin: observe its stable menu roles, read the owning row's node.id
-		// from React's host fiber, and never replace or mutate the official module.
-		const COPY_SESSION_ID_MENU_ATTRIBUTE = "data-dsh-copy-session-id";
-		const COPY_SESSION_ID_WRAPPER_ATTRIBUTE = "data-dsh-copy-session-id-wrapper";
-		const COPY_SESSION_ID_VALUE_ATTRIBUTE = "data-dsh-copy-session-id-value";
-		const COPY_SESSION_ID_LABEL_ATTRIBUTE = "data-dsh-copy-session-id-label";
-		const SESSION_MENU_LABELS = Object.freeze({
-			zh: Object.freeze({ rename: "重命名", fork: "分叉会话", archive: "归档会话", copy: "复制会话ID", copied: "已复制", copyFailed: "复制失败" }),
-			en: Object.freeze({ rename: "Rename", fork: "Fork session", archive: "Archive session", copy: "Copy session ID", copied: "Copied", copyFailed: "Copy failed" }),
-			de: Object.freeze({ rename: "Umbenennen", fork: "Sitzung forken", archive: "Sitzung archivieren", copy: "Sitzungs-ID kopieren", copied: "Kopiert", copyFailed: "Kopieren fehlgeschlagen" }),
-			fr: Object.freeze({ rename: "Renommer", fork: "Dupliquer la session", archive: "Archiver la session", copy: "Copier l’identifiant de session", copied: "Copié", copyFailed: "Échec de la copie" }),
-			es: Object.freeze({ rename: "Renombrar", fork: "Bifurcar sesión", archive: "Archivar sesión", copy: "Copiar ID de sesión", copied: "Copiado", copyFailed: "Error al copiar" }),
-			ja: Object.freeze({ rename: "名前を変更", fork: "セッションを分岐", archive: "セッションをアーカイブ", copy: "セッションIDをコピー", copied: "コピーしました", copyFailed: "コピーに失敗しました" }),
-			ko: Object.freeze({ rename: "이름 바꾸기", fork: "세션 분기", archive: "세션 보관", copy: "세션 ID 복사", copied: "복사됨", copyFailed: "복사하지 못했습니다" }),
-			pt: Object.freeze({ rename: "Renomear", fork: "Bifurcar sessão", archive: "Arquivar sessão", copy: "Copiar ID da sessão", copied: "Copiado", copyFailed: "Falha ao copiar" })
+		// DSH 0.1.7 registers the sidebar session "..." menu as the list slot
+		// `sidebar.workspaces.session.menu.item` (pin 100 / rename 200 / fork 300 /
+		// archive 400). Prefer that slot over the pre-0.1.7 DOM scraper, which broke
+		// when row props stopped exposing onRename/onFork/onArchive and the menu
+		// moved into a portal.
+		const SESSION_MENU_ITEM_SLOT = "sidebar.workspaces.session.menu.item";
+		const COPY_SESSION_MENU_ORDER = 500;
+		const DELETE_SESSION_MENU_ORDER = 600;
+		const COPY_SESSION_ID_LABELS = Object.freeze({
+			zh: Object.freeze({ copy: "复制会话ID", copied: "已复制", copyFailed: "复制失败" }),
+			en: Object.freeze({ copy: "Copy session ID", copied: "Copied", copyFailed: "Copy failed" }),
+			de: Object.freeze({ copy: "Sitzungs-ID kopieren", copied: "Kopiert", copyFailed: "Kopieren fehlgeschlagen" }),
+			fr: Object.freeze({ copy: "Copier l’identifiant de session", copied: "Copié", copyFailed: "Échec de la copie" }),
+			es: Object.freeze({ copy: "Copiar ID de sesión", copied: "Copiado", copyFailed: "Error al copiar" }),
+			ja: Object.freeze({ copy: "セッションIDをコピー", copied: "コピーしました", copyFailed: "コピーに失敗しました" }),
+			ko: Object.freeze({ copy: "세션 ID 복사", copied: "복사됨", copyFailed: "복사하지 못했습니다" }),
+			pt: Object.freeze({ copy: "Copiar ID da sessão", copied: "Copiado", copyFailed: "Falha ao copiar" })
 		});
-		const PENDING_SESSION_ID_TTL_MS = 5000;
-
-		function reactFiberFromElement(element) {
-			try {
-				for (let current = element, depth = 0; current && depth < 8; current = current.parentElement, depth += 1) {
-					const key = Object.getOwnPropertyNames(current).find((name) => name.startsWith("__reactFiber$") || name.startsWith("__reactInternalInstance$"));
-					if (key) return current[key];
-				}
-			} catch (_) {
-				// React internals are an optional compatibility hint; fail closed.
-			}
-			return undefined;
-		}
-
-		function sessionIdFromReactFiber(fiber) {
-			try {
-				for (let current = fiber, depth = 0; current && depth < 80; current = current.return, depth += 1) {
-					const props = current.memoizedProps || current.pendingProps;
-					const node = props?.node;
-					if (node && typeof node.id === "string" && (typeof props.onRename === "function" || typeof props.onFork === "function" || typeof props.onArchive === "function")) {
-						return node.id;
-					}
-				}
-			} catch (_) {
-				// React internals are an optional compatibility hint; fail closed.
-			}
-			return "";
-		}
-
-		function sessionIdFromElement(element) {
-			return sessionIdFromReactFiber(reactFiberFromElement(element));
-		}
-
-		function menuLabels(menu) {
-			return [...menu.querySelectorAll("button[role='menuitem']")].map((item) => (item.textContent || "").replace(/\s+/g, " ").trim());
-		}
-
-		function sessionMenuLocale(menu) {
-			const labels = menuLabels(menu);
-			for (const [locale, copy] of Object.entries(SESSION_MENU_LABELS)) {
-				if (labels.includes(copy.rename) && labels.includes(copy.fork) && labels.includes(copy.archive)) return locale;
-			}
-			return "";
-		}
-
-		function copySessionIdIconSVG() {
-			if (typeof document.createElementNS !== "function") return undefined;
-			const ns = "http://www.w3.org/2000/svg";
-			const svg = document.createElementNS(ns, "svg");
-			svg.setAttribute("width", "16");
-			svg.setAttribute("height", "16");
-			svg.setAttribute("viewBox", "0 0 16 16");
-			svg.setAttribute("fill", "none");
-			svg.setAttribute("aria-hidden", "true");
-			// Match the official IconCopyOutline16 geometry so the injected item
-			// has the same visible size as Rename/Fork/Archive.
-			const path = document.createElementNS(ns, "path");
-			path.setAttribute("d", "M6.14929 4.02032C7.11197 4.02032 7.87983 4.02016 8.49597 4.07598C9.12128 4.13269 9.65792 4.25188 10.1415 4.53106C10.7202 4.8653 11.2008 5.3459 11.535 5.92462C11.8142 6.40818 11.9334 6.94481 11.9901 7.57012C12.0459 8.18625 12.0458 8.95419 12.0458 9.9168C12.0458 10.8795 12.0459 11.6473 11.9901 12.2635C11.9334 12.8888 11.8142 13.4254 11.535 13.909C11.2008 14.4877 10.7202 14.9683 10.1415 15.3025C9.65792 15.5817 9.12128 15.7009 8.49597 15.7576C7.87984 15.8134 7.11196 15.8133 6.14929 15.8133C5.18667 15.8133 4.41874 15.8134 3.80261 15.7576C3.1773 15.7009 2.64067 15.5817 2.1571 15.3025C1.5784 14.9683 1.09778 14.4877 0.76355 13.909C0.484366 13.4254 0.365184 12.8888 0.308472 12.2635C0.252649 11.6473 0.252808 10.8795 0.252808 9.9168C0.252808 8.95418 0.252664 8.18625 0.308472 7.57012C0.365184 6.94481 0.484366 6.40818 0.76355 5.92462C1.09777 5.34589 1.57839 4.86529 2.1571 4.53106C2.64067 4.25188 3.1773 4.13269 3.80261 4.07598C4.41874 4.02017 5.18666 4.02032 6.14929 4.02032ZM6.14929 5.37774C5.16181 5.37774 4.46634 5.37761 3.92566 5.42657C3.39434 5.47472 3.07859 5.56574 2.83582 5.70587C2.4632 5.92106 2.15354 6.2307 1.93835 6.60333C1.79823 6.8461 1.70721 7.16185 1.65906 7.69317C1.6101 8.23385 1.61023 8.92933 1.61023 9.9168C1.61023 10.9043 1.61009 11.5998 1.65906 12.1404C1.70721 12.6717 1.79823 12.9875 1.93835 13.2303C2.15356 13.6029 2.46321 13.9126 2.83582 14.1277C3.07859 14.2679 3.39434 14.3589 3.92566 14.407C4.46634 14.456 5.16182 14.4559 6.14929 14.4559C7.13682 14.4559 7.83224 14.456 8.37292 14.407C8.90425 14.3589 9.21999 14.2679 9.46277 14.1277C9.83535 13.9126 10.145 13.6029 10.3602 13.2303C10.5004 12.9875 10.5914 12.6717 10.6395 12.1404C10.6885 11.5998 10.6884 10.9043 10.6884 9.9168C10.6884 8.92934 10.6885 8.23384 10.6395 7.69317C10.5914 7.16185 10.5004 6.8461 10.3602 6.60333C10.1451 6.23071 9.83536 5.92107 9.46277 5.70587C9.21999 5.56574 8.90424 5.47472 8.37292 5.42657C7.83224 5.3776 7.13682 5.37774 6.14929 5.37774ZM9.80164 0.367975C10.7638 0.367975 11.5314 0.36788 12.1473 0.423639C12.7726 0.480307 13.3093 0.598759 13.7928 0.877741C14.3717 1.21192 14.8521 1.69355 15.1864 2.27227C15.4655 2.75574 15.5857 3.29164 15.6425 3.9168C15.6983 4.53301 15.6971 5.3016 15.6971 6.26446V7.82989C15.6971 8.29264 15.6989 8.58993 15.6649 8.84844C15.4668 10.3525 14.401 11.5738 12.9833 11.9988V10.5467C13.6973 10.1903 14.2105 9.49662 14.3192 8.67169C14.3387 8.52347 14.3407 8.3358 14.3407 7.82989V6.26446C14.3407 5.27706 14.3398 4.58149 14.2909 4.04083C14.2428 3.50968 14.1526 3.19372 14.0126 2.95098C13.7974 2.57849 13.4876 2.26869 13.1151 2.05352C12.8724 1.91347 12.5564 1.82237 12.0253 1.77423C11.4847 1.72528 10.7888 1.7254 9.80164 1.7254H7.71472C6.7562 1.72558 5.92665 2.27697 5.52332 3.07891H4.07019C4.54221 1.51132 5.9932 0.368186 7.71472 0.367975H9.80164Z");
-			path.setAttribute("fill", "currentColor");
-			svg.appendChild(path);
-			return svg;
-		}
-
-		function makeCopySessionMenuItem(template, sessionId, locale) {
-			const labels = SESSION_MENU_LABELS[locale] || SESSION_MENU_LABELS.zh;
-			const item = template.cloneNode(true);
-			item.removeAttribute("disabled");
-			item.removeAttribute("aria-haspopup");
-			item.removeAttribute("aria-expanded");
-			item.setAttribute(COPY_SESSION_ID_MENU_ATTRIBUTE, "");
-			item.setAttribute(COPY_SESSION_ID_VALUE_ATTRIBUTE, sessionId);
-			item.setAttribute("aria-label", labels.copy);
-			item.__dshCopySessionIdLabels = labels;
-			const spans = item.querySelectorAll("span");
-			const label = spans.length > 0 ? spans[spans.length - 1] : document.createElement("span");
-			if (spans.length === 0) item.appendChild(label);
-			label.setAttribute(COPY_SESSION_ID_LABEL_ATTRIBUTE, "");
-			label.textContent = labels.copy;
-			if (spans.length > 1) {
-				spans[0].textContent = "";
-				spans[0].setAttribute("aria-hidden", "true");
-				const icon = copySessionIdIconSVG();
-				if (icon) spans[0].appendChild(icon);
-			}
-			item.addEventListener("click", (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				copySessionIdFromMenuItem(item);
-			});
-			return item;
-		}
-
-		function showCopySessionIdFeedback(item, text, fallback, delay) {
-			if (!item.isConnected) return;
-			const label = item.querySelector(`[${COPY_SESSION_ID_LABEL_ATTRIBUTE}]`);
-			if (!label) return;
-			if (item.__dshCopySessionIdTimer !== undefined) window.clearTimeout(item.__dshCopySessionIdTimer);
-			label.textContent = text;
-			item.setAttribute("aria-label", text);
-			item.__dshCopySessionIdTimer = window.setTimeout(() => {
-				item.__dshCopySessionIdTimer = undefined;
-				if (!item.isConnected) return;
-				label.textContent = fallback;
-				item.setAttribute("aria-label", fallback);
-			}, delay);
-		}
-
-		function copySessionIdFromMenuItem(item) {
-			const sessionId = item.getAttribute(COPY_SESSION_ID_VALUE_ATTRIBUTE) || "";
-			const labels = item.__dshCopySessionIdLabels || SESSION_MENU_LABELS.zh;
-			if (!sessionId) {
-				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-				return;
-			}
-			const copyViaExec = () => {
-				if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
-				let success = false;
-				const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
-				const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-				try {
-					const area = document.createElement("textarea");
-					area.value = sessionId;
-					area.setAttribute("readonly", "");
-					area.style.position = "fixed";
-					area.style.left = "-9999px";
-					area.style.top = "0";
-					area.style.opacity = "0";
-					(document.body || document.documentElement).appendChild(area);
-					area.focus({ preventScroll: true });
-					area.select();
-					area.setSelectionRange(0, area.value.length);
-					success = document.execCommand("copy");
-					area.remove();
-				} catch (_) {
-					success = false;
-				}
-				if (selectedRange && selection) {
-					try {
-						selection.removeAllRanges();
-						selection.addRange(selectedRange);
-					} catch (_) {}
-				}
-				return success;
-			};
-			if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-				let result;
-				try {
-					result = navigator.clipboard.writeText(sessionId);
-				} catch (_) {
-					if (copyViaExec()) {
-						showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
-						return;
-					}
-					showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-					return;
-				}
-				Promise.resolve(result).then(() => {
-					showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
-				}).catch(() => {
-					if (copyViaExec()) {
-						showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
-						return;
-					}
-					showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-				});
-			} else if (copyViaExec()) {
-				showCopySessionIdFeedback(item, labels.copied, labels.copy, 1000);
-			} else {
-				showCopySessionIdFeedback(item, labels.copyFailed, labels.copy, 1200);
-			}
-		}
-
-		function removeCopySessionIdMenuItem(item) {
-			if (!item) return;
-			if (item.__dshCopySessionIdTimer !== undefined && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
-				window.clearTimeout(item.__dshCopySessionIdTimer);
-				item.__dshCopySessionIdTimer = undefined;
-			}
-			const wrapper = item.parentElement?.hasAttribute(COPY_SESSION_ID_WRAPPER_ATTRIBUTE) ? item.parentElement : item;
-			wrapper.remove();
-		}
-
-		function installCopySessionIdMenu() {
-			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
-			let enabled = typeof window === "undefined" || window[SHOW_COPY_SESSION_ID_GLOBAL] !== false;
-			let pendingSessionId = "";
-			let pendingAt = 0;
-			let scheduled = false;
-			const isFreshPending = () => pendingSessionId && Date.now() - pendingAt < PENDING_SESSION_ID_TTL_MS;
-			const rememberSessionAction = (event) => {
-				const button = event.target?.closest?.("button");
-				if (!button || button.closest("[role='menu']")) return;
-				const row = button.closest("[role='treeitem']");
-				if (!row) return;
-				const sessionId = sessionIdFromElement(button) || sessionIdFromElement(row);
-				if (!sessionId) return;
-				pendingSessionId = sessionId;
-				pendingAt = Date.now();
-			};
-			const decorate = () => {
-				const menus = [...document.querySelectorAll("[role='menu']")];
-				for (const menu of menus) {
-					const existing = menu.querySelector(`[${COPY_SESSION_ID_MENU_ATTRIBUTE}]`);
-					if (!enabled) {
-						removeCopySessionIdMenuItem(existing);
-						continue;
-					}
-					const locale = sessionMenuLocale(menu);
-					if (existing || !locale) continue;
-					const fiberSessionId = sessionIdFromElement(menu);
-					const fromPending = !fiberSessionId && isFreshPending();
-					const sessionId = fiberSessionId || (fromPending ? pendingSessionId : "");
-					if (!sessionId) continue;
-					const items = [...menu.querySelectorAll("button[role='menuitem']")];
-					const archive = items.find((item) => (item.textContent || "").replace(/\s+/g, " ").trim() === SESSION_MENU_LABELS[locale].archive);
-					const template = archive || items[items.length - 1];
-					if (!template) continue;
-					const item = makeCopySessionMenuItem(template, sessionId, locale);
-					// The opener is consumed once a matching portal menu is decorated;
-					// keeping it would risk assigning a stale id to a later menu.
-					pendingSessionId = "";
-					pendingAt = 0;
-					const templateWrapper = template.parentElement;
-					const wrapper = templateWrapper?.cloneNode(false);
-					if (wrapper) {
-						wrapper.setAttribute(COPY_SESSION_ID_WRAPPER_ATTRIBUTE, "");
-						wrapper.appendChild(item);
-						if (archive?.parentElement) archive.parentElement.before(wrapper);
-						else if (templateWrapper?.parentElement) templateWrapper.parentElement.appendChild(wrapper);
-					} else {
-						menu.appendChild(item);
-					}
-				}
-			};
-			const schedule = () => {
-				if (scheduled) return;
-				scheduled = true;
-				const run = () => {
-					scheduled = false;
-					decorate();
-				};
-				if (typeof queueMicrotask === "function") queueMicrotask(run);
-				else if (typeof window.setTimeout === "function") window.setTimeout(run, 0);
-				else setTimeout(run, 0);
-			};
-			const onSettingChange = (event) => {
-				enabled = event.detail !== false;
-				schedule();
-			};
-			document.addEventListener("pointerdown", rememberSessionAction, true);
-			document.addEventListener("click", rememberSessionAction, true);
-			window.addEventListener(SHOW_COPY_SESSION_ID_EVENT, onSettingChange);
-			const observer = new MutationObserver(schedule);
-			observer.observe(document.documentElement, { childList: true, subtree: true });
-			schedule();
-			return () => {
-				document.removeEventListener("pointerdown", rememberSessionAction, true);
-				document.removeEventListener("click", rememberSessionAction, true);
-				window.removeEventListener(SHOW_COPY_SESSION_ID_EVENT, onSettingChange);
-				observer.disconnect();
-				for (const item of document.querySelectorAll(`[${COPY_SESSION_ID_MENU_ATTRIBUTE}]`)) removeCopySessionIdMenuItem(item);
-			};
-		}
-
-
-
-		const DELETE_SESSION_MENU_ATTRIBUTE = "data-dsh-delete-session";
-		const DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE = "data-dsh-delete-session-wrapper";
-		const DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE = "data-dsh-delete-session-completed";
-		const DELETE_SESSION_MENU_VALUE_ATTRIBUTE = "data-dsh-delete-session-value";
-		const DELETE_SESSION_MENU_LABEL_ATTRIBUTE = "data-dsh-delete-session-label";
 		const DELETE_SESSION_MENU_LABELS = Object.freeze({ zh: "删除会话", en: "Delete session", de: "Sitzung löschen", fr: "Supprimer la session", es: "Eliminar sesión", ja: "セッションを削除", ko: "세션 삭제", pt: "Excluir sessão" });
 		const DELETE_SESSION_CONFIRM_ATTRIBUTE = "data-dsh-delete-session-confirm";
 		const DELETE_SESSION_CONFIRM_PANEL_ATTRIBUTE = "data-dsh-delete-session-confirm-panel";
@@ -3694,25 +3424,17 @@ window.__ModuleLoader__.load({
 				if (typeof submit.focus === "function") submit.focus();
 			});
 		}
-
-		// Match the official IconTrashOutline16 geometry so the injected delete item
-		// matches the exact visual weight, proportions, and curves of Rename/Fork/Copy/Archive.
-		function deleteSessionIconSVG() {
-			if (typeof document === "undefined" || typeof document.createElementNS !== "function") return null;
-			const ns = "http://www.w3.org/2000/svg";
-			const svg = document.createElementNS(ns, "svg");
-			svg.setAttribute("width", "16");
-			svg.setAttribute("height", "16");
-			svg.setAttribute("viewBox", "0 0 16 16");
-			svg.setAttribute("fill", "none");
-			svg.setAttribute("aria-hidden", "true");
-			const path = document.createElementNS(ns, "path");
-			path.setAttribute("d", "M14.4782 4.84067L14.2138 10.1152C14.1102 12.1872 14.067 13.0115 13.3866 13.9607C13.1044 14.3546 12.7498 14.6912 12.3424 14.9535C11.8239 15.2872 11.2415 15.4316 10.5585 15.4998C9.88727 15.5668 9.04946 15.5656 7.99998 15.5656C6.95051 15.5656 6.1127 15.5668 5.44142 15.4998C4.75851 15.4316 4.17602 15.2872 3.65753 14.9535C3.25012 14.6912 2.89559 14.3546 2.61332 13.9607C1.93296 13.0115 1.88979 12.1872 1.78619 10.1152L1.52179 4.84067L2.89006 4.77277L3.15343 10.0463C3.26221 12.2218 3.32452 12.6015 3.72646 13.1624C3.90825 13.4161 4.13686 13.6334 4.39927 13.8023C4.66204 13.9714 5.00263 14.0792 5.57825 14.1367C6.16562 14.1953 6.92298 14.1963 7.99998 14.1963C9.07699 14.1963 9.83434 14.1953 10.4217 14.1367C10.9973 14.0792 11.3379 13.9714 11.6007 13.8023C11.8631 13.6334 12.0917 13.4161 12.2735 13.1624C12.6755 12.6015 12.7378 12.2218 12.8465 10.0463L13.1099 4.77277L14.4782 4.84067ZM5.43011 6.22849H6.7994V11.3909H5.43011V6.22849ZM9.20056 6.22849H10.5699V11.3909H9.20056V6.22849ZM8.53597 0.434431C9.17976 0.434431 9.6522 0.426926 10.0966 0.571258C10.2357 0.616451 10.3717 0.672554 10.502 0.738948C10.9182 0.951107 11.2464 1.29099 11.7015 1.74612L12.4978 2.54136H15.3742V3.91169H0.625732V2.54136H3.50218L4.29845 1.74612C4.75358 1.29099 5.08174 0.951107 5.49801 0.738948C5.62831 0.672554 5.76425 0.616451 5.90334 0.571258C6.34776 0.426926 6.82021 0.434431 7.46399 0.434431H8.53597ZM7.46399 1.80476C6.73208 1.80476 6.51641 1.81187 6.32617 1.87369C6.25545 1.89667 6.18668 1.92533 6.12041 1.95907C5.96398 2.03878 5.82348 2.16253 5.44142 2.54136H10.5585C10.1765 2.16253 10.036 2.03878 9.87955 1.95907C9.81329 1.92533 9.74452 1.89667 9.6738 1.87369C9.48356 1.81187 9.26789 1.80476 8.53597 1.80476H7.46399Z");
-			path.setAttribute("fill", "currentColor");
-			svg.appendChild(path);
-			return svg;
+		function reactFiberFromElement(element) {
+			try {
+				for (let current = element, depth = 0; current && depth < 8; current = current.parentElement, depth += 1) {
+					const key = Object.getOwnPropertyNames(current).find((name) => name.startsWith("__reactFiber$") || name.startsWith("__reactInternalInstance$"));
+					if (key) return current[key];
+				}
+			} catch (_) {
+				// React internals are an optional compatibility hint; fail closed.
+			}
+			return undefined;
 		}
-		function removeDeleteSessionMenuItem(item) { if (!item) return; const wrapper = item.parentElement?.hasAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE) ? item.parentElement : item; wrapper.remove(); }
 		function currentWorkspaceIdForSession(uiWorkspace, sessionId) {
 			try {
 				const items = uiWorkspace?.workspaces?.list?.getSnapshot?.()?.items;
@@ -3730,56 +3452,214 @@ window.__ModuleLoader__.load({
 			const sessions = typeof ctx?.get === "function" ? ctx.get("sessions") : undefined;
 			if (typeof sessions?.drainScopeDrops === "function") await sessions.drainScopeDrops();
 		}
-		async function deleteSessionFromMenu(item, ctx) {
-			const sessionId = item.getAttribute(DELETE_SESSION_MENU_VALUE_ATTRIBUTE) || "";
-			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return;
-			item.setAttribute("aria-disabled", "true");
+
+		function sessionMenuLocaleKey() {
+			const code = String(localeCode || "").toLowerCase();
+			if (code.startsWith("zh")) return "zh";
+			if (code.startsWith("de")) return "de";
+			if (code.startsWith("fr")) return "fr";
+			if (code.startsWith("es")) return "es";
+			if (code.startsWith("ja")) return "ja";
+			if (code.startsWith("ko")) return "ko";
+			if (code.startsWith("pt")) return "pt";
+			return "en";
+		}
+
+		function copySessionIdLabels() {
+			return COPY_SESSION_ID_LABELS[sessionMenuLocaleKey()] || COPY_SESSION_ID_LABELS.en;
+		}
+
+		function deleteSessionMenuLabel() {
+			return DELETE_SESSION_MENU_LABELS[sessionMenuLocaleKey()] || DELETE_SESSION_MENU_LABELS.en;
+		}
+
+		function loadSessionMenuPrimitives() {
+			try {
+				return require("@deepseek-ai/dsh-client-ui-primitives");
+			} catch (_) {
+				return null;
+			}
+		}
+
+		function copyTextToClipboard(text) {
+			const value = text == null ? "" : String(text);
+			const copyViaExec = () => {
+				if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
+				let success = false;
+				const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+				const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+				try {
+					const area = document.createElement("textarea");
+					area.value = value;
+					area.setAttribute("readonly", "");
+					area.style.position = "fixed";
+					area.style.left = "-9999px";
+					area.style.top = "0";
+					area.style.opacity = "0";
+					(document.body || document.documentElement).appendChild(area);
+					area.focus({ preventScroll: true });
+					area.select();
+					area.setSelectionRange(0, area.value.length);
+					success = document.execCommand("copy");
+					area.remove();
+				} catch (_) {
+					success = false;
+				}
+				if (selectedRange && selection) {
+					try {
+						selection.removeAllRanges();
+						selection.addRange(selectedRange);
+					} catch (_) {}
+				}
+				return success;
+			};
+			if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+				try {
+					return Promise.resolve(navigator.clipboard.writeText(value)).then(() => true).catch(() => copyViaExec());
+				} catch (_) {
+					return Promise.resolve(copyViaExec());
+				}
+			}
+			return Promise.resolve(copyViaExec());
+		}
+
+		async function deleteSessionById(sessionId, ctx) {
+			if (!sessionId || !(await requestDeleteSessionConfirmation(t("bridge.session_delete_confirm")))) return false;
 			try {
 				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
 				const isCurrent = uiWorkspace?.mainReference?.sessionId === sessionId;
 				const workspaceId = isCurrent ? currentWorkspaceIdForSession(uiWorkspace, sessionId) : undefined;
 				if (isCurrent) await releaseOpenSidebarSession(ctx, sessionId);
 				const result = await callDesktopRPC(ctx.connection, "deleteSession", { sessionId }, undefined);
-				if (!result?.ok) { const error = new Error(result?.error?.message || t("bridge.session_delete_failed", "")); error.code = result?.error?.code || "desktop-bridge/delete-failed"; throw error; }
+				if (!result?.ok) {
+					const error = new Error(result?.error?.message || t("bridge.session_delete_failed", ""));
+					error.code = result?.error?.code || "desktop-bridge/delete-failed";
+					throw error;
+				}
 				if (isCurrent && typeof uiWorkspace?.startSession === "function") await uiWorkspace.startSession(workspaceId);
-				const menu = item.closest?.("[role=\"menu\"]");
-				if (menu) menu.setAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE, "");
-				removeDeleteSessionMenuItem(item);
+				return true;
 			} catch (error) {
 				const message = t("bridge.session_delete_failed", desktopErrorMessage(error));
-				await requestDeleteSessionConfirmation(message, { title: t("bridge.session_delete_title"), action: t("bridge.session_delete_dismiss"), danger: false, dismissOnly: true });
-				item.removeAttribute("aria-disabled");
+				await requestDeleteSessionConfirmation(message, {
+					title: t("bridge.session_delete_title"),
+					action: t("bridge.session_delete_dismiss"),
+					danger: false,
+					dismissOnly: true
+				});
+				return false;
 			}
 		}
-		function makeDeleteSessionMenuItem(template, sessionId, locale, ctx) {
-			const labelText = DELETE_SESSION_MENU_LABELS[locale] || DELETE_SESSION_MENU_LABELS.en;
-			const item = template.cloneNode(true); item.removeAttribute("disabled"); item.removeAttribute("aria-haspopup"); item.removeAttribute("aria-expanded");
-			item.setAttribute(DELETE_SESSION_MENU_ATTRIBUTE, ""); item.setAttribute(DELETE_SESSION_MENU_VALUE_ATTRIBUTE, sessionId); item.setAttribute("aria-label", labelText);
-			const spans = item.querySelectorAll("span"); const label = spans.length > 0 ? spans[spans.length - 1] : document.createElement("span"); if (spans.length === 0) item.appendChild(label); label.setAttribute(DELETE_SESSION_MENU_LABEL_ATTRIBUTE, ""); label.textContent = labelText;
-			if (spans.length > 1) { spans[0].textContent = ""; spans[0].setAttribute("aria-hidden", "true"); const icon = deleteSessionIconSVG(); if (icon) spans[0].appendChild(icon); }
-			item.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void deleteSessionFromMenu(item, ctx); }); return item;
+
+		function useDesktopBooleanFlag(globalName, eventName) {
+			const [enabled, setEnabled] = react.useState(() => typeof window === "undefined" || window[globalName] !== false);
+			react.useEffect(() => {
+				if (typeof window === "undefined" || typeof window.addEventListener !== "function") return undefined;
+				const onChange = (event) => setEnabled(event.detail !== false);
+				window.addEventListener(eventName, onChange);
+				return () => window.removeEventListener(eventName, onChange);
+			}, [globalName, eventName]);
+			return enabled;
 		}
-		function installDeleteSessionMenu(ctx) {
-			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
-			let enabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false; let pendingSessionId = ""; let pendingAt = 0; let scheduled = false;
-			const rememberSessionAction = (event) => { const button = event.target?.closest?.("button"); if (!button || button.closest("[role='menu']")) return; const row = button.closest("[role='treeitem']"); if (!row) return; const id = sessionIdFromElement(button) || sessionIdFromElement(row); if (id) { pendingSessionId = id; pendingAt = Date.now(); } };
-			const decorate = () => {
-				const injected = document.querySelectorAll("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]"); if (!enabled) { for (const item of injected) removeDeleteSessionMenuItem(item); return; }
-				for (const menu of document.querySelectorAll("[role='menu']")) {
-					if (menu.hasAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE) || menu.querySelector("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]")) continue; const locale = sessionMenuLocale(menu); if (!locale) continue;
-					const fresh = pendingSessionId && Date.now() - pendingAt < PENDING_SESSION_ID_TTL_MS; const sessionId = sessionIdFromElement(menu) || (fresh ? pendingSessionId : ""); if (!sessionId) continue;
-					const menuItems = [...menu.querySelectorAll("button[role='menuitem']")]; const archive = menuItems.find((entry) => (entry.textContent || "").replace(/\s+/g, " ").trim() === SESSION_MENU_LABELS[locale].archive); const template = archive || menuItems[menuItems.length - 1]; if (!template) continue;
-					const item = makeDeleteSessionMenuItem(template, sessionId, locale, ctx); const templateWrapper = template.parentElement; const wrapper = templateWrapper?.cloneNode(false);
-					if (wrapper) { wrapper.setAttribute(DELETE_SESSION_MENU_WRAPPER_ATTRIBUTE, ""); wrapper.appendChild(item); if (templateWrapper?.parentElement) templateWrapper.parentElement.appendChild(wrapper); } else menu.appendChild(item);
-					pendingSessionId = ""; pendingAt = 0;
+
+		function installSessionMenuSlots(ctx) {
+			if (typeof ctx?.slots?.inject !== "function" || typeof ctx?.slots?.register !== "function") return () => {};
+			const primitives = loadSessionMenuPrimitives();
+			const MenuItemButton = primitives?.MenuItemButton;
+			const IconCopyOutlineRegular = primitives?.IconCopyOutlineRegular;
+			const IconTrashOutlineRegular = primitives?.IconTrashOutlineRegular;
+
+			function CopySessionIdMenuItem({ sessionId, useMenuOpenState }) {
+				const enabled = useDesktopBooleanFlag(SHOW_COPY_SESSION_ID_GLOBAL, SHOW_COPY_SESSION_ID_EVENT);
+				const labels = copySessionIdLabels();
+				const [label, setLabel] = react.useState(labels.copy);
+				react.useEffect(() => { setLabel(labels.copy); }, [labels.copy]);
+				if (!enabled || !sessionId) return null;
+				const onSelect = () => {
+					void copyTextToClipboard(sessionId).then((ok) => {
+						setLabel(ok ? labels.copied : labels.copyFailed);
+						if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+							window.setTimeout(() => setLabel(labels.copy), ok ? 1000 : 1200);
+						}
+					});
+				};
+				const icon = IconCopyOutlineRegular ? jsx(IconCopyOutlineRegular, {}) : null;
+				if (typeof MenuItemButton === "function") {
+					return jsx(MenuItemButton, {
+						icon,
+						separatorBefore: true,
+						onSelect,
+						children: label
+					});
 				}
-			};
-			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
-			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); };
-			document.addEventListener("pointerdown", rememberSessionAction, true); document.addEventListener("click", rememberSessionAction, true); window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
-			const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
-			return () => { document.removeEventListener("pointerdown", rememberSessionAction, true); document.removeEventListener("click", rememberSessionAction, true); window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const menu of document.querySelectorAll("[role='menu']")) menu.removeAttribute(DELETE_SESSION_MENU_COMPLETED_ATTRIBUTE); for (const item of document.querySelectorAll("[" + DELETE_SESSION_MENU_ATTRIBUTE + "]")) removeDeleteSessionMenuItem(item); };
+				return jsxs("button", {
+					type: "button",
+					role: "menuitem",
+					"data-dsh-copy-session-id": "",
+					"data-dsh-copy-session-id-value": sessionId,
+					"aria-label": label,
+					onClick: (event) => { event.preventDefault(); event.stopPropagation(); onSelect(); },
+					children: [
+						icon ? jsx("span", { "aria-hidden": true, children: icon }) : null,
+						jsx("span", { "data-dsh-copy-session-id-label": "", children: label })
+					]
+				});
+			}
+
+			function DeleteSessionMenuItem({ sessionId, useMenuOpenState }) {
+				const enabled = useDesktopBooleanFlag(DELETE_SESSION_ACTIONS_GLOBAL, DELETE_SESSION_ACTIONS_EVENT);
+				const label = deleteSessionMenuLabel();
+				const [, setMenuOpen] = typeof useMenuOpenState === "function" ? useMenuOpenState() : [false, () => {}];
+				if (!enabled || !sessionId) return null;
+				const onSelect = () => {
+					if (typeof setMenuOpen === "function") setMenuOpen(false);
+					void deleteSessionById(sessionId, ctx);
+				};
+				const icon = IconTrashOutlineRegular ? jsx(IconTrashOutlineRegular, {}) : null;
+				if (typeof MenuItemButton === "function") {
+					return jsx(MenuItemButton, {
+						icon,
+						danger: true,
+						onSelect,
+						children: label
+					});
+				}
+				return jsxs("button", {
+					type: "button",
+					role: "menuitem",
+					"data-dsh-delete-session": "",
+					"data-dsh-delete-session-value": sessionId,
+					"aria-label": label,
+					onClick: (event) => { event.preventDefault(); event.stopPropagation(); onSelect(); },
+					children: [
+						icon ? jsx("span", { "aria-hidden": true, children: icon }) : null,
+						jsx("span", { "data-dsh-delete-session-label": "", children: label })
+					]
+				});
+			}
+
+			try {
+				const dispose = ctx.slots.inject(SESSION_MENU_ITEM_SLOT, function* () {
+					yield ctx.slots.register({
+						name: SESSION_MENU_ITEM_SLOT,
+						id: "deepseek-harness-desktop.copy-session-id",
+						order: COPY_SESSION_MENU_ORDER
+					}, CopySessionIdMenuItem);
+					yield ctx.slots.register({
+						name: SESSION_MENU_ITEM_SLOT,
+						id: "deepseek-harness-desktop.delete-session",
+						order: DELETE_SESSION_MENU_ORDER
+					}, DeleteSessionMenuItem);
+				});
+				return () => {
+					try { if (typeof dispose === "function") dispose(); } catch (_) {}
+					closeDeleteSessionConfirmation();
+				};
+			} catch (error) {
+				console.warn("[desktop-bridge] session menu slot registration failed", error);
+				return () => {};
+			}
 		}
+
 		const ARCHIVED_SESSIONS_NS = "settings.archivedSessions";
 		const ARCHIVED_SESSIONS_SECTION_ID = "archived-sessions";
 		const ARCHIVED_SESSIONS_PAGE_ATTRIBUTE = "data-dsh-archived-sessions-page";
@@ -5807,8 +5687,7 @@ window.__ModuleLoader__.load({
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();
-			const stopCopySessionIdMenu = installCopySessionIdMenu();
-			const stopDeleteSessionMenu = installDeleteSessionMenu(ctx);
+			const stopSessionMenuSlots = installSessionMenuSlots(ctx);
 			const stopArchivedSessionDelete = installArchivedSessionDelete(ctx);
 			const stopArchivedSessionBatch = installArchivedSessionBatch(ctx);
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
@@ -5816,8 +5695,7 @@ window.__ModuleLoader__.load({
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
-					stopCopySessionIdMenu();
-					stopDeleteSessionMenu();
+					stopSessionMenuSlots();
 					stopArchivedSessionDelete();
 					stopArchivedSessionBatch();
 					stopHoverMessageActions();
