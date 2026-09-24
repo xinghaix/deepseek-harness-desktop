@@ -3051,6 +3051,8 @@ window.__ModuleLoader__.load({
 				.dshDesktopArchivedSection {
 					width: 100%; max-width: 760px; color: var(--dsw-alias-label-primary);
 					flex-direction: column; gap: 12px; display: flex;
+					/* Settings options pane has padding-top:0; match Desktop Settings card-title inset so search clears the chrome header. */
+					box-sizing: border-box; padding-top: 14px;
 				}
 				.dshDesktopArchivedStatus {
 					color: var(--dsw-alias-label-tertiary); margin: 0; font-size: 13px; line-height: 20px;
@@ -3070,6 +3072,15 @@ window.__ModuleLoader__.load({
 					border: .5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .08));
 					border-radius: 8px; background: var(--dsw-alias-bg-layer-1, rgba(0, 0, 0, .025));
 					color: var(--dsw-alias-label-secondary, #5f6368); font-size: 12px;
+				}
+				.dshDesktopArchivedBatch > label {
+					display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+					color: var(--dsw-alias-label-primary, #1f2329); white-space: nowrap;
+				}
+				.dshDesktopArchivedBatch input[type="checkbox"],
+				.dshDesktopArchivedRow input[type="checkbox"] {
+					width: 15px; height: 15px; margin: 0; flex: none;
+					accent-color: var(--dsw-alias-brand-primary, #3370ff);
 				}
 				.dshDesktopArchivedList {
 					flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; display: flex;
@@ -3839,10 +3850,38 @@ window.__ModuleLoader__.load({
 		function installArchivedSessionDelete(ctx) {
 			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
 			let enabled = window[DELETE_SESSION_ACTIONS_GLOBAL] !== false; let scheduled = false;
-			const decorate = () => { const injected = document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]"); if (!enabled) { for (const button of injected) button.remove(); return; } for (const row of document.querySelectorAll("li")) { if (row.closest?.("[" + ARCHIVED_SESSIONS_PAGE_ATTRIBUTE + "]")) continue; if (row.querySelector("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) continue; const unarchive = archivedUnarchiveButton(row); if (!unarchive) continue; const sessionId = archivedSessionIdFromElement(row); if (!sessionId) continue; const button = makeArchivedDeleteButton(unarchive, sessionId, row, ctx); (unarchive.parentElement || row).appendChild(button); } };
+			const isFirstClassArchivedPage = (el) => !!el?.closest?.("[" + ARCHIVED_SESSIONS_PAGE_ATTRIBUTE + "]");
+			const decorate = () => {
+				const injected = document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]");
+				if (!enabled) {
+					for (const button of injected) {
+						if (isFirstClassArchivedPage(button)) continue;
+						button.remove();
+					}
+					return;
+				}
+				for (const row of document.querySelectorAll("li")) {
+					if (isFirstClassArchivedPage(row)) continue;
+					if (row.querySelector("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) continue;
+					const unarchive = archivedUnarchiveButton(row);
+					if (!unarchive) continue;
+					const sessionId = archivedSessionIdFromElement(row);
+					if (!sessionId) continue;
+					const button = makeArchivedDeleteButton(unarchive, sessionId, row, ctx);
+					(unarchive.parentElement || row).appendChild(button);
+				}
+			};
 			const schedule = () => { if (scheduled) return; scheduled = true; const run = () => { scheduled = false; decorate(); }; if (typeof queueMicrotask === "function") queueMicrotask(run); else if (typeof window.setTimeout === "function") window.setTimeout(run, 0); else setTimeout(run, 0); };
 			const onSettingChange = (event) => { enabled = event.detail !== false; schedule(); }; window.addEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); const observer = new MutationObserver(schedule); observer.observe(document.documentElement, { childList: true, subtree: true }); schedule();
-			return () => { window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange); observer.disconnect(); closeDeleteSessionConfirmation(); for (const button of document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) button.remove(); };
+			return () => {
+				window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
+				observer.disconnect();
+				closeDeleteSessionConfirmation();
+				for (const button of document.querySelectorAll("[" + ARCHIVED_DELETE_SESSION_ATTRIBUTE + "]")) {
+					if (isFirstClassArchivedPage(button)) continue;
+					button.remove();
+				}
+			};
 		}
 
 		const ARCHIVED_BATCH_ATTRIBUTE = "data-dsh-archived-batch";
@@ -3946,6 +3985,7 @@ window.__ModuleLoader__.load({
 		}
 		function installArchivedSessionBatch(ctx) {
 			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof window === "undefined" || typeof window.addEventListener !== "function" || !document.documentElement || typeof MutationObserver !== "function") return () => {};
+			const isFirstClassArchivedPage = (el) => !!el?.closest?.("[" + ARCHIVED_SESSIONS_PAGE_ATTRIBUTE + "]");
 			const selected = new Set();
 			let knownOrder = [];
 			let scheduled = false;
@@ -4047,13 +4087,20 @@ window.__ModuleLoader__.load({
 			const decorate = () => {
 				const list = archivedBatchList();
 				if (!list) {
-					for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) toolbar.remove();
-					for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) checkbox.remove();
+					// First-class Archived Sessions page owns its own React batch UI; never strip it.
+					for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) {
+						if (isFirstClassArchivedPage(toolbar)) continue;
+						toolbar.remove();
+					}
+					for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) {
+						if (isFirstClassArchivedPage(checkbox)) continue;
+						checkbox.remove();
+					}
 					return;
 				}
 				const rows = archivedBatchRows().filter((entry) => entry.row.parentElement === list);
 				knownOrder = rows.map((entry) => entry.id);
-				let toolbar = document.querySelector("[" + ARCHIVED_BATCH_ATTRIBUTE + "]");
+				let toolbar = [...document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")].find((el) => !isFirstClassArchivedPage(el));
 				if (!toolbar) toolbar = createToolbar();
 				if (toolbar.parentElement !== list.parentElement) list.before(toolbar);
 				for (const entry of rows) {
@@ -4141,8 +4188,14 @@ window.__ModuleLoader__.load({
 				window.removeEventListener(DELETE_SESSION_ACTIONS_EVENT, onSettingChange);
 				observer.disconnect();
 				activeProgress?.close();
-				for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) toolbar.remove();
-				for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) checkbox.remove();
+				for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) {
+					if (isFirstClassArchivedPage(toolbar)) continue;
+					toolbar.remove();
+				}
+				for (const checkbox of document.querySelectorAll("[" + ARCHIVED_BATCH_ROW_SELECT_ATTRIBUTE + "]")) {
+					if (isFirstClassArchivedPage(checkbox)) continue;
+					checkbox.remove();
+				}
 				selected.clear();
 			};
 		}

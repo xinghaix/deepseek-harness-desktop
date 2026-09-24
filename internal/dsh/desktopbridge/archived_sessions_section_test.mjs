@@ -369,6 +369,9 @@ const nodes = collect(tree);
 assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-sessions-page")), "page root must carry data-dsh-archived-sessions-page");
 assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-batch")), "batch toolbar is first-class on the page");
 assert.ok(nodes.some((node) => node.type === "input" && node.props?.type === "search"), "search box present");
+assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-batch-select-all")), "select-all checkbox present");
+assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-batch-unarchive")), "batch unarchive present");
+assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-batch-delete")), "batch delete present");
 const rows = nodes.filter((node) => node.type === "li");
 assert.equal(rows.length, 2, "two archived summaries become rows");
 assert.equal(rows[0].props["data-session-id"], "session-archived-a", "newest archive first");
@@ -376,10 +379,73 @@ assert.equal(rows[1].props["data-session-id"], "session-archived-b");
 assert.ok(nodes.some((node) => node.type === "button" && String(node.props?.["aria-label"] || "").includes("取消归档")), "per-row unarchive present");
 assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-delete-archived-session")), "per-row delete present");
 assert.ok(nodes.some((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-session-select")), "row multi-select present");
+assert.equal(
+  nodes.filter((node) => node.props && Object.prototype.hasOwnProperty.call(node.props, "data-dsh-archived-session-select")).length,
+  2,
+  "each visible row gets a multi-select checkbox"
+);
+
+// CSS must inset the page under the settings chrome header (options pane has padding-top:0).
+assert.match(source, /\.dshDesktopArchivedSection\s*\{[\s\S]*?padding-top:\s*14px/, "archived section CSS must add top padding under settings chrome");
 
 await injected.unarchive("session-archived-a");
 assert.deepEqual(unarchiveCalls, ["session-archived-a"]);
 await injected.deleteSession("session-archived-b");
 assert.deepEqual(deleteCalls, ["session-archived-b"]);
+
+// MutationObserver decoration must NOT strip the first-class page batch UI when no legacy Unarchive list exists.
+const page = document.createElement("div");
+page.setAttribute("data-dsh-archived-sessions-page", "");
+page.className = "dshDesktopArchivedSection";
+const toolbar = document.createElement("div");
+toolbar.setAttribute("data-dsh-archived-batch", "");
+toolbar.className = "dshDesktopArchivedBatch";
+const selectAll = document.createElement("input");
+selectAll.type = "checkbox";
+selectAll.setAttribute("data-dsh-archived-batch-select-all", "");
+toolbar.appendChild(selectAll);
+page.appendChild(toolbar);
+const list = document.createElement("ul");
+list.className = "dshDesktopArchivedList";
+const row = document.createElement("li");
+row.setAttribute("data-dsh-archived-session-row", "");
+row.setAttribute("data-session-id", "session-page-owned");
+const checkbox = document.createElement("input");
+checkbox.type = "checkbox";
+checkbox.setAttribute("data-dsh-archived-session-select", "");
+checkbox.setAttribute("data-dsh-archived-session-select-id", "session-page-owned");
+const unarchiveBtn = document.createElement("button");
+unarchiveBtn.textContent = "取消归档";
+unarchiveBtn.setAttribute("aria-label", "取消归档 Alpha");
+const deleteBtn = document.createElement("button");
+deleteBtn.setAttribute("data-dsh-delete-archived-session", "");
+deleteBtn.setAttribute("data-dsh-delete-archived-id", "session-page-owned");
+deleteBtn.textContent = "删除会话";
+row.appendChild(checkbox);
+row.appendChild(unarchiveBtn);
+row.appendChild(deleteBtn);
+list.appendChild(row);
+page.appendChild(list);
+document.body.appendChild(page);
+
+// Kick MutationObservers (installArchivedSessionBatch / delete decorate) similarly to a DOM mutation.
+for (const observer of observers) observer.callback([], observer);
+for (const timer of timers.splice(0)) {
+  if (!timer.cancelled) timer.fn();
+}
+await Promise.resolve();
+await Promise.resolve();
+
+assert.ok(page.isConnected, "first-class page must remain mounted");
+assert.ok(page.querySelector("[data-dsh-archived-batch]"), "decorator must not remove first-class batch toolbar");
+assert.ok(page.querySelector("[data-dsh-archived-session-select]"), "decorator must not remove first-class row checkboxes");
+assert.ok(page.querySelector("[data-dsh-delete-archived-session]"), "decorator must not remove first-class per-row delete");
+// document.querySelectorAll in this harness unions documentElement + body and double-counts body descendants.
+assert.equal(page.querySelectorAll("[data-dsh-archived-batch]").length, 1, "first-class page must keep exactly one batch toolbar (decorator must not inject a second)");
+assert.equal(
+  [...document.body.querySelectorAll("[data-dsh-archived-batch]")].filter((el) => !el.closest("[data-dsh-archived-sessions-page]")).length,
+  0,
+  "no legacy toolbar should be injected without a foreign list"
+);
 
 console.log("archived_sessions_section_test: ok");

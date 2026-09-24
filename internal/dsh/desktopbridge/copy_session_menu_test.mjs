@@ -120,6 +120,9 @@ class FakeElement {
     this.parentElement.childNodes.splice(index, 0, node);
     if (this.isConnected) notifyMutation();
   }
+  focus() {}
+  select() {}
+  setSelectionRange(_start, _end) {}
 
   remove() {
     if (!this.parentElement) return;
@@ -586,6 +589,44 @@ assert.ok(mutationDeliveryCount < mutationDeliveryLimit, "archived decoration mu
 assert.equal(stableList.querySelectorAll("[data-dsh-archived-session-select]").length, 1, "observer stability fixture must remain decorated");
 asyncMutationDelivery = false;
 stableList.remove();
+
+// First-class Archived Sessions page owns its batch/select UI. With only that page
+// mounted (no foreign Unarchive list), decoration must leave its controls alone.
+const firstClassPage = document.createElement("div");
+firstClassPage.setAttribute("data-dsh-archived-sessions-page", "");
+const firstClassToolbar = document.createElement("div");
+firstClassToolbar.setAttribute("data-dsh-archived-batch", "");
+const firstClassSelectAll = document.createElement("input");
+firstClassSelectAll.type = "checkbox";
+firstClassSelectAll.setAttribute("data-dsh-archived-batch-select-all", "");
+firstClassToolbar.appendChild(firstClassSelectAll);
+firstClassPage.appendChild(firstClassToolbar);
+const firstClassList = document.createElement("ul");
+const firstClassRow = makeArchivedRow("session-first-class-owned", "First class");
+const firstClassCheckbox = document.createElement("input");
+firstClassCheckbox.type = "checkbox";
+firstClassCheckbox.setAttribute("data-dsh-archived-session-select", "");
+firstClassCheckbox.setAttribute("data-dsh-archived-session-select-id", "session-first-class-owned");
+if (firstClassRow.childNodes[0]) firstClassRow.childNodes[0].before(firstClassCheckbox);
+else firstClassRow.appendChild(firstClassCheckbox);
+const firstClassDelete = document.createElement("button");
+firstClassDelete.setAttribute("data-dsh-delete-archived-session", "");
+firstClassDelete.setAttribute("data-dsh-delete-archived-id", "session-first-class-owned");
+firstClassDelete.textContent = "Delete session";
+firstClassRow.appendChild(firstClassDelete);
+firstClassList.appendChild(firstClassRow);
+firstClassPage.appendChild(firstClassList);
+document.documentElement.appendChild(firstClassPage);
+await flushMicrotasks();
+assert.ok(firstClassPage.querySelector("[data-dsh-archived-batch]"), "first-class batch toolbar must survive decoration when no legacy list exists");
+assert.ok(firstClassPage.querySelector("[data-dsh-archived-session-select]"), "first-class row checkbox must survive decoration");
+assert.ok(firstClassPage.querySelector("[data-dsh-delete-archived-session]"), "first-class delete must survive decoration");
+assert.equal(
+  [...document.querySelectorAll("[data-dsh-archived-batch]")].filter((el) => !el.closest("[data-dsh-archived-sessions-page]")).length,
+  0,
+  "decorator must not inject a legacy toolbar for the first-class page"
+);
+firstClassPage.remove();
 
 for (const cleanup of cleanups) cleanup();
 assert.equal(menu.querySelector("[data-dsh-copy-session-id]"), null, "dispose must remove injected menu nodes");
