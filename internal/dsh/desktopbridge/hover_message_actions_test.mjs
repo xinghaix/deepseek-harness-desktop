@@ -605,6 +605,8 @@ assert.match(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay/);
 // attachment-only card it drifted a whole row lower, because a "last line" of attachments is
 // a tall row rather than a line.
 assert.match(hoverStyle.textContent, /\[data-dsh-desktop-prompt-overlay\] \{ position: fixed[^}]*display: flex !important; flex-direction: column/);
+assert.match(hoverStyle.textContent, /\[data-dsh-desktop-prompt-overlay\] \{ position: fixed !important; z-index: var\(--dsw-z-index-sticky, 10\) !important;/, "sticky shelf sits under modal/dialog layers");
+assert.doesNotMatch(hoverStyle.textContent, /--dsw-z-index-popover/, "sticky shelf must not reuse the popover z-index token");
 assert.match(hoverStyle.textContent, /\[data-dsh-desktop-prompt-overlay\] \[data-dsh-desktop-prompt-overlay-toolbar\] \{ position: absolute !important[^}]*right: 12px !important/);
 // It must be out of flow — no flex row of its own, no margin reserving space under the text.
 assert.doesNotMatch(hoverStyle.textContent, /data-dsh-desktop-prompt-overlay-toolbar\] \{ position: absolute[^}]*align-self: flex-end/, "the strip does not reserve a flex row");
