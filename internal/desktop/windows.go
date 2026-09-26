@@ -78,7 +78,7 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 		URL:                url,
 		UseApplicationMenu: true,
 		DevToolsEnabled:    false,
-		Permissions:        deniedWebviewPermissions(),
+		Permissions:        chatWebviewPermissions(),
 	}
 	// applyDesktopWindowChrome already sets MacTitleBarHiddenInsetUnified, traffic
 	// lights, and InvisibleTitleBarHeight = desktopNativeTopInset (Wails macOS
@@ -105,9 +105,30 @@ const dimChatJS = "(function(){var id='dsh-desktop-config-dim';var el=document.g
 const undimChatJS = "var el=document.getElementById('dsh-desktop-config-dim');if(el)el.remove();"
 const showDiscardConfigJS = "var el=document.getElementById('discard-config');if(el)el.hidden=false;"
 
+// deniedWebviewPermissions is for management / config chrome that never
+// records audio or video. Chat uses chatWebviewPermissions instead.
 func deniedWebviewPermissions() map[application.PermissionType]application.Permission {
 	return map[application.PermissionType]application.Permission{
 		application.PermissionMicrophone:    application.PermissionDeny,
+		application.PermissionCamera:        application.PermissionDeny,
+		application.PermissionGeolocation:   application.PermissionDeny,
+		application.PermissionNotifications: application.PermissionDeny,
+		application.PermissionClipboardRead: application.PermissionDeny,
+	}
+}
+
+// chatWebviewPermissions enables Chat voice input (DSH experimental
+// client-ui-voice-input → getUserMedia / MediaRecorder) while still denying
+// camera, geolocation, notifications, and clipboard-read.
+//
+// Microphone uses PermissionDefault so macOS TCC and Windows WebView2 can
+// present their native prompts. Linux/WebKitGTK has no prompt; Default and
+// Allow both permit capture (see Wails allowMediaCapture). Darwin's
+// Permissions map is not wired in Wails beta.25 — macOS still needs
+// NSMicrophoneUsageDescription (and hardened-runtime audio-input entitlement).
+func chatWebviewPermissions() map[application.PermissionType]application.Permission {
+	return map[application.PermissionType]application.Permission{
+		application.PermissionMicrophone:    application.PermissionDefault,
 		application.PermissionCamera:        application.PermissionDeny,
 		application.PermissionGeolocation:   application.PermissionDeny,
 		application.PermissionNotifications: application.PermissionDeny,
@@ -120,7 +141,9 @@ func applyDesktopWindowChrome(options application.WebviewWindowOptions) applicat
 	options.DevToolsEnabled = false
 	options.OpenInspectorOnStartup = false
 	options.EnableFileDrop = false
-	options.Permissions = deniedWebviewPermissions()
+	if options.Permissions == nil {
+		options.Permissions = deniedWebviewPermissions()
+	}
 	if runtime.GOOS == "darwin" {
 		options.Mac.WebviewPreferences.JavaScriptCanOpenWindowsAutomatically.Set(false)
 		options.Frameless = false

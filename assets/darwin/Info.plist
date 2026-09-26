@@ -25,5 +25,7 @@
     <string>public.app-category.developer-tools</string>
     <key>NSHumanReadableCopyright</key>
     <string>Deepseek Harness Desktop</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Deepseek Harness Desktop needs microphone access for Chat voice input. / 用于 Chat 语音输入录音。</string>
 </dict>
 </plist>

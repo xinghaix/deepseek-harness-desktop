@@ -53,6 +53,8 @@ class BuildPackagingTest(unittest.TestCase):
                         self.assertTrue((contents / "MacOS" / executable).is_file())
                         self.assertTrue((contents / "Resources/icons.icns").is_file())
                         self.assertFalse((contents / "Resources/plugins").exists())
+                        plist = (contents / "Info.plist").read_text()
+                        self.assertIn("NSMicrophoneUsageDescription", plist)
                         self.assertTrue((dist / f"deepseek-harness-desktop-darwin-{arch}.dmg").is_file())
 
 
