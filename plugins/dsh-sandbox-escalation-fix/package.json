@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-sandbox-escalation-fix",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Normalize redundant sandbox requests and malformed justifications in DeepSeek Harness tools, including PTC run_code",
   "keywords": [
     "deepseek-harness",
@@ -61,17 +61,17 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-sandbox": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-sandbox-policy": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1"
+    "@deepseek-ai/dsh-agent": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox-policy": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-sandbox": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-sandbox-policy": "^0.1.7-rc.1",
-    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-agent": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox-policy": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.1",
     "@types/node": "24.10.1",
     "typescript": "5.9.3"
   },

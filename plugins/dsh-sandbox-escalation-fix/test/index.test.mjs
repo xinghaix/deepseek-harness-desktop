@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   collectCandidateToolNames,
@@ -397,4 +398,13 @@ test("does not patch tools without escalation parameters", () => {
   const original = definition.execute;
   assert.equal(patchToolDefinition(definition, () => "danger-full-access"), undefined);
   assert.equal(definition.execute, original);
+});
+
+test("peerDependencies declare DSH 0.2.0-rc.1 support", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(manifest.peerDependencies["@deepseek-ai/cordis"], "^4.0.4");
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-agent"], "^0.2.0-rc.1");
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-sandbox"], "^0.2.0-rc.1");
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-sandbox-policy"], "^0.2.0-rc.1");
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-tools"], "^0.2.0-rc.1");
 });

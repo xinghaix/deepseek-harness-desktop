@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.4] - 2026-09-29
+
+### Changed
+
+- 将 `peerDependencies` 与 `devDependencies`（`@deepseek-ai/dsh-agent`、`dsh-sandbox`、`dsh-sandbox-policy`、`dsh-tools`）声明升级为 `^0.2.0-rc.1`，适配 DSH `0.2.0-rc.1` 更严格的启动与安装预检拦截规则（`semver.satisfies`），原生通过兼容性检查，避免被自动禁用或拒绝安装。
+
 ## [0.2.3] - 2026-09-24
 
 ### Added

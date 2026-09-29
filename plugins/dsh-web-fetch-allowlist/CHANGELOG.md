@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.2] - 2026-09-29
+
+### Changed
+
+- `peerDependencies` 中 `@deepseek-ai/dsh-settings` 与 `@deepseek-ai/dsh-web` 改为 `^0.2.0-rc.1`；`dsh.engines.dsh` 改为 `>=0.2.0-rc.1`，适配 DSH `0.2.0-rc.1` 严格的 `semver.satisfies` 插件预检拦截机制。
+
 ## [0.2.1] - 2026-09-24
 
 ### Added

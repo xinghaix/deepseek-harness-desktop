@@ -87,6 +87,12 @@ test("manifest loads plugin manager, not the removed settings card owner", () =>
   assert.ok(!manifest.dsh.client.inject.includes("@deepseek-ai/dsh-client-ui-settings-plugins"));
 });
 
+test("peerDependencies and engines declare DSH 0.2.0-rc.1 support", () => {
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-settings"], "^0.2.0-rc.1");
+  assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-web"], "^0.2.0-rc.1");
+  assert.equal(manifest.dsh.engines.dsh, ">=0.2.0-rc.1");
+});
+
 test("summary is text only; page exposes the form without a second expand click", () => {
   const h = harness(); h.declareSlot(); const entry = h.entry(); const props = face(entry);
   assert.equal(render(entry, props, "summary"), "description");
