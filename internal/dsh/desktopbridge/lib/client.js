@@ -5068,7 +5068,6 @@ window.__ModuleLoader__.load({
 												jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.process_title") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: options.executable ? t("bridge.cli_configured", options.executable) : t("bridge.cli_unset") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.cli_version", status?.cliVersion && status.cliVersion !== "unknown" ? status.cliVersion : "—") }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: options.port ? t("bridge.address", "http://127.0.0.1:" + options.port + "/") : t("bridge.address_not_ready") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: appVersion ? t("bridge.desktop_version", appVersion) : t("bridge.desktop_version", "—") })
 											]
 										}),

@@ -149,6 +149,8 @@ function renderStatus(status) {
   updateCLIVersion(lastVersion);
   $("metric-home").textContent = o.home || dash;
   $("metric-workspace").textContent = o.workspace || dash;
+  const isRunning = state === "running";
+  if ($("metric-url-row")) $("metric-url-row").hidden = !isRunning || !status.url;
   $("metric-url").textContent = status.url || t("dashboard.url_not_ready");
   updateButtons();
   renderErrorCard(status);

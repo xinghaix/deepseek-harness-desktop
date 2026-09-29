@@ -173,4 +173,10 @@ func TestManagementUIContract(t *testing.T) {
 	if strings.Contains(html, "? 100 : 900") {
 		t.Fatal("management UI must not poll Status every 100/900ms")
 	}
+	if !strings.Contains(html, `id="metric-url-row" hidden`) {
+		t.Fatal("metric-url-row must exist and be hidden by default")
+	}
+	if !strings.Contains(html, `$("metric-url-row").hidden = !isRunning || !status.url`) {
+		t.Fatal("metric-url-row must only be displayed when running with a valid status URL")
+	}
 }
