@@ -265,8 +265,7 @@ const desktopNativeWindowInsetJS = `
   }
 
   // Chat drag: InvisibleTitleBarHeight (>0) supplies native drag (Wails #5900).
-  // Title-band double-click zoom removed — hit-band fought native drag and blocked
-  // toolbar clicks. Do not reinject a full-width pointer-events overlay.
+  // Double-click is handled at capture phase without a hit-test overlay below.
 
   applyInset();
 })();
@@ -333,6 +332,17 @@ const desktopChromeJS = `
   document.documentElement.appendChild(chrome);
 
   const runWindowAction = (action) => window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__(action);
+  // Reuse the existing blank drag element: no extra overlay over controls or
+  // Chat content. The first press still goes to the native drag gesture.
+  if (!isManagement) drag.addEventListener("mousedown", (event) => {
+    if (!event.isTrusted || event.defaultPrevented || event.button !== 0 ||
+        event.buttons !== 1 || event.detail !== 2 || event.target !== drag ||
+        event.clientX < 5 || event.clientY < 5 ||
+        event.clientX >= document.documentElement.clientWidth - 5) return;
+    event.preventDefault();
+    event.stopPropagation();
+    runWindowAction("maximize");
+  });
   controls.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;

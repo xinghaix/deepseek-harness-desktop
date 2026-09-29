@@ -83,9 +83,13 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	// applyDesktopWindowChrome already sets MacTitleBarHiddenInsetUnified, traffic
 	// lights, and InvisibleTitleBarHeight = desktopNativeTopInset (Wails macOS
 	// invisible native drag strip). Do NOT override Height to 0 — that kills
-	// native drag. Zoom uses JS click-timing → ToggleChatZoom (not AppleActionOnDoubleClick).
+	// native drag. The blank strip handles its second press via the existing
+	// window action (work-area maximise/restore, not system fullscreen).
 	// Docs: https://v3.wails.io/features/windows/frameless/
 	options = applyDesktopWindowChrome(options)
+	if runtime.GOOS == "darwin" {
+		options.JS += desktopMacTitlebarZoomJS
+	}
 	// Remote Chat has only Wails Core: install gesture callbacks before signalling
 	// native readiness so queued ExecJS and WindowRuntimeReady hooks can run.
 	options.JS += desktopChatDragJS + desktopChatRuntimeScript(url)

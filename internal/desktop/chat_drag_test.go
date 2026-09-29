@@ -45,7 +45,21 @@ function run(OS) {
  assert.deepEqual(calls,["wails:drag"],OS+" Core-only Chat must start native drag");
  dispatch("mousemove");assert.equal(calls.length,1,"one native message per press");
  function none(label, body) {calls.length=0;dispatch("mouseup");body();assert.deepEqual(calls,[],label);}
- for(const bad of [{button:2,buttons:2},{button:1,buttons:4},{buttons:3},{isTrusted:false},{defaultPrevented:true},{detail:2}]) {
+ // Second press must zoom via the existing authenticated action, not start a drag.
+ const zoom=[];window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__=action=>zoom.push(action);
+ calls.length=0;dispatch("mouseup");
+ const second=dispatch("mousedown",drag,{detail:2});dispatch("mousemove",drag,{detail:2});
+ assert.equal(second.defaultPrevented,true,OS+" double press prevents text selection");
+ assert.deepEqual(zoom,["maximize"],OS+" double press zooms once");
+ assert.deepEqual(calls,[],OS+" double press never starts native drag");
+ dispatch("mouseup");zoom.length=0;
+ const first=dispatch("mousedown");dispatch("mousemove");
+ assert.equal(first.defaultPrevented,false,OS+" first press stays draggable");
+ assert.deepEqual(calls,["wails:drag"],OS+" first press still drags");
+ dispatch("mouseup");calls.length=0;
+ const controls=elements.find(e=>e.className==="dsh-desktop-chrome__controls");
+ dispatch("mousedown",controls,{detail:2});assert.deepEqual(zoom,[],OS+" controls cannot zoom via double-click");
+ for(const bad of [{button:2,buttons:2},{button:1,buttons:4},{buttons:3},{isTrusted:false},{defaultPrevented:true}]) {
   none("invalid press "+JSON.stringify(bad),()=>{dispatch("mousedown",drag,bad);dispatch("mousemove");});
  }
  for(const bad of [{buttons:0},{isTrusted:false},{defaultPrevented:true}]) {
@@ -53,7 +67,12 @@ function run(OS) {
  }
  for(const type of ["mouseup","blur","pointercancel"])none(type+" cancels pending drag",()=>{dispatch("mousedown");dispatch(type);dispatch("mousemove");});
  none("arbitrary content is not draggable",()=>{dispatch("mousedown",root);dispatch("mousemove",root);});
- none("doubleclick never invokes zoom",()=>dispatch("dblclick"));
+ none("dblclick never sends a second native drag",()=>dispatch("dblclick"));
+ assert.deepEqual(zoom,[],OS+" dblclick after mousedown must not zoom twice");
+ for(const bad of [{isTrusted:false},{button:2,buttons:2},{buttons:3},{defaultPrevented:true},{clientX:0},{clientY:0}]) {
+  zoom.length=0;dispatch("mousedown",drag,{detail:2,...bad});
+  assert.deepEqual(zoom,[],OS+" invalid double press cannot zoom: "+JSON.stringify(bad));
+ }
  const edges=[[0,350,"w"],[999,350,"e"],[500,0,"n"],[500,699,"s"],[0,0,"nw"],[999,0,"ne"],[0,699,"sw"],[999,699,"se"]];
  for(const [clientX,clientY,edge] of edges) {
   calls.length=0;dispatch("mousedown",root,{clientX,clientY});dispatch("mousemove",root,{clientX,clientY});
