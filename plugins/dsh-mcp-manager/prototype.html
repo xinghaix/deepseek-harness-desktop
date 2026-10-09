@@ -1,0 +1,1099 @@
+<!-- THROWAWAY PROTOTYPE — not loaded by DSH. See README.md and docs/research/dsh-mcp-management.md §5.4.1 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — dsh-mcp-manager</title>
+<!--
+Throwaway prototype, not the plugin.
+Chosen interaction: plugin detail, a server list that expands downward. No side drawer.
+Stdio confirms on enable, and again when command/args/cwd of an enabled server change.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --label: #0f1115;
+    --label-2: #61666b;
+    --label-3: #81858c;
+    --bg: #fff;
+    --bg-sunken: #f9fafb;
+    --bg-open: #f3f4f6;
+    --border: #0000001f;
+    --border-strong: #00000029;
+    --blue: #4176e6;
+    --blue-soft: #edf3fe;
+    --red: #ec1313;
+    --amber: #f59e0b;
+    --hover: #2631480f;
+    --shadow: 0 12px 40px #00000024;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  body[data-theme="dark"] {
+    color-scheme: dark;
+    --label: #f9fafb;
+    --label-2: #c5c8ce;
+    --label-3: #8b9098;
+    --bg: #232324;
+    --bg-sunken: #1c1c1e;
+    --bg-open: #1a1a1c;
+    --border: #ffffff1f;
+    --border-strong: #ffffff29;
+    --blue: #7aaaff;
+    --blue-soft: #4176e633;
+    --red: #ff6b6b;
+    --amber: #f7ad31;
+    --hover: #ffffff0f;
+    --shadow: 0 12px 40px #00000080;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--font); color: var(--label); background: var(--bg); font-size: 14px; line-height: 1.45; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  code { font-family: var(--mono); font-size: 12px; }
+  h1, h2, p { margin: 0; }
+  .page { max-width: 760px; margin: 0 auto; padding: 28px 24px 140px; }
+  .crumb { border: 0; background: transparent; color: var(--label-3); padding: 0; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+  .crumb:hover { color: var(--label); }
+  .crumb:focus-visible, .btn:focus-visible, .disclosure:focus-visible, .switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .head { display: flex; gap: 14px; align-items: flex-start; margin-top: 18px; }
+  .mark { width: 48px; height: 48px; border-radius: 16px; background: var(--bg); border: 0.5px solid var(--border); display: grid; place-items: center; font-weight: 500; flex: none; color: var(--label-2); }
+  .titles { min-width: 0; }
+  h1 { font-size: 20px; font-weight: 500; line-height: 28px; }
+  .ver, .pkg, .sub, .count { color: var(--label-3); font-size: 12px; }
+  .ver { font-weight: 400; margin-left: 8px; }
+  .pkg { margin-top: 2px; }
+  .desc { color: var(--label-2); margin-top: 8px; }
+  .head-side { margin-left: auto; }
+  .toolbar, .sheet-top, .form-actions, .row-actions { display: flex; align-items: center; gap: 8px; }
+  .toolbar { margin: 28px 0 8px; }
+  .spacer { flex: 1; }
+  .btn { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 36px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--label); font-size: 14px; line-height: 22px; cursor: pointer; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: #0f1115; color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #43454a; }
+  .btn.outline { border: 0.5px solid var(--border); }
+  .btn.outline:hover:not(:disabled) { background: var(--hover); }
+  .btn.sm { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; line-height: 18px; }
+  .btn.ghost { color: var(--label-2); }
+  .btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--label); }
+  .btn.danger { color: var(--red); }
+  .btn.danger:hover:not(:disabled) { background: #ec13130d; }
+  .btn.danger-fill { background: var(--red); color: #fff; }
+  .btn.danger-fill:hover:not(:disabled) { background: var(--red); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 500; color: var(--label-3); font-size: 12px; padding: 0 8px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 12px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: var(--hover); }
+  tr.row[aria-selected="true"] td { background: var(--blue-soft); }
+  .name { font-weight: 500; }
+  .bad { color: var(--red); }
+  .warn { color: var(--amber); }
+  .tag { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--label-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; line-height: 18px; vertical-align: 1px; }
+  .switch { box-sizing: border-box; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; background: var(--border); display: inline-flex; align-items: center; flex: none; }
+  .switch .thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; display: block; transition: transform .12s ease; }
+  .switch[aria-checked="true"] { background: #0f1115; }
+  .switch[aria-checked="true"] .thumb { transform: translateX(16px); }
+  .switch:disabled { opacity: .5; cursor: default; }
+  .drawer-mask { position: fixed; inset: 0; background: #0000003d; z-index: 10; }
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(420px, 100%); background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px 22px 80px; overflow: auto; z-index: 11; }
+  .drawer h2, .editor h2 { font-size: 18px; font-weight: 500; }
+  .field { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 0; margin: 0; }
+  .field > input, .field > select, .field > .radios, .field > .tools, .field > .arg-row, .field > .sub { align-self: stretch; }
+  .field + .field { border-top: 0.5px solid #0000001a; }
+  .field-label, .legend { color: var(--label); font-size: 13px; font-weight: 500; line-height: 1.5; }
+  input[type="text"], input[type="password"], select { width: 100%; height: 34px; border: 0.5px solid var(--border-strong); background: var(--bg); border-radius: 12px; padding: 0 12px; font-size: 13px; }
+  input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: inset 0 0 0 0.5px var(--blue); }
+  input:disabled { color: var(--label-3); }
+  .radios { display: flex; gap: 14px; font-size: 14px; }
+  .radios input { width: 16px; height: 16px; margin: 0; accent-color: var(--label); }
+  .secret { color: var(--label-2); font-size: 13px; }
+  .arg-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .arg-row input { flex: 1; }
+  .argv { margin: 10px 0 0; padding: 0; list-style: none; }
+  .argv li { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; }
+  .argv .idx { width: 1.5em; color: var(--label-3); font-size: 12px; line-height: 28px; }
+  .argv code { display: block; flex: 1; white-space: pre-wrap; background: var(--bg-sunken); border-radius: 8px; padding: 6px 8px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tools code { background: var(--bg-sunken); border-radius: 6px; padding: 2px 6px; }
+  .form-actions { margin-top: 18px; }
+  .shell { display: flex; min-height: 100%; }
+  .nav { width: 220px; flex: none; border-right: 1px solid var(--border); padding: 22px 12px; background: var(--bg-sunken); }
+  .nav .eyebrow { color: var(--label-3); font-size: 12px; padding: 0 10px 10px; }
+  .nav button, .names button.srv { display: block; width: 100%; text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 8px 10px; }
+  .nav button[aria-current="page"], .names button.srv[aria-selected="true"] { background: var(--blue-soft); color: var(--blue); }
+  .split { display: flex; flex: 1; min-width: 0; }
+  .names { width: 260px; flex: none; border-right: 1px solid var(--border); padding: 22px 12px 120px; }
+  .names h1 { padding: 0 8px; }
+  .lead { color: var(--label-2); font-size: 13px; padding: 6px 8px 14px; }
+  .names .toolbar { margin: 0 8px 12px; flex-wrap: wrap; }
+  .editor { flex: 1; padding: 28px 32px 140px; max-width: 680px; }
+  .sheet { padding: 18px 0; border-top: 1px solid var(--border); }
+  .add-wide, .drop { width: 100%; border: 1px dashed var(--border-strong); background: transparent; border-radius: 12px; color: var(--label-2); padding: 16px; text-align: center; }
+  .add-wide { margin: 22px 0 0; }
+  .drop { margin-top: 8px; }
+  .preview { margin: 4px 0 12px; padding: 0; list-style: none; }
+  .preview li { padding: 2px 0; border: 0; color: var(--label-2); font-size: 12px; line-height: 18px; }
+  .preview li.warn { color: var(--label-3); }
+  .import-json { width: 100%; min-height: 140px; max-height: 220px; margin: 6px 0 8px; padding: 10px 12px; border: 0.5px solid var(--border-strong); border-radius: 12px; background: var(--bg); color: var(--label); font-family: var(--mono); font-size: 12px; line-height: 18px; resize: vertical; }
+  .modal-root { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal-mask { position: absolute; inset: 0; background: #0000003d; }
+  .dialog { position: relative; z-index: 1; box-sizing: border-box; width: min(380px, 100%); display: flex; flex-direction: column; gap: 20px; padding: 0 0 24px; border: 0; border-radius: 28px; background: var(--bg); box-shadow: 0 0 0 0.5px #00000014, 0 3px 8px #0000000a, 0 12px 32px #00000014; }
+  .dialog:focus { outline: none; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px 14px 0 24px; }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+  .modal-close { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--label-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .modal-close:hover { background: var(--hover); }
+  .modal-desc { margin: 0; padding: 0 24px; font-size: 14px; line-height: 22px; color: var(--label); }
+  .modal-body { display: flex; flex-direction: column; gap: 8px; padding: 0 24px; }
+  .modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 24px; }
+  .ack { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; font-size: 14px; line-height: 22px; cursor: pointer; }
+  .ack input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--label); }
+  .dialog pre { white-space: pre-wrap; background: var(--bg-sunken); border-radius: 10px; padding: 10px; font-family: var(--mono); font-size: 12px; }
+  #bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 40; width: min(760px, calc(100% - 24px)); background: #111; color: #fff; border-radius: 16px; padding: 8px 10px 10px; box-shadow: 0 10px 30px #00000055; }
+  #bar .controls { display: flex; align-items: center; gap: 8px; }
+  #bar button { background: #2a2a2a; color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; }
+  #bar .label { flex: 1; text-align: center; font-size: 13px; }
+  #bar .label small { display: block; color: #aaa; font-size: 11px; font-weight: 400; }
+  #dump { margin: 8px 4px 0; color: #cfcfcf; font-family: var(--mono); font-size: 11px; white-space: pre-wrap; max-height: 68px; overflow: auto; }
+  .server { border-bottom: 0; }
+  .server.open { background: var(--bg-open); border-bottom: 0.5px solid #0000001a; border-radius: 0; margin: 0; }
+  .server.open .summary-wrap { margin: 0; padding: 0 8px; border-bottom: 0; border-radius: 0; }
+  .server.open .expand { padding: 0 12px 12px; }
+  .summary-wrap { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 0 8px; border-bottom: 0.5px solid #0000001a; border-radius: 0; }
+  .summary-wrap:hover { background: var(--hover); }
+  .disclosure { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; border: 0; background: transparent; text-align: left; padding: 8px 4px; border-radius: 12px; color: var(--label-3); }
+  .summary-wrap:hover .disclosure { color: var(--label-2); }
+  .disclosure .name { color: var(--label); }
+  .chevron { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex: none; transition: transform .16s; }
+
+  .who { min-width: 140px; display: flex; flex-direction: column; }
+  .status-cell { flex: none; max-width: 128px; display: flex; flex-direction: column; }
+  .status-cell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-line { position: relative; flex: 1; min-width: 72px; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+  .tool-line code, .more-menu code { font-size: 12px; line-height: 18px; background: var(--bg-sunken); border-radius: 6px; padding: 1px 6px; white-space: nowrap; color: var(--label); }
+  .tool-more { flex: none; height: 24px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--label-2); font-size: 12px; cursor: pointer; }
+  .tool-more:hover { background: var(--hover); color: var(--label); }
+  .more-menu { position: absolute; z-index: 5; top: calc(100% + 4px); right: 0; display: flex; flex-wrap: wrap; gap: 6px; width: max-content; max-width: 280px; padding: 8px; background: var(--bg); border-radius: 12px; box-shadow: 0 0 0 0.5px #00000014, 0 8px 24px #00000014; }
+  .fold { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--label-3); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+  .fold:hover { background: var(--hover); color: var(--label); }
+  .fold[aria-expanded="true"] .chevron, .config-fold[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+  .config-fold { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; margin-top: 4px; padding: 0; border: 0; background: transparent; color: var(--label-2); font-size: 13px; cursor: pointer; }
+  .config-fold:hover { color: var(--label); }
+  .expand { padding: 0 4px 8px 4px; }
+  body[data-theme="dark"] .btn.primary { background: #f9fafb; color: #0f1115; }
+  body[data-theme="dark"] .btn.primary:hover:not(:disabled) { background: #e1e5ee; }
+  body[data-theme="dark"] .switch[aria-checked="true"] { background: #f9fafb; }
+  body[data-theme="dark"] .switch[aria-checked="true"] .thumb { background: #232324; }
+  body[data-theme="dark"] .summary-wrap, body[data-theme="dark"] .server.open, body[data-theme="dark"] .field + .field { border-color: #ffffff1f; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="bar">
+  <div class="controls">
+    <div class="label" id="label"></div>
+    <button type="button" id="locale">EN</button>
+    <button type="button" id="theme">明暗</button>
+  </div>
+  <pre id="dump"></pre>
+</div>
+<script>
+const locales = ["zh-CN", "en", "de", "fr", "es", "ja", "ko", "pt"];
+const messages = {
+  "zh-CN": {
+    add: "添加",
+    import: "导入",
+    count: "总共 {total} · {enabled} 启用",
+    "status.connected": "连接成功",
+    "status.failed": "连接失败",
+    "status.disabled": "已停用",
+    "status.unknown": "未知",
+    "status.empty": "已加载但无工具",
+    "field.name": "名称",
+    "field.url": "URL",
+    "field.headers": "Headers",
+    "field.addHeaders": "添加 Header"
+  },
+  en: {
+    add: "Add",
+    import: "Import",
+    count: "{total} total · {enabled} enabled",
+    "status.connected": "Connected",
+    "status.failed": "Connection failed",
+    "status.disabled": "Disabled",
+    "status.unknown": "Unknown",
+    "status.empty": "Loaded, no tools",
+    "field.name": "Name",
+    "field.url": "URL",
+    "field.headers": "Headers",
+    "field.addHeaders": "Add header"
+  },
+  de: {
+    add: "Hinzufügen",
+    import: "Importieren",
+    count: "{total} gesamt · {enabled} aktiv",
+    "status.connected": "Verbunden",
+    "status.failed": "Verbindung fehlgeschlagen",
+    "status.disabled": "Deaktiviert",
+    "status.unknown": "Unbekannt",
+    "status.empty": "Geladen, keine Tools",
+    "field.name": "Name",
+    "field.url": "URL",
+    "field.headers": "Header",
+    "field.addHeaders": "Header hinzufügen"
+  },
+  fr: {
+    add: "Ajouter",
+    import: "Importer",
+    count: "{total} au total · {enabled} activés",
+    "status.connected": "Connecté",
+    "status.failed": "Échec de connexion",
+    "status.disabled": "Désactivé",
+    "status.unknown": "Inconnu",
+    "status.empty": "Chargé, aucun outil",
+    "field.name": "Nom",
+    "field.url": "URL",
+    "field.headers": "En-têtes",
+    "field.addHeaders": "Ajouter un en-tête"
+  },
+  es: {
+    add: "Añadir",
+    import: "Importar",
+    count: "{total} en total · {enabled} activos",
+    "status.connected": "Conectado",
+    "status.failed": "Error de conexión",
+    "status.disabled": "Desactivado",
+    "status.unknown": "Desconocido",
+    "status.empty": "Cargado, sin herramientas",
+    "field.name": "Nombre",
+    "field.url": "URL",
+    "field.headers": "Encabezados",
+    "field.addHeaders": "Añadir encabezado"
+  },
+  ja: {
+    add: "追加",
+    import: "インポート",
+    count: "合計 {total} · {enabled} 有効",
+    "status.connected": "接続成功",
+    "status.failed": "接続失敗",
+    "status.disabled": "無効",
+    "status.unknown": "不明",
+    "status.empty": "読み込み済み、ツールなし",
+    "field.name": "名前",
+    "field.url": "URL",
+    "field.headers": "ヘッダー",
+    "field.addHeaders": "ヘッダーを追加"
+  },
+  ko: {
+    add: "추가",
+    import: "가져오기",
+    count: "총 {total} · {enabled} 사용",
+    "status.connected": "연결됨",
+    "status.failed": "연결 실패",
+    "status.disabled": "사용 안 함",
+    "status.unknown": "알 수 없음",
+    "status.empty": "로드됨, 도구 없음",
+    "field.name": "이름",
+    "field.url": "URL",
+    "field.headers": "헤더",
+    "field.addHeaders": "헤더 추가"
+  },
+  pt: {
+    add: "Adicionar",
+    import: "Importar",
+    count: "{total} no total · {enabled} ativos",
+    "status.connected": "Ligado",
+    "status.failed": "Falha na ligação",
+    "status.disabled": "Desativado",
+    "status.unknown": "Desconhecido",
+    "status.empty": "Carregado, sem ferramentas",
+    "field.name": "Nome",
+    "field.url": "URL",
+    "field.headers": "Cabeçalhos",
+    "field.addHeaders": "Adicionar cabeçalho"
+  }
+};
+function t(key, vars) {
+  const pack = messages[state.locale] || messages.en;
+  let text = pack[key] || messages.en[key] || key;
+  if (vars) Object.keys(vars).forEach(function (name) { text = text.split("{" + name + "}").join(String(vars[name])); });
+  return text;
+}
+const state = {
+  theme: "light",
+  locale: "zh-CN",
+  expanded: "github",
+  configOpen: "",
+  confirm: null,
+  pendingDelete: null,
+  importOpen: false,
+  importText: "",
+  note: "",
+  servers: [
+    serverSeed("github", "stdio", true, "connected", ["list_repos", "get_file", "search_code", "create_issue", "update_file", "list_commits"], { command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], env: [{ name: "GITHUB_TOKEN", set: true }] }),
+    serverSeed("docs", "streamable-http", true, "failed", [], { url: "https://docs.example/mcp", headers: [{ name: "Authorization", set: true }], error: "连接超时。地址和请求头已打码。" }),
+    serverSeed("files", "stdio", false, "disabled", [], { command: "node", args: ["./mcp/files.js", "/Users/xing/My Documents"] }),
+    serverSeed("sentry", "streamable-http", true, "connected", ["list_issues"], { url: "https://mcp.example/mcp", external: true })
+  ]
+};
+function serverSeed(name, transport, enabled, status, tools, extra) {
+  const item = Object.assign({
+    id: name, serverName: name, transport: transport, enabled: enabled, status: status, tools: tools,
+    command: "", args: [], cwd: "", url: "", env: [], headers: [],
+    external: false, error: ""
+  }, extra);
+  item.applied = { command: item.command, args: Array.isArray(item.args) ? item.args.slice() : [], cwd: item.cwd || "" };
+  return item;
+}
+function findServer(id) {
+  return state.servers.find(function (item) { return item.id === id; });
+}
+function serverNameOf(item) {
+  return String(item && item.serverName || "").trim();
+}
+function nameClash(name, exceptId) {
+  return state.servers.some(function (other) {
+    return other.id !== exceptId && serverNameOf(other) === name;
+  });
+}
+function nameIssue(item) {
+  const name = serverNameOf(item);
+  if (!name) return "empty";
+  if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) return "invalid";
+  if (nameClash(name, item.id)) return "taken";
+  return "";
+}
+function nameMessage(item) {
+  const issue = nameIssue(item);
+  if (issue === "empty") return "请先填写名称。";
+  if (issue === "invalid") return "名称只能是字母、数字、下划线和短横线，1 到 32 个字符。";
+  if (issue === "taken") return "已经有一台叫「" + serverNameOf(item) + "」的服务器，请换一个名称。";
+  return "";
+}
+function argvList(item) {
+  return [item.command].concat(Array.isArray(item.args) ? item.args : []);
+}
+function launchOf(item) {
+  return { command: item.command || "", args: Array.isArray(item.args) ? item.args.slice() : [], cwd: item.cwd || "" };
+}
+function sameLaunch(a, b) {
+  if (!a || !b || a.command !== b.command || a.cwd !== b.cwd || a.args.length !== b.args.length) return false;
+  for (let i = 0; i < a.args.length; i++) if (a.args[i] !== b.args[i]) return false;
+  return true;
+}
+function launchChanged(item) {
+  return item.transport === "stdio" && !sameLaunch(launchOf(item), item.applied);
+}
+function applyLaunch(item) {
+  item.applied = launchOf(item);
+}
+function revertLaunch(item) {
+  item.command = item.applied.command;
+  item.args = item.applied.args.slice();
+  item.cwd = item.applied.cwd;
+}
+function el(tag, attrs) {
+  const node = document.createElement(tag);
+  const props = attrs || {};
+  Object.keys(props).forEach(function (key) {
+    const value = props[key];
+    if (value == null || value === false) return;
+    if (key === "class") node.className = value;
+    else if (key === "text") node.textContent = value;
+    else node.setAttribute(key, value === true ? "" : String(value));
+  });
+  for (let i = 2; i < arguments.length; i++) appendChild(node, arguments[i]);
+  return node;
+}
+function appendChild(node, child) {
+  if (child == null || child === false) return;
+  if (Array.isArray(child)) { child.forEach(function (item) { appendChild(node, item); }); return; }
+  node.append(child.nodeType ? child : document.createTextNode(String(child)));
+}
+let modalKey = null;
+function disarmModal() {
+  if (!modalKey) return;
+  document.removeEventListener("keydown", modalKey);
+  modalKey = null;
+}
+function armModal(onCancel) {
+  disarmModal();
+  modalKey = function (event) {
+    if (event.key !== "Escape" || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    onCancel();
+  };
+  document.addEventListener("keydown", modalKey);
+}
+function closeIcon() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M4.5 4.5 11.5 11.5 M11.5 4.5 4.5 11.5");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.4");
+  path.setAttribute("stroke-linecap", "round");
+  svg.append(path);
+  return svg;
+}
+function modal(opts) {
+  const root = el("div", { class: "modal-root", role: "presentation" });
+  const mask = el("div", { class: "modal-mask" });
+  mask.addEventListener("click", opts.onCancel);
+  const card = el("div", { class: "dialog", role: "dialog" });
+  card.setAttribute("aria-modal", "true");
+  card.setAttribute("aria-label", opts.title);
+  card.tabIndex = -1;
+  const close = el("button", { class: "modal-close", type: "button", "aria-label": "关闭" });
+  close.append(closeIcon());
+  close.addEventListener("click", function (event) { event.stopPropagation(); opts.onCancel(); });
+  const content = el("div", { class: "modal-content" },
+    el("div", { class: "modal-header" }, el("h2", { text: opts.title }), close)
+  );
+  if (opts.description) content.append(el("p", { class: "modal-desc", text: opts.description }));
+  if (opts.body) content.append(el("div", { class: "modal-body" }, opts.body));
+  card.append(content, el("div", { class: "modal-footer" },
+    button("取消", "outline", opts.onCancel),
+    button(opts.confirmLabel, opts.danger ? "danger-fill" : "primary", opts.onConfirm, opts.confirmDisabled)
+  ));
+  root.append(mask, card);
+  armModal(opts.onCancel);
+  return root;
+}
+function button(label, variant, onClick, disabled) {
+  const node = el("button", { class: variant === "crumb" ? "crumb" : "btn " + (variant || "ghost sm"), type: "button", text: label });
+  if (disabled) node.disabled = true;
+  node.addEventListener("click", function (event) { event.stopPropagation(); onClick(); });
+  return node;
+}
+function chevron() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M4 6.5 8 10.5 12 6.5");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.5");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.append(path);
+  return svg;
+}
+function toggle(item) {
+  const node = el("button", { class: "switch", type: "button", role: "switch", "aria-label": "启用" });
+  node.setAttribute("aria-checked", item.enabled ? "true" : "false");
+  node.append(el("span", { class: "thumb" }));
+  node.addEventListener("click", function (event) {
+    event.stopPropagation();
+    const next = !item.enabled;
+    if (next) {
+      const message = nameMessage(item);
+      if (message) { state.note = message; render(); return; }
+    }
+    if (next && item.transport === "stdio") {
+      state.confirm = { id: item.id, reason: "enable" };
+      render();
+      return;
+    }
+    item.enabled = next;
+    item.status = next ? "unknown" : "disabled";
+    if (!next) item.error = "";
+    render();
+  });
+  return node;
+}
+function statusNode(item) {
+  const wrap = el("span", { class: "status-cell" });
+  wrap.append(el("span", { class: item.status === "failed" ? "bad" : item.status === "disabled" ? "sub" : "", text: t("status." + item.status) }));
+  if (item.error) wrap.append(el("span", { class: "sub bad", text: item.error }));
+  return wrap;
+}
+function textInput(item, field, placeholder) {
+  const input = el("input", { type: "text", value: item[field] || "", placeholder: placeholder || "" });
+  if (item.external) input.disabled = true;
+  input.addEventListener("input", function () {
+    item[field] = input.value;
+    paintDump({ editing: field, value: input.value, server: item.serverName });
+  });
+  return input;
+}
+function labeled(title, control) {
+  return el("label", { class: "field" }, el("span", { class: "field-label", text: title }), control);
+}
+function argsEditor(item) {
+  if (!Array.isArray(item.args)) item.args = [];
+  const box = el("div", { class: "field" }, el("span", { class: "legend", text: "args · 每一项是一个 argv 元素，不经 shell" }));
+  item.args.forEach(function (value, index) {
+    const input = el("input", { type: "text", value: value });
+    if (item.external) input.disabled = true;
+    input.addEventListener("input", function () {
+      item.args[index] = input.value;
+      paintDump({ editing: "args[" + index + "]", value: input.value, server: item.serverName });
+    });
+    box.append(el("div", { class: "arg-row" },
+      el("span", { class: "sub", text: String(index) }),
+      input,
+      button("移除", "ghost sm", function () { item.args.splice(index, 1); render(); }, item.external)
+    ));
+  });
+  box.append(button("添加参数", "outline sm", function () { item.args.push(""); render(); }, item.external));
+  return box;
+}
+function secretEditor(item, key, title, addLabel) {
+  if (!Array.isArray(item[key])) item[key] = [];
+  const rows = item[key];
+  const box = el("div", { class: "field" },
+    el("span", { class: "legend", text: title })
+  );
+  rows.forEach(function (row, index) {
+    const name = el("input", { type: "text", value: row.name || "", placeholder: "名称", autocomplete: "off" });
+    if (item.external) name.disabled = true;
+    name.addEventListener("input", function () {
+      row.name = name.value;
+      paintDump({ editing: key, index: index, name: name.value });
+    });
+    let valueControl;
+    if (row.set && !row.editing) {
+      valueControl = el("span", { class: "secret", text: "已设置" });
+    } else {
+      valueControl = el("input", { type: "password", placeholder: row.set ? "输入新值" : "值", autocomplete: "new-password" });
+      if (item.external) valueControl.disabled = true;
+      valueControl.addEventListener("input", function () {
+        if (valueControl.value) row.set = true;
+      });
+      valueControl.addEventListener("change", function () {
+        row.editing = false;
+        setTimeout(render, 0);
+      });
+    }
+    box.append(el("div", { class: "arg-row" },
+      name,
+      valueControl,
+      row.set && !row.editing ? button("更换", "ghost sm", function () { row.editing = true; render(); }, item.external) : null,
+      button("移除", "ghost sm", function () { rows.splice(index, 1); render(); }, item.external)
+    ));
+  });
+  box.append(button(addLabel, "outline sm", function () {
+    rows.push({ name: "", set: false, editing: true });
+    render();
+  }, item.external));
+  return box;
+}
+function argvView(item) {
+  const list = el("ol", { class: "argv" });
+  argvList(item).forEach(function (part, index) {
+    list.append(el("li", null, el("span", { class: "idx", text: String(index) }), el("code", { text: part })));
+  });
+  return list;
+}
+function fields(item) {
+  const box = el("div");
+  const nameInput = textInput(item, "serverName", "字母、数字、下划线或短横线");
+  const nameHint = el("p", { class: "sub" });
+  function paintName() { nameHint.textContent = nameMessage(item); }
+  nameInput.addEventListener("input", paintName);
+  paintName();
+  box.append(el("label", { class: "field" }, el("span", { class: "field-label", text: t("field.name") }), nameInput, nameHint));
+  const radios = el("div", { class: "radios" });
+  ["stdio", "streamable-http"].forEach(function (value) {
+    const input = el("input", { type: "radio", name: "transport-" + item.id, value: value });
+    input.checked = item.transport === value;
+    if (item.external) input.disabled = true;
+    input.addEventListener("change", function () {
+      item.transport = value;
+      render();
+    });
+    radios.append(el("label", null, input, " " + value));
+  });
+  box.append(el("div", { class: "field" }, el("span", { class: "legend", text: "传输" }), radios));
+  if (item.transport === "stdio") {
+    box.append(labeled("command", textInput(item, "command")));
+    box.append(argsEditor(item));
+    box.append(labeled("cwd", textInput(item, "cwd", "可选")));
+    box.append(secretEditor(item, "env", "环境变量", "添加环境变量"));
+  } else {
+    box.append(labeled(t("field.url"), textInput(item, "url")));
+    box.append(secretEditor(item, "headers", t("field.headers"), t("field.addHeaders")));
+  }
+  if (item.external) box.append(el("p", { class: "sub", text: "这行来自手写配置或配置包。可以开关，不能在这里删除或改写。" }));
+  return box;
+}
+function toolsField(item) {
+  const tools = el("div", { class: "tools" });
+  if (item.tools.length) {
+    item.tools.forEach(function (name) { tools.append(el("code", { text: "mcp__" + item.serverName + "__" + name })); });
+  } else {
+    tools.append(el("span", { class: "sub", text: "还没有工具。" }));
+  }
+  return el("div", { class: "field" },
+    el("span", { class: "legend", text: "工具" }),
+    tools
+  );
+}
+const importSample = [
+  "{",
+  "  \"mcpServers\": {",
+  "    \"filesystem\": {",
+  "      \"command\": \"npx\",",
+  "      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\"],",
+  "      \"envFile\": \".env\"",
+  "    },",
+  "    \"brave-search\": {",
+  "      \"type\": \"http\",",
+  "      \"url\": \"https://mcp.example/brave\",",
+  "      \"headers\": { \"Authorization\": \"Bearer ***\" }",
+  "    },",
+  "    \"legacy\": { \"type\": \"sse\", \"url\": \"https://example/sse\" },",
+  "    \"socket\": { \"type\": \"ws\", \"url\": \"wss://example/mcp\" },",
+  "    \"notion\": { \"oauth\": { \"clientId\": \"x\" } }",
+  "  }",
+  "}"
+].join("\n");
+state.importText = importSample;
+function secretNames(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.keys(value).map(function (name) {
+    return { name: name, set: typeof value[name] === "string" && value[name].length > 0 };
+  });
+}
+function parseImport(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return { error: "", rows: [] };
+  let data;
+  try { data = JSON.parse(raw); } catch (err) { return { error: "不是 JSON", rows: [] }; }
+  const table = data && data.mcpServers && typeof data.mcpServers === "object" ? data.mcpServers : data;
+  if (!table || typeof table !== "object" || Array.isArray(table)) return { error: "没有 mcpServers", rows: [] };
+  const rows = [];
+  const seen = {};
+  Object.keys(table).forEach(function (name) {
+    const entry = table[name];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      rows.push({ warn: true, text: name + " · 跳过：不是对象" });
+      return;
+    }
+    if (!/^[A-Za-z0-9_-]{1,32}$/.test(name)) {
+      rows.push({ warn: true, text: name + " · 跳过：名称不符合 serverName" });
+      return;
+    }
+    if (seen[name]) {
+      rows.push({ warn: true, text: name + " · 跳过：这份 JSON 里名称重复" });
+      return;
+    }
+    seen[name] = true;
+    if (nameClash(name)) {
+      rows.push({ warn: true, text: name + " · 跳过：已经配置过「" + name + "」，不会重复添加" });
+      return;
+    }
+    const type = String(entry.type || entry.transport || "").toLowerCase();
+    if (type === "sse") {
+      rows.push({ warn: true, text: name + " · sse · 跳过：DSH 没有旧版 SSE" });
+      return;
+    }
+    if (type === "ws" || type === "websocket") {
+      rows.push({ warn: true, text: name + " · ws · 跳过：DSH 没有 WebSocket" });
+      return;
+    }
+    if (type && type !== "http" && type !== "streamable-http" && type !== "stdio") {
+      rows.push({ warn: true, text: name + " · " + type + " · 跳过：DSH 不支持这种传输" });
+      return;
+    }
+    const http = type === "http" || type === "streamable-http";
+    const stdio = type === "stdio" || (!type && typeof entry.command === "string");
+    if (!http && !stdio) {
+      const oauth = entry.oauth || entry.auth;
+      rows.push({ warn: true, text: name + " · " + (oauth ? "oauth · 跳过：DSH 没有 OAuth" : "跳过：没有可识别的 type") });
+      return;
+    }
+    if (http) {
+      const server = serverSeed(name, "streamable-http", false, "disabled", [], {
+        url: typeof entry.url === "string" ? entry.url : "",
+        headers: secretNames(entry.headers)
+      });
+      const via = type === "http" ? "type http · 写成 streamable-http" : "streamable-http";
+      rows.push({ warn: false, server: server, text: name + " · " + via + " · 导入 url / headers，默认停用" });
+      return;
+    }
+    const args = Array.isArray(entry.args) ? entry.args.map(String) : (typeof entry.args === "string" ? [entry.args] : []);
+    const server = serverSeed(name, "stdio", false, "disabled", [], {
+      command: typeof entry.command === "string" ? entry.command : "",
+      args: args,
+      cwd: typeof entry.cwd === "string" ? entry.cwd : "",
+      env: secretNames(entry.env)
+    });
+    const dropped = entry.envFile ? "。envFile 丢掉，不读 .env" : "";
+    rows.push({ warn: false, server: server, text: name + " · stdio · 导入 command / args / env，默认停用" + dropped });
+  });
+  return { error: "", rows: rows };
+}
+function paintImportList(list, confirm) {
+  const plan = parseImport(state.importText);
+  const accepted = plan.rows.filter(function (row) { return row.server; }).length;
+  list.replaceChildren();
+  if (plan.error) list.append(el("li", { class: "warn", text: plan.error }));
+  plan.rows.forEach(function (row) {
+    list.append(el("li", { class: row.warn ? "warn" : "", text: row.text }));
+  });
+  confirm.textContent = "确认导入 " + accepted + " 台（仍停用）";
+  confirm.disabled = accepted === 0;
+}
+function importBox() {
+  if (!state.importOpen) return null;
+  const area = el("textarea", { class: "import-json", spellcheck: "false" });
+  area.value = state.importText;
+  const file = el("input", { type: "file", accept: "application/json,.json" });
+  file.style.display = "none";
+  file.addEventListener("change", function () {
+    const picked = file.files && file.files[0];
+    if (!picked) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      state.importText = String(reader.result || "");
+      render();
+    };
+    reader.readAsText(picked);
+  });
+  const list = el("ul", { class: "preview" });
+  const confirm = button("确认导入", "primary", acceptImport);
+  area.addEventListener("input", function () {
+    state.importText = area.value;
+    paintImportList(list, confirm);
+  });
+  paintImportList(list, confirm);
+  return el("div", null,
+    el("span", { class: "legend", text: "mcpServers JSON" }),
+    el("div", { class: "form-actions" },
+      button("选择 JSON 文件", "outline sm", function () { file.click(); }),
+      file
+    ),
+    area,
+    list,
+    el("div", { class: "form-actions" },
+      button("关闭", "outline", function () { state.importOpen = false; render(); }),
+      confirm
+    )
+  );
+}
+function acceptImport() {
+  const plan = parseImport(state.importText);
+  let added = 0;
+  plan.rows.forEach(function (row) {
+    if (!row.server || findServer(row.server.id)) return;
+    state.servers.push(row.server);
+    added += 1;
+  });
+  state.importOpen = false;
+  state.note = "已放入 " + added + " 台，默认停用。跳过的没有写入。";
+  render();
+}
+function confirmCopy(reason) {
+  if (reason === "save") return { title: "保存前确认 argv 变更", action: "确认并保存" };
+  if (reason === "restart") return { title: "重连前确认 argv", action: "确认并重连" };
+  return { title: "启用前确认 argv", action: "确认并启用" };
+}
+function cancelConfirm(item) {
+  if (state.confirm && state.confirm.reason !== "enable") revertLaunch(item);
+  state.confirm = null;
+  render();
+}
+function confirmDialog() {
+  if (!state.confirm) return null;
+  const item = findServer(state.confirm.id);
+  if (!item) return null;
+  const copy = confirmCopy(state.confirm.reason);
+  const ack = el("label", { class: "ack" });
+  const input = el("input", { type: "checkbox" });
+  input.checked = !!state.confirm.ack;
+  input.setAttribute("data-modal-autofocus", "true");
+  input.addEventListener("change", function () {
+    state.confirm.ack = input.checked;
+    render();
+  });
+  ack.append(input, el("span", { text: "我已核对上面的命令和 cwd" }));
+  return modal({
+    title: copy.title,
+    description: "每一行是一个 argv 元素。不会拼成 shell 命令，也不会按空格拆开。cwd 单独列出。",
+    body: [argvView(item), el("p", { class: "secret", text: "cwd · " + (item.cwd || "（未设置）") }), ack],
+    confirmLabel: copy.action,
+    confirmDisabled: !state.confirm.ack,
+    onCancel: function () { cancelConfirm(item); },
+    onConfirm: function () {
+      const reason = state.confirm.reason;
+      applyLaunch(item);
+      if (reason === "enable") {
+        item.enabled = true;
+        item.status = "unknown";
+        item.error = "";
+        state.note = "已确认 argv。原型不会真的启动。";
+      } else if (reason === "restart") {
+        state.note = "已确认 argv。原型不会真的重连。";
+      } else {
+        state.note = "已确认变更。原型不写入 profile。";
+      }
+      state.confirm = null;
+      render();
+    }
+  });
+}
+function saveServer(item) {
+  if (item.external) return;
+  const message = nameMessage(item);
+  if (message) { state.note = message; render(); return; }
+  item.serverName = serverNameOf(item);
+  if (item.enabled && launchChanged(item)) {
+    state.confirm = { id: item.id, reason: "save" };
+    render();
+    return;
+  }
+  applyLaunch(item);
+  state.note = item.transport === "stdio" && !item.enabled
+    ? "已保存。服务器仍停用，启用时会确认当时的 argv。"
+    : "已保存。原型不写入 profile。";
+  render();
+}
+function restartServer(item) {
+  if (item.enabled && launchChanged(item)) {
+    state.confirm = { id: item.id, reason: "restart" };
+    render();
+    return;
+  }
+  state.note = (item.serverName || "未命名") + "：原型里不会真的重连。";
+  render();
+}
+function addServer() {
+  const id = "draft-" + Math.random().toString(36).slice(2, 6);
+  state.servers.unshift(serverSeed(id, "stdio", false, "disabled", [], {}));
+  state.servers[0].serverName = "";
+  state.servers[0].id = id;
+  state.expanded = id;
+  state.configOpen = id;
+  state.note = "";
+  render();
+}
+function askDelete(item) {
+  if (item.external) return;
+  state.pendingDelete = item.id;
+  render();
+}
+function removeServer(item) {
+  if (!item || item.external) return;
+  state.servers = state.servers.filter(function (row) { return row.id !== item.id; });
+  if (state.expanded === item.id) state.expanded = "";
+  state.pendingDelete = null;
+  state.note = (item.serverName || "未命名") + " 已从列表移除。原型不写 profile。";
+  render();
+}
+function deleteDialog() {
+  if (!state.pendingDelete) return null;
+  const item = findServer(state.pendingDelete);
+  if (!item) return null;
+  const name = item.serverName || "未命名";
+  return modal({
+    title: "删除「" + name + "」？",
+    description: "删除后这台服务器会从列表里消失。",
+    confirmLabel: "删除",
+    danger: true,
+    onCancel: function () { state.pendingDelete = null; render(); },
+    onConfirm: function () { removeServer(item); }
+  });
+}
+function pluginHead() {
+  return el("div", null,
+    button("‹ 插件", "crumb", function () { state.note = "返回插件列表。原型停在详情页。"; render(); }),
+    el("div", { class: "head" },
+      el("div", { class: "mark", text: "M" }),
+      el("div", { class: "titles" },
+        el("h1", null, "dsh-mcp-manager", el("span", { class: "ver", text: "0.0.0-prototype" })),
+        el("div", { class: "pkg" }, el("code", { text: "dsh-mcp-manager" }), " · web profile"),
+        el("p", { class: "desc", text: "管理这个 profile 里的 MCP 服务器。协议仍由官方 dsh-mcp-client 连接。" })
+      ),
+      el("div", { class: "head-side sub", text: "插件已启用" })
+    ),
+    state.note ? el("p", { class: "sub", text: state.note }) : null
+  );
+}
+function viewList() {
+  const enabled = state.servers.filter(function (item) { return item.enabled; }).length;
+  const list = el("div", { class: "server-list" });
+  state.servers.forEach(function (item) {
+    const open = state.expanded === item.id;
+    const summary = el("button", { class: "disclosure", type: "button" });
+    summary.setAttribute("aria-expanded", open ? "true" : "false");
+    const name = el("span", { class: "name", text: item.serverName || "未命名" });
+    if (item.external) name.append(el("span", { class: "tag", text: "外部" }));
+    summary.append(
+      el("span", { class: "who" }, name, el("span", { class: "sub", text: item.transport })),
+      statusNode(item),
+      toolLine(item)
+    );
+    summary.addEventListener("click", function () { toggleRow(item, open); });
+    const remove = button("删除", "danger sm", function () { askDelete(item); }, item.external);
+    if (item.external) remove.title = "外部配置不能在这里删除";
+    const fold = el("button", { class: "fold", type: "button", "aria-label": open ? "收起" : "展开" });
+    fold.setAttribute("aria-expanded", open ? "true" : "false");
+    fold.append(el("span", { class: "chevron" }, chevron()));
+    fold.addEventListener("click", function (event) {
+      event.stopPropagation();
+      toggleRow(item, open);
+    });
+    const row = el("div", { class: open ? "server open" : "server" }, el("div", { class: "summary-wrap" }, summary, remove, toggle(item), fold));
+    if (open) row.append(el("div", { class: "expand" }, toolsField(item), configSection(item)));
+    list.append(row);
+  });
+  const page = el("div", { class: "page" },
+    pluginHead(),
+    el("div", { class: "toolbar" },
+      button(t("add"), "primary", addServer),
+      button(t("import"), "outline", function () { state.importOpen = !state.importOpen; render(); }),
+      el("span", { class: "spacer" }),
+      el("span", { class: "count", text: t("count", { total: state.servers.length, enabled: enabled }) })
+    ),
+    importBox(),
+    list
+  );
+  const dialog = confirmDialog() || deleteDialog();
+  if (dialog) page.append(dialog);
+  return page;
+}
+function snapshot(extra) {
+  return Object.assign({
+    expanded: state.expanded,
+    confirm: state.confirm ? state.confirm.reason : null,
+    importOpen: state.importOpen,
+    servers: state.servers.map(function (item) {
+      return {
+        serverName: item.serverName,
+        transport: item.transport,
+        enabled: item.enabled,
+        status: item.status,
+        external: item.external,
+        args: item.args,
+        cwd: item.cwd || "",
+        env: (item.env || []).map(function (row) { return { name: row.name, set: !!row.set }; }),
+        headers: (item.headers || []).map(function (row) { return { name: row.name, set: !!row.set }; }),
+        launchChanged: launchChanged(item)
+      };
+    })
+  }, extra || {});
+}
+function toolLine(item) {
+  const line = el("span", { class: "tool-line" });
+  line.setAttribute("data-tool-line", "");
+  item.tools.forEach(function (name) {
+    const chip = el("code", { text: name, title: "mcp__" + (item.serverName || "server") + "__" + name });
+    chip.setAttribute("data-chip", "");
+    line.append(chip);
+  });
+  const more = el("button", { class: "tool-more", type: "button", text: "更多" });
+  more.hidden = true;
+  more.setAttribute("data-more", "");
+  const menu = el("span", { class: "more-menu" });
+  menu.hidden = true;
+  menu.setAttribute("data-more-menu", "");
+  more.addEventListener("click", function (event) {
+    event.stopPropagation();
+    state.expanded = item.id;
+    state.configOpen = "";
+    render();
+  });
+  menu.addEventListener("click", function (event) { event.stopPropagation(); });
+  line.append(more, menu);
+  return line;
+}
+function fitTools() {
+  document.querySelectorAll("[data-tool-line]").forEach(function (line) {
+    const more = line.querySelector("[data-more]");
+    const menu = line.querySelector("[data-more-menu]");
+    const chips = Array.from(line.querySelectorAll("[data-chip]"));
+    const menuOpen = menu && !menu.hidden;
+    chips.forEach(function (chip) { chip.hidden = false; });
+    if (more) more.hidden = true;
+    if (!chips.length || line.scrollWidth <= line.clientWidth + 1) {
+      if (menu) menu.replaceChildren();
+      return;
+    }
+    more.hidden = false;
+    const hidden = [];
+    for (let i = chips.length - 1; i >= 0; i -= 1) {
+      if (line.scrollWidth <= line.clientWidth + 1) break;
+      chips[i].hidden = true;
+      hidden.unshift(chips[i].textContent);
+    }
+    if (menu && !menuOpen) {
+      menu.replaceChildren.apply(menu, hidden.map(function (name) { return el("code", { text: name }); }));
+    }
+  });
+}
+function toggleRow(item, open) {
+  if (open) {
+    state.expanded = "";
+    if (state.configOpen === item.id) state.configOpen = "";
+  } else {
+    state.expanded = item.id;
+    state.configOpen = "";
+  }
+  render();
+}
+function configSection(item) {
+  const editing = state.configOpen === item.id;
+  const head = el("button", { class: "config-fold", type: "button" });
+  head.setAttribute("aria-expanded", editing ? "true" : "false");
+  head.append(el("span", { class: "chevron" }, chevron()), "编辑连接");
+  head.addEventListener("click", function () {
+    state.configOpen = editing ? "" : item.id;
+    render();
+  });
+  const box = el("div", null, head);
+  if (!editing) return box;
+  if (item.enabled && launchChanged(item)) box.append(el("p", { class: "warn", text: "command、args 或 cwd 已改。保存或重连前会先确认。" }));
+  box.append(
+    fields(item),
+    el("div", { class: "form-actions" },
+      button("重启", "outline", function () { restartServer(item); }),
+      button("删除", "danger sm", function () { askDelete(item); }, item.external),
+      button("保存", "primary", function () { saveServer(item); }, item.external)
+    )
+  );
+  return box;
+}
+function paintDump(extra) {
+  document.getElementById("dump").textContent = JSON.stringify(snapshot(extra), null, 2);
+}
+function render() {
+  disarmModal();
+  document.body.dataset.theme = state.theme;
+  document.documentElement.lang = state.locale;
+  document.getElementById("locale").textContent = state.locale;
+  document.getElementById("app").replaceChildren(viewList());
+  document.getElementById("label").innerHTML = "列表展开<small>点一行，在下面编辑。没有侧边抽屉。</small>";
+  paintDump();
+  requestAnimationFrame(fitTools);
+}
+document.addEventListener("click", function () {
+  document.querySelectorAll("[data-more-menu]").forEach(function (menu) { menu.hidden = true; });
+});
+window.addEventListener("resize", fitTools);
+document.getElementById("locale").addEventListener("click", function () {
+  const index = locales.indexOf(state.locale);
+  state.locale = locales[(index + 1) % locales.length];
+  render();
+});
+document.getElementById("theme").addEventListener("click", function () {
+  state.theme = state.theme === "light" ? "dark" : "light";
+  render();
+});
+render();
+
+</script>
+</body>
+</html>

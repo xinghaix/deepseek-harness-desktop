@@ -1,0 +1,4 @@
+# Manager UI only. MCP servers are separate official config bundles.
+- insert:
+    - id: dsh-mcp-manager
+      name: dsh-mcp-manager
