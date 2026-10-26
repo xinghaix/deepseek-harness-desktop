@@ -261,4 +261,11 @@ func (d *Service) rebuildApplicationMenu() {
 	}
 	app.Menu.SetApplicationMenu(ApplicationMenu(app, d))
 	d.refreshTrayMenu()
+	// 语言变化时同步刷新已打开窗口中非 macOS 悬浮窗控按钮的提示文案
+	script := desktopChromeTitlesSyncJS()
+	for _, name := range []string{setupWindowName, configWindowName, chatWindowName} {
+		if w, ok := app.Window.GetByName(name); ok && w != nil {
+			w.ExecJS(script)
+		}
+	}
 }

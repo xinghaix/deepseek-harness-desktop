@@ -394,7 +394,20 @@ window.__ModuleLoader__.load({
 			const changed = next !== localeCode;
 			localeCatalog = catalog;
 			localeCode = next;
-			if (typeof window !== "undefined") window[LOCALE_BUNDLE_GLOBAL] = { locale: localeCode, catalog };
+			if (typeof window !== "undefined") {
+				window[LOCALE_BUNDLE_GLOBAL] = { locale: localeCode, catalog };
+				// 同步更新非 macOS 页面内悬浮窗控按钮的提示文案
+				if (typeof window.__DSH_DESKTOP_SET_CHROME_TITLES__ === "function") {
+					try {
+						window.__DSH_DESKTOP_SET_CHROME_TITLES__({
+							settings: catalog["chrome.open_settings"],
+							minimize: catalog["chrome.minimize"],
+							maximize: catalog["chrome.maximize"],
+							close: catalog["chrome.close"]
+						});
+					} catch (_) {}
+				}
+			}
 			if (!changed) return true;
 			for (const handler of [...localeChangeHandlers]) {
 				try { handler(localeCode); } catch (_) { /* one bad listener must not break i18n */ }
@@ -656,41 +669,6 @@ window.__ModuleLoader__.load({
 				text + " { display: block !important; min-width: 0 !important; font-size: .86rem !important; white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; line-height: 1.45 !important; color: var(--dsw-alias-text-primary, inherit) !important; }",
 				overlay + ":focus-visible { outline: 2px solid color-mix(in srgb, var(--dsw-alias-accent, #4f8cff) 70%, transparent) !important; outline-offset: 2px !important; }",
 			].join("\n");
-		}
-		const COMPOSER_COMPACT_ATTR = "data-dsh-desktop-composer-compact";
-		function clearComposerCompactMarks(scope) {
-			const root = scope || (typeof document !== "undefined" ? document : null);
-			if (!root || typeof root.querySelectorAll !== "function") return;
-			for (const el of root.querySelectorAll("[" + COMPOSER_COMPACT_ATTR + "]")) {
-				if (typeof el.removeAttribute === "function") el.removeAttribute(COMPOSER_COMPACT_ATTR);
-			}
-		}
-		function markComposerCompact() {
-			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
-			clearComposerCompactMarks(document);
-			const scroll = conversationScrollRoot();
-			const candidates = [];
-			const areas = document.querySelectorAll("textarea, [contenteditable='true']");
-			for (const area of areas) {
-				if (!area) continue;
-				let host = area.parentElement;
-				for (let depth = 0; host && depth < 6; depth += 1, host = host.parentElement) {
-					if (!host || host === document.body || host === document.documentElement) break;
-					if (scroll && (host === scroll || (typeof scroll.contains === "function" && scroll.contains(host)))) continue;
-					const rect = typeof host.getBoundingClientRect === "function" ? host.getBoundingClientRect() : null;
-					if (!rect) continue;
-					const vh = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 800;
-					const height = Number(rect.height) || Math.max(0, Number(rect.bottom) - Number(rect.top)) || 0;
-					const width = Number(rect.width) || Math.max(0, Number(rect.right) - Number(rect.left)) || 0;
-					if (Number(rect.bottom) >= vh - 48 && height > 40 && height < vh * 0.55) {
-						candidates.push({ host, score: width * (1 / Math.max(1, vh - Number(rect.top) || 0)) });
-						break;
-					}
-				}
-			}
-			candidates.sort((a, b) => b.score - a.score);
-			const pick = candidates[0] && candidates[0].host;
-			if (pick && typeof pick.setAttribute === "function") pick.setAttribute(COMPOSER_COMPACT_ATTR, "");
 		}
 		function setHoverMessageActionsAttr(enabled) {
 			const root = typeof document === "undefined" ? null : document.documentElement;
@@ -993,29 +971,53 @@ window.__ModuleLoader__.load({
 			if (candidate && visible.some(({ node }) => node === candidate)) return null;
 			return candidate;
 		}
-		// The card must never cover the Chat composer, so the composer's top edge is the floor
-		// for the card height. Walking up a few levels keeps its padding and toolbar in view.
-		function composerTopEdge() {
-			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
+		// 悬浮卡片绝不能遮挡底部 Chat 输入框：向上查找输入框外层包裹盒的上沿，
+		// 同时排除对话流内部的行内消息编辑框以及占满对话区的外层布局容器。
+		function composerLayout(scrollRoot) {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") {
+				return { top: null, hosts: [] };
+			}
+			const root = scrollRoot || conversationScrollRoot();
+			const pane = conversationPaneRoot(root);
+			const rootRect = root && typeof root.getBoundingClientRect === "function" ? root.getBoundingClientRect() : null;
+			const rootTop = rootRect ? Number(rootRect.top) || 0 : 0;
+			const vh = typeof window !== "undefined" && Number(window.innerHeight) > 0 ? Number(window.innerHeight) : 0;
 			let edge = Infinity;
+			const hosts = [];
 			for (const area of document.querySelectorAll("textarea, [contenteditable='true']")) {
-				if (!area) continue;
-				// The composer is a wrapper around the field, so take the topmost usable box within
-				// a few levels rather than trusting the field element alone.
+				if (!area || isPromptOverlayNode(area)) continue;
+				// 排除对话滚动容器内部的行内编辑框（如编辑历史消息时的 textarea）
+				if (root && (area === root || (typeof root.contains === "function" && root.contains(area)))) continue;
+				if (!promptHasRenderableArea(area)) continue;
 				let candidate = Infinity;
+				let hostNode = null;
 				let node = area;
 				for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+					if (node === document.body || node === document.documentElement || node === root || node === pane) break;
+					// 若祖先节点已包含对话滚动区，说明已到达外层列/面板容器，停止继续向上合并
+					if (root && typeof node.contains === "function" && node.contains(root)) break;
 					if (typeof node.getBoundingClientRect !== "function") continue;
 					const rect = node.getBoundingClientRect();
 					if (!rect) continue;
 					const boxTop = Number(rect.top);
-					// Derive the height from the edges: an element with no box has top === bottom.
 					const boxHeight = Number(rect.height) || Number(rect.bottom) - Number(rect.top);
-					if (Number.isFinite(boxTop) && Number.isFinite(boxHeight) && boxHeight > 0) candidate = Math.min(candidate, boxTop);
+					if (!Number.isFinite(boxTop) || !Number.isFinite(boxHeight) || !(boxHeight > 0)) continue;
+					if (rootTop > 0 && boxTop <= rootTop + PROMPT_OVERLAY_EPSILON) break;
+					if (vh > 0 && boxHeight >= vh * 0.75) break;
+					if (boxTop <= candidate) {
+						candidate = boxTop;
+						hostNode = node;
+					}
 				}
-				if (Number.isFinite(candidate)) edge = Math.min(edge, candidate);
+				if (Number.isFinite(candidate)) {
+					edge = Math.min(edge, candidate);
+					if (hostNode) hosts.push(hostNode);
+				}
 			}
-			return Number.isFinite(edge) ? edge : null;
+			return { top: Number.isFinite(edge) ? edge : null, hosts };
+		}
+		function composerTopEdge(scrollRoot) {
+			return composerLayout(scrollRoot).top;
 		}
 		// DSH owns the older-history control. Find it structurally instead of matching one locale's
 		// label, so the overlay can reserve its lane without replacing or duplicating the native UI.
@@ -1024,6 +1026,7 @@ window.__ModuleLoader__.load({
 			const buttons = typeof root.querySelectorAll === "function"
 				? root.querySelectorAll("button")
 				: (typeof document.querySelectorAll === "function" ? document.querySelectorAll("button") : []);
+			const localizedOlder = normalizePreviewText(t("bridge.overlay_load_older"));
 			for (const button of buttons) {
 				if (!button || isPromptOverlayNode(button)) continue;
 				let parent = button.parentElement;
@@ -1031,7 +1034,8 @@ window.__ModuleLoader__.load({
 					if (hasPreviewClass(parent, "older") || parent.hasAttribute?.("data-chat-load-older")) return button;
 				}
 				const label = normalizePreviewText(button.textContent || button.innerText || "");
-				if (/load\s+older|加载更早/i.test(label)) return button;
+				if (localizedOlder && label === localizedOlder) return button;
+				if (/load\s+older|加载更早|ältere\s+laden|charger\s+les\s+plus\s+anciens|cargar\s+anteriores|さらに読み込む|過去のメッセージを読み込む|이전\s*내용\s*불러오기|더\s*불러오기|carregar\s+anteriores/i.test(label)) return button;
 			}
 			return null;
 		}
@@ -1044,7 +1048,15 @@ window.__ModuleLoader__.load({
 			const buttonLeft = Number(rect.left);
 			const buttonRight = Number(rect.right);
 			if (!(buttonBottom > buttonTop) || !Number.isFinite(buttonBottom) || !Number.isFinite(buttonTop)) return false;
-			if (buttonBottom <= Number(rootRect.top) || buttonTop >= floor) return false;
+			const overlayTop = Number.isFinite(Number(top)) ? Number(top) : (Number(rootRect?.top) || 0);
+			// 仅当原生“加载更早”按钮进入顶部悬浮窗可覆盖范围（含附件与顶部保护带）时才视为遭遇，
+			// 避免按钮在视口中下部、未与顶部悬浮窗重叠时提前触发常驻高亮。
+			const maxCardSpan = promptOverlayMaxLines() * PROMPT_OVERLAY_LINE_FALLBACK
+				+ PROMPT_OVERLAY_CHROME_PX
+				+ PROMPT_OVERLAY_THUMB_H * PROMPT_OVERLAY_MEDIA_ROWS
+				+ PROMPT_OVERLAY_TOP_PROTECTION_PX;
+			const encounterCeiling = Math.min(floor, overlayTop + maxCardSpan);
+			if (buttonBottom <= overlayTop || buttonTop >= encounterCeiling) return false;
 			return buttonRight > left && buttonLeft < left + width;
 		}
 		function computeOverlayMetrics(root, node) {
@@ -1114,7 +1126,9 @@ window.__ModuleLoader__.load({
 			width = clamped.width;
 			const maxWidth = Math.max(1, paneBox.width - inset * 2);
 			const viewportHeight = typeof window !== "undefined" && Number(window.innerHeight) > 0 ? Number(window.innerHeight) : Math.max(1, Number(rootRect.bottom) || 1);
-			const composer = composerTopEdge();
+			const composerInfo = composerLayout(root);
+			const composer = composerInfo.top;
+			for (const hostNode of composerInfo.hosts) observeExtras.push(hostNode);
 			const floor = composer !== null && composer > top ? composer : viewportHeight;
 			const encounterOlder = isOfficialLoadOlderEncountered(root, rootRect, left, width, top, floor);
 			const availHeight = Math.max(1, floor - top - 8);
@@ -1150,7 +1164,8 @@ window.__ModuleLoader__.load({
         // (the image IS the content) or a file card (the image is just a type icon).
         // Upstream action labels, in the languages DSH ships. Used only to decide whether a
         // media-wrapping control is a message action or an attachment.
-        const PREVIEW_ACTION_LABEL = /复制|复制全文|编辑|重试|重新生成|分支|删除|撤销|copy|edit|retry|regenerate|branch|delete|undo|duplicate/i;
+        // 覆盖全部 8 种支持语言的原生操作按钮文案，用于区分消息操作按钮与图片/文件附件
+        const PREVIEW_ACTION_LABEL = /复制|复制全文|编辑|重试|重新生成|分支|删除|撤销|copy|edit|retry|regenerate|branch|delete|undo|duplicate|kopieren|bearbeiten|wiederholen|neu\s+generieren|zweig|abzweigen|löschen|rückgängig|copier|modifier|réessayer|régénérer|branche|bifurquer|supprimer|annuler|copiar|editar|reintentar|regenerar|rama|bifurcar|eliminar|deshacer|コピー|編集|再試行|再生成|ブランチ|分岐|削除|元に戻す|복사|편집|재시도|다시\s*생성|브랜치|분기|삭제|실행\s*취소|tentar\s+novamente|ramificar|excluir|desfazer/i;
         const PREVIEW_IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|svg|heic|tiff?)(?![a-z0-9])/i;
         const PREVIEW_FILE_EXT = /\.(pdf|docx?|xlsx?|pptx?|csv|tsv|zip|tar|gz|rar|7z|txt|md|json|ya?ml|go|ts|tsx|js|jsx|py|rs|rb|java|c|cpp|h|sh|sql|log|mp4|mov|webm|m4v|mp3|wav|m4a|flac)(?![a-z0-9])/i;
         function previewAttr(node, name) {
@@ -1275,13 +1290,15 @@ window.__ModuleLoader__.load({
             // otherwise two different turns with identical wording could be mistaken for one.
             if (sourceTurn !== null) return Number.isSafeInteger(turn) && sourceTurn === turn;
             const expected = normalizedPromptIdentity(entry.prompt);
-            if (expected.length < 8) return false;
+            if (!expected) return false;
             const actual = normalizedPromptIdentity(collectPromptPreviewParts(source)
                 .filter((part) => part.kind === "text")
                 .map((part) => part.value)
                 .join(" "));
             if (!actual) return false;
+            // 完整文本精确相等时无需 8 字符门槛（否则“继续”“看下报错”等短提示词会漏配并重复悬浮）
             if (actual === expected) return true;
+            if (expected.length < 8) return false;
             const prefix = expected.slice(0, Math.min(64, expected.length)).replace(/[.…]+$/, "").trim();
             return prefix.length >= 8 && actual.includes(prefix);
         }
@@ -1390,8 +1407,10 @@ window.__ModuleLoader__.load({
         // native re-render does not look like a different control. The ordinal keeps two
         // same-labeled controls apart: without it, clicking one copy paints a check on both.
         function canonicalActionLabel(node) {
+            const actionAttr = previewAttr(node, "data-action") || previewAttr(node, "data-operation");
+            if (/^copy$/i.test(actionAttr)) return "copy";
             const raw = previewAttr(node, "aria-label") || previewAttr(node, "title") || operationLabel(node);
-            return isCopyOperation(raw) ? "copy" : raw;
+            return isCopyOperation(raw, node) ? "copy" : raw;
         }
         function operationSignature(node, source) {
             for (const name of ["data-action", "data-operation", "data-testid"]) {
@@ -1412,18 +1431,19 @@ window.__ModuleLoader__.load({
             const key = aria ? "aria-label" : title ? "title" : "text";
             return key + ":" + label + "#" + ordinal;
         }
-        // Whether a native action is the copy control. Used to hide copy on an attachment-only
-        // prompt: there is no text to copy, and official Chat does not offer it there either.
-        function isCopyOperation(label) {
-            return /复制|copy/i.test(String(label || ""));
+        // 识别全部 8 种支持语言下的“复制”操作（以及显式的 data-action="copy"）
+        function isCopyOperation(label, node) {
+            const actionAttr = node ? (previewAttr(node, "data-action") || previewAttr(node, "data-operation")) : "";
+            if (/^copy$/i.test(actionAttr)) return true;
+            return /复制|copy|kopieren|copier|copiar|コピー|복사/i.test(String(label || ""));
         }
-        function actionGlyph(label) {
+        function actionGlyph(label, node) {
             // Copy is drawn with the official Chat path; the rest keep a text glyph because no
             // official path was extracted for them, and a wrong drawing is worse than a plain one.
-            if (isCopyOperation(label)) return { path: PROMPT_OVERLAY_ICON_COPY, text: "⧉" };
-            if (/编辑|edit/i.test(label)) return { path: "", text: "✎" };
-            if (/重试|重新生成|retry|regenerate/i.test(label)) return { path: "", text: "↻" };
-            if (/分支|branch/i.test(label)) return { path: "", text: "⑂" };
+            if (isCopyOperation(label, node)) return { path: PROMPT_OVERLAY_ICON_COPY, text: "⧉" };
+            if (/编辑|edit|bearbeiten|modifier|editar|編集|편집/i.test(label)) return { path: "", text: "✎" };
+            if (/重试|重新生成|retry|regenerate|wiederholen|neu\s+generieren|réessayer|régénérer|reintentar|regenerar|再試行|再生成|재시도|다시\s*생성|tentar\s+novamente/i.test(label)) return { path: "", text: "↻" };
+            if (/分支|branch|zweig|abzweigen|branche|bifurquer|rama|bifurcar|ブランチ|分岐|브랜치|분기|ramificar/i.test(label)) return { path: "", text: "⑂" };
             return { path: "", text: "⋯" };
         }
         // One filled official path inside a 16x16 viewBox. createElementNS (not innerHTML) because
@@ -1530,7 +1550,9 @@ window.__ModuleLoader__.load({
             if (parts.some((p) => p.kind === "text" && /[.…]{2,}$/.test(p.value))) return true;
             const text = normalizePreviewText(source.textContent || "");
             if (/[.…]{2,}$/.test(text)) return true;
-            if (state && state.body) {
+            // 仅当 state.body 属于当前正在渲染的同一条提示词时，才参考其滚动容器的溢出测量结果，
+            // 避免从上一条溢出长提示词切换到短提示词时误读旧 body 的 more-below 状态。
+            if (state && state.body && state.source === source) {
                 if (typeof state.body.hasAttribute === "function" && state.body.hasAttribute(PROMPT_OVERLAY_MORE_BELOW_ATTR)) return true;
                 const scrollH = Number(state.body.scrollHeight) || 0;
                 const clientH = Number(state.body.clientHeight) || 0;
@@ -1562,7 +1584,7 @@ window.__ModuleLoader__.load({
             // re-introduce it just because the official strip happened to be rendered.
             const hasText = !(state && state.hasText === false);
             const controls = collectNativeOperationControls(source)
-                .filter((target) => hasText || !isCopyOperation(operationLabel(target)));
+                .filter((target) => hasText || !isCopyOperation(operationLabel(target), target));
             const showOlder = shouldShowLoadOlder(source, state);
             if (!times.length && !controls.length && !showOlder) return null;
             const toolbar = document.createElement("div");
@@ -1577,7 +1599,10 @@ window.__ModuleLoader__.load({
                 const glyphNode = promptGlyphNode(PROMPT_OVERLAY_ICON_LOAD_OLDER);
                 if (glyphNode) olderBtn.appendChild(glyphNode);
                 const span = document.createElement("span");
-                span.textContent = t("bridge.overlay_load_older");
+                // 若点击“加载更早”后因上游 DOM 变更触发了工具栏重建，在加载窗口内保持禁用与 loading 文案
+                const loadingStillActive = Boolean(state && Number(state.loadOlderUntil) > Date.now());
+                span.textContent = t(loadingStillActive ? "bridge.overlay_loading" : "bridge.overlay_load_older");
+                if (loadingStillActive) olderBtn.disabled = true;
                 olderBtn.appendChild(span);
                 olderBtn.addEventListener("click", (event) => {
                     event.preventDefault?.();
@@ -1585,6 +1610,8 @@ window.__ModuleLoader__.load({
                     if (olderBtn.disabled) return;
                     olderBtn.disabled = true;
                     span.textContent = t("bridge.overlay_loading");
+                    const until = Date.now() + 1200;
+                    if (state) state.loadOlderUntil = until;
                     try {
                         if (typeof state?.onLoadOlder === "function") {
                             state.onLoadOlder();
@@ -1597,8 +1624,13 @@ window.__ModuleLoader__.load({
                         }
                     } catch (_) {}
                     setTimeout(() => {
-                        olderBtn.disabled = false;
-                        span.textContent = t("bridge.overlay_load_older");
+                        if (state && state.loadOlderUntil === until) state.loadOlderUntil = 0;
+                        const currentBtn = state?.toolbar?.querySelector?.("[" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]") || olderBtn;
+                        if (currentBtn) {
+                            currentBtn.disabled = false;
+                            const labelSpan = currentBtn.querySelector?.("span") || span;
+                            if (labelSpan) labelSpan.textContent = t("bridge.overlay_load_older");
+                        }
                     }, 1200);
                 });
                 toolbar.appendChild(olderBtn);
@@ -1625,13 +1657,13 @@ window.__ModuleLoader__.load({
                 button.setAttribute("aria-label", label);
                 const signature = operationSignature(target, source);
                 button.setAttribute(PROMPT_OVERLAY_ACTION_KEY_ATTR, signature);
-                const confirmLabel = isCopyOperation(label) ? t("bridge.overlay_copied") : "";
+                const confirmLabel = isCopyOperation(label, target) ? t("bridge.overlay_copied") : "";
                 // A rebuilt card must keep showing a confirmation that is still within its window.
                 if (confirmLabel && promptActionConfirmed(signature)) {
                     button.setAttribute(PROMPT_OVERLAY_ACTION_DONE_ATTR, confirmLabel);
                     setActionGlyph(button, { path: PROMPT_OVERLAY_ICON_CHECK, text: "✓" });
                 } else {
-                    setActionGlyph(button, actionGlyph(label));
+                    setActionGlyph(button, actionGlyph(label, target));
                 }
                 const showHint = () => {
                     // Read the label at hover time so a confirmation replaces the action name.
@@ -1781,7 +1813,13 @@ window.__ModuleLoader__.load({
             body.setAttribute(PROMPT_OVERLAY_BODY_ATTR, "");
             // Bound here rather than in the caller: every rebuild creates a new body, so the
             // listener has to travel with the element.
-            body.addEventListener?.("scroll", () => syncOverlayFade(body));
+            body.addEventListener?.("scroll", () => {
+                syncOverlayFade(body);
+                if (state && state.body === body) {
+                    syncToolbarOlderState(state, overlayPointerResting(state.host));
+                    positionOverlayStrip(state);
+                }
+            });
             content.appendChild(body);
             const parts = collectPromptPreviewParts(source);
             const mediaParts = parts.filter((part) => part.kind === "media");
@@ -1861,10 +1899,16 @@ window.__ModuleLoader__.load({
             // The action strip is a SIBLING of the scrolling body, absolutely placed on the last
             // line of the card: it must not scroll with the text, and it must not reserve a row.
             // hasText tells it whether this prompt carries any copyable text at all.
-            const toolbar = createPromptToolbar(source, Object.assign({
+            if (state) {
+                state.proxyDescriptors = [];
+                state.hasText = textParts.length > 0;
+                state.body = body;
+            }
+            const toolbar = createPromptToolbar(source, state || {
                 proxyDescriptors: [],
                 hasText: textParts.length > 0,
-            }, state || {}));
+                body,
+            });
             const extra = attachmentRows * rowHeight
                 + Math.max(0, attachmentRows - 1) * PROMPT_OVERLAY_THUMB_GAP
                 + (attachmentRows ? PROMPT_OVERLAY_THUMB_GAP + PROMPT_OVERLAY_BLOCK_PAD : 0);
@@ -1892,12 +1936,17 @@ window.__ModuleLoader__.load({
 			if (state.host.parentNode && typeof state.host.parentNode.removeChild === "function") state.host.parentNode.removeChild(state.host);
 			state.host = null;
 			state.content = null;
+			state.body = null;
 			state.toolbar = null;
 			state.source = null;
 			state.widthTarget = null;
 			state.widthObserve = [];
 			state.attachmentLayout = null;
 			state.proxyDescriptors = [];
+			state.isLongDisplay = false;
+			state.hasOlderAction = false;
+			state.encounterOlder = false;
+			state.loadOlderUntil = 0;
 		}
 		// Fade the last visible line only while there is more to scroll to. Hiding it at the
 		// bottom matters: a permanent fade would keep suggesting content that is no longer there.
@@ -1991,6 +2040,30 @@ window.__ModuleLoader__.load({
 			if (typeof strip.style.setProperty === "function") strip.style.setProperty("top", value, "important");
 			else strip.style.top = value;
 		}
+		// 仅在“加载更早”按钮显隐或顶部遭遇状态变化时局部同步工具栏与常驻属性，
+		// 避免因跨过顶部边界而整卡重建 content/body 及图片缩略图。
+		function syncToolbarOlderState(state, preserveStripMotion) {
+			if (!state || !state.source || !state.host) return;
+			const resolvedShowOlder = shouldShowLoadOlder(state.source, state);
+			if (resolvedShowOlder !== Boolean(state.hasOlderAction)) {
+				state.hasOlderAction = resolvedShowOlder;
+				state.proxyDescriptors = [];
+				if (state.toolbar && state.toolbar.parentNode === state.host) {
+					state.host.removeChild(state.toolbar);
+				}
+				state.toolbar = createPromptToolbar(state.source, state);
+				if (state.toolbar) {
+					state.host.appendChild(state.toolbar);
+					if (preserveStripMotion && typeof state.toolbar.setAttribute === "function") {
+						state.toolbar.setAttribute(PROMPT_OVERLAY_STRIP_SETTLED_ATTR, "");
+					}
+				}
+			}
+			const resolvedLongDisplay = Boolean(state.encounterOlder && state.hasOlderAction);
+			state.isLongDisplay = resolvedLongDisplay;
+			if (resolvedLongDisplay) state.host.setAttribute(PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR, "");
+			else if (typeof state.host.removeAttribute === "function") state.host.removeAttribute(PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR);
+		}
 		function setStickyPrompt(next, root, state) {
 			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function" || !state) return;
 			for (const host of document.querySelectorAll("[" + PROMPT_OVERLAY_ATTR + "]")) {
@@ -2022,17 +2095,6 @@ window.__ModuleLoader__.load({
 			state.widthObserve = Array.isArray(metrics?.widthObserve) ? metrics.widthObserve.filter(Boolean) : [];
 			const encounterOlder = Boolean(metrics?.encounterOlder);
 			state.encounterOlder = encounterOlder;
-			const showOlder = shouldShowLoadOlder(next, state);
-			state.hasOlderAction = showOlder;
-			const isLongDisplay = Boolean(encounterOlder && showOlder);
-			if (Boolean(state.isLongDisplay) !== isLongDisplay) {
-				state.isLongDisplay = isLongDisplay;
-				state.needsRefresh = true;
-			}
-			if (state.host) {
-				if (state.isLongDisplay) state.host.setAttribute(PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR, "");
-				else if (typeof state.host.removeAttribute === "function") state.host.removeAttribute(PROMPT_OVERLAY_ENCOUNTER_OLDER_ATTR);
-			}
 			// A locale, line-budget or width change must also re-render the card body.
 			const locale = currentLocale();
 			const maxLines = promptOverlayMaxLines();
@@ -2045,6 +2107,8 @@ window.__ModuleLoader__.load({
 			const preserveStripMotion = state.source === next && state.toolbar && overlayPointerResting(state.host);
 			if (state.source !== next || state.needsRefresh || !state.content || state.locale !== locale || state.maxLines !== maxLines || widthChanged) {
 				restoreScrollTop = state.source === next ? Number(state.body?.scrollTop) || 0 : 0;
+				// 切换消息源时先清空旧 body 引用，避免构建新工具栏时误读上一条提示词的溢出属性
+				if (state.source !== next) state.body = null;
 				clearElementChildren(state.host);
 				state.source = next;
 				const built = buildPromptPreview(next, state, metrics);
@@ -2052,6 +2116,7 @@ window.__ModuleLoader__.load({
 				state.body = built && built.body ? built.body : null;
 				state.toolbar = built && built.toolbar ? built.toolbar : null;
 				state.extra = built ? built.extra || 0 : 0;
+				state.hasOlderAction = Boolean(state.toolbar && state.toolbar.querySelector?.("[" + PROMPT_OVERLAY_LOAD_OLDER_ATTR + "]"));
 				if (state.content) state.host.appendChild(state.content);
 				// The toolbar is a sibling of the body, not a child, so it never scrolls with it.
 				if (state.toolbar) state.host.appendChild(state.toolbar);
@@ -2069,6 +2134,7 @@ window.__ModuleLoader__.load({
 			// After the size lands: reading the scroller's geometry before this would measure the
 			// previous frame's box.
 			syncOverlayFade(state.body);
+			syncToolbarOlderState(state, preserveStripMotion);
 			// Same reason: the strip is centred on a measured line box, so it can only be placed
 			// once the card has its final width and height.
 			positionOverlayStrip(state);
@@ -2108,8 +2174,9 @@ window.__ModuleLoader__.load({
 				return "";
 			})();
 			const state = {
-				host: null, content: null, toolbar: null, extra: 0, maxLines: 0, source: null,
+				host: null, content: null, body: null, toolbar: null, extra: 0, maxLines: 0, source: null,
 				proxyDescriptors: [], needsRefresh: false, syncing: false, pending: false,
+				isLongDisplay: false, hasOlderAction: false, encounterOlder: false, loadOlderUntil: 0,
 				sessionKey: initialSessionKey, awaitingSessionSync: false, stalePrompts: null
 			};
 			const writeCSS = () => {
@@ -2260,15 +2327,32 @@ window.__ModuleLoader__.load({
 				}
 				return null;
 			};
+			// 仅将位于对话消息流与桌面设置面板之外、且具备轮次跳转语义的按钮识别为官方轮次导航控件，
+			// 避免页面上其它带数字的 aria-current / tooltip 按钮误触发历史预览或分页加载。
+			const isOfficialHistoryRailButton = (button, scrollRoot) => {
+				if (!button || isPromptOverlayNode(button)) return false;
+				if (button.hasAttribute?.("hidden") || button.getAttribute?.("aria-hidden") === "true") return false;
+				if (scrollRoot && (button === scrollRoot || (typeof scrollRoot.contains === "function" && scrollRoot.contains(button)))) return false;
+				if (typeof button.closest === "function" && button.closest("[data-chat-flow-kind], [data-chat-flow-key], .dshDesktopBridge, .dshDesktopArchivedSection")) return false;
+				return true;
+			};
+			const extractOfficialTurnNumber = (label, button) => {
+				const explicitTurn = button ? (previewAttr(button, "data-turn") || previewAttr(button, "data-chat-turn")) : "";
+				if (explicitTurn !== "" && Number.isSafeInteger(Number(explicitTurn))) return Number(explicitTurn);
+				const text = String(label || "");
+				if (!/轮|turn|jump|跳转|scroll|message|消息|对话|prompt|#/i.test(text)) return NaN;
+				const match = text.match(/(\d+)(?!.*\d)/);
+				return match ? Number(match[1]) : NaN;
+			};
 			const findOfficialHistoryTarget = () => {
 				if (!history.outline.length || typeof document === "undefined" || typeof document.querySelectorAll !== "function") return null;
-				const buttons = document.querySelectorAll("button");
+				const scrollRoot = conversationScrollRoot();
+				const buttons = [...document.querySelectorAll("button")].filter((btn) => isOfficialHistoryRailButton(btn, scrollRoot));
 				const activeTarget = () => {
 					for (const button of buttons) {
 						if (previewAttr(button, "aria-current") !== "true") continue;
 						const label = previewAttr(button, "aria-label");
-						const match = label.match(/(\d+)(?!.*\d)/);
-						const turn = match ? Number(match[1]) : NaN;
+						const turn = extractOfficialTurnNumber(label, button);
 						const entry = history.outline.find((candidate) => candidate.turn === turn);
 						if (entry) return { entry, explicit: false };
 					}
@@ -2277,24 +2361,25 @@ window.__ModuleLoader__.load({
 				const describedBy = new Map();
 				for (const button of buttons) {
 					const tooltipId = previewAttr(button, "aria-describedby");
-					if (tooltipId) describedBy.set(tooltipId, previewAttr(button, "aria-label"));
+					if (tooltipId) describedBy.set(tooltipId, { label: previewAttr(button, "aria-label"), button });
 				}
 				if (!describedBy.size) return activeTarget();
 				for (const tooltip of document.querySelectorAll("[role=tooltip]")) {
 					if (!tooltip || isPromptOverlayNode(tooltip) || tooltip.hasAttribute?.("hidden") || tooltip.getAttribute?.("aria-hidden") === "true") continue;
 					const tooltipId = previewAttr(tooltip, "id");
-					const label = tooltipId ? describedBy.get(tooltipId) : "";
+					const ref = tooltipId ? describedBy.get(tooltipId) : null;
+					const label = ref?.label || "";
 					if (!label) continue;
 					const text = normalizePreviewText(tooltip.textContent || "");
 					if (!text) continue;
 					const byPrompt = history.outline.find((entry) => {
 						const prompt = normalizePreviewText(entry.prompt);
+						if (prompt && text === prompt) return true;
 						const prefix = prompt.slice(0, Math.min(40, prompt.length)).replace(/[.…]+$/, "");
 						return prefix.length >= 8 && text.includes(prefix);
 					});
 					if (byPrompt) return { entry: byPrompt, explicit: true };
-					const match = label.match(/(\d+)(?!.*\d)/);
-					const turn = match ? Number(match[1]) : NaN;
+					const turn = extractOfficialTurnNumber(label, ref?.button);
 					const byTurn = history.outline.find((entry) => entry.turn === turn);
 					if (byTurn) return { entry: byTurn, explicit: true };
 				}
@@ -2337,7 +2422,7 @@ window.__ModuleLoader__.load({
 					// may start a potentially multi-page jump; otherwise use turnOutline text and
 					// preserve DSH Web's lazy-history CPU budget.
 					if (targetInfo.explicit && !promptNodes().some((node) => promptTurn(node) === target.turn)) requestHistoryTurn(target);
-					return target;
+					return targetInfo;
 				}
 				history.previewTarget = null;
 				// Keep the lightweight preview node cached. The native-boundary fallback can be
@@ -2447,12 +2532,13 @@ window.__ModuleLoader__.load({
 					writeCSS();
 					if (!enabled) {
 						setStickyPrompt(null, null, state);
-						clearComposerCompactMarks(document);
 						return;
 					}
 					const root = conversationScrollRoot();
 					syncHistoryBinding();
-					const historyTarget = state.awaitingSessionSync ? null : syncOfficialHistoryPreview();
+					const historyTargetInfo = state.awaitingSessionSync ? null : syncOfficialHistoryPreview();
+					const historyTarget = historyTargetInfo?.entry || null;
+					const historyExplicit = historyTargetInfo?.explicit === true;
 					updateHistoryState();
 					const rootRect = root && typeof root.getBoundingClientRect === "function" ? root.getBoundingClientRect() : null;
 					const boundaryTop = rootRect ? Number(rootRect.top) || 0 : 0;
@@ -2468,9 +2554,11 @@ window.__ModuleLoader__.load({
 						return rect && Number(rect.top) < boundaryTop + PROMPT_OVERLAY_TOP_PROTECTION_PX
 							&& Number(rect.bottom) > boundaryTop + PROMPT_OVERLAY_EPSILON;
 					});
-					const historySource = historyPreviewSource(historyTarget, root);
+					// 被动轮次高亮（aria-current）与普通粘性卡片一样遵守 56px 顶部保护带退让，
+					// 仅当用户主动悬停/聚焦轮次预览 tooltip（explicit）时才允许立即展示目标轮次。
+					const historySource = (!protectedPrompt || historyExplicit) ? historyPreviewSource(historyTarget, root) : null;
 					const stickyCandidate = acceptFreshSessionPrompt(pickStickyPrompt(root));
-					const boundarySource = !state.awaitingSessionSync && !protectedPrompt && !historySource && !stickyCandidate && encounterOlder
+					const boundarySource = !state.awaitingSessionSync && !protectedPrompt && !historyTarget && !historySource && !stickyCandidate && encounterOlder
 						? historyBoundaryFallback(root)
 						: null;
 					const rawCandidate = historySource || stickyCandidate || boundarySource;
@@ -2484,7 +2572,6 @@ window.__ModuleLoader__.load({
 						? rawCandidate
 						: (rawCandidate && !promptScrolledPast(rawCandidate, topEdge) ? null : rawCandidate);
 					setStickyPrompt(candidate, candidate ? root : null, state);
-					markComposerCompact();
 					observeLayout();
 				} finally {
 					state.syncing = false;
@@ -2615,7 +2702,6 @@ window.__ModuleLoader__.load({
 				if (resizeObserver) { try { resizeObserver.disconnect(); } catch {} }
 				if (frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
 				removeOverlayHost(state);
-				clearComposerCompactMarks(document);
 				setHoverMessageActionsAttr(false);
 				if (style && style.parentNode && typeof style.parentNode.removeChild === "function") style.parentNode.removeChild(style);
 			};
@@ -4708,7 +4794,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -4732,7 +4818,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {

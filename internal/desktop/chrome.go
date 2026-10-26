@@ -61,6 +61,9 @@ const desktopChromeCSS = `
   pointer-events: auto;
   --wails-draggable: drag;
 }
+.dsh-desktop-config .dsh-desktop-chrome__drag {
+  inset: 0 132px 0 0;
+}
 .dsh-desktop-chrome__controls {
   display: flex;
   align-items: center;
@@ -330,6 +333,18 @@ const desktopChromeJS = `
   addButton("close", %s);
   chrome.append(drag, controls);
   document.documentElement.appendChild(chrome);
+  // 供运行时语言切换动态刷新悬浮窗控按钮的 title 与 aria-label
+  window.__DSH_DESKTOP_SET_CHROME_TITLES__ = (titles) => {
+    if (!titles || typeof titles !== "object") return;
+    for (const [action, label] of Object.entries(titles)) {
+      if (typeof label !== "string" || !label) continue;
+      const btn = controls.querySelector('button[data-action="' + action + '"]');
+      if (btn) {
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
+      }
+    }
+  };
 
   const runWindowAction = (action) => window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__(action);
   // Reuse the existing blank drag element: no extra overlay over controls or
@@ -652,4 +667,15 @@ func desktopChromeBodyScript(nativeMac bool) string {
 		strconv.Quote(i18n.TActive("chrome.maximize")),
 		strconv.Quote(i18n.TActive("chrome.close")),
 	) + external
+}
+
+// desktopChromeTitlesSyncJS 生成在语言切换时同步更新非 macOS 悬浮窗控按钮文案的脚本。
+func desktopChromeTitlesSyncJS() string {
+	return fmt.Sprintf(
+		`if(typeof window.__DSH_DESKTOP_SET_CHROME_TITLES__==="function")window.__DSH_DESKTOP_SET_CHROME_TITLES__({settings:%s,minimize:%s,maximize:%s,close:%s});`,
+		strconv.Quote(i18n.TActive("chrome.open_settings")),
+		strconv.Quote(i18n.TActive("chrome.minimize")),
+		strconv.Quote(i18n.TActive("chrome.maximize")),
+		strconv.Quote(i18n.TActive("chrome.close")),
+	)
 }

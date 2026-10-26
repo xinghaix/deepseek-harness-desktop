@@ -1708,6 +1708,109 @@ olderButton.rect = savedBoundaryOlderRect;
 for (const [node, rect] of savedBoundaryRects) node.rect = rect;
 window.dispatchEvent(new CustomEvent("pointermove"));
 
+// 回归测试：少于 8 个字符的短提示词（如“继续”）在无 data-chat-turn 时仍应精确匹配真实 DOM 气泡，
+// 视口内可见时不重复悬浮，滚出顶部后保留原气泡的图片与操作按钮而非退化为纯文本虚拟节点。
+historyOutline.push({ turn: 9, seq: 99, prompt: "继续", response: "" });
+for (const listener of historySessionListeners) listener();
+const savedShortRects = new Map([
+  [u1, { ...u1.rect }], [u2, { ...u2.rect }], [u3, { ...u3.rect }],
+  [a1, { ...a1.rect }], [a2, { ...a2.rect }], [a3, { ...a3.rect }]
+]);
+for (const node of savedShortRects.keys()) node.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+const shortPromptNode = new FakeElement("div");
+shortPromptNode.setAttribute("data-chat-flow-kind", "user");
+shortPromptNode.setAttribute("data-chat-flow-key", "short-prompt-u9");
+shortPromptNode.rect = { top: 160, bottom: 210, left: 40, right: 400 };
+shortPromptNode.innerText = "继续";
+const shortImgWrap = new FakeElement("div");
+shortImgWrap.setAttribute("data-attachment", "image");
+const shortImg = new FakeElement("img");
+shortImg.setAttribute("src", "https://example.test/short.png");
+shortImgWrap.appendChild(shortImg);
+shortPromptNode.appendChild(shortImgWrap);
+const shortCopyBtn = new FakeElement("button");
+shortCopyBtn.setAttribute("aria-label", "Kopieren");
+let shortDeCopyClicks = 0;
+shortCopyBtn.click = () => { shortDeCopyClicks += 1; };
+shortPromptNode.appendChild(shortCopyBtn);
+scroll.appendChild(shortPromptNode);
+const shortTurnButton = new FakeElement("button");
+shortTurnButton.setAttribute("aria-current", "true");
+shortTurnButton.setAttribute("aria-label", "跳转并加载第 9 轮");
+body.appendChild(shortTurnButton);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 0, "short (<8 chars) visible prompt must not duplicate as a history preview");
+shortPromptNode.rect = { top: -180, bottom: -110, left: 40, right: 400 };
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.equal(overlays().length, 1, "scrolled-past short prompt renders in overlay");
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-media]")?.querySelectorAll("img").length || 0, 1, "short prompt matches real DOM and preserves its image attachment");
+const deCopyProxy = overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-action]");
+assert.ok(deCopyProxy, "localized German copy button is recognized and proxied");
+assert.equal(officialGlyphPath(deCopyProxy), officialCopyPath, "German Kopieren button uses the official copy glyph");
+deCopyProxy.dispatchEvent({ type: "click" });
+assert.equal(shortDeCopyClicks, 1, "clicking German copy proxy forwards to native control");
+assert.equal(officialGlyphPath(deCopyProxy), officialCheckPath, "German copy proxy swaps to official check glyph on confirmation");
+body.removeChild(shortTurnButton);
+scroll.removeChild(shortPromptNode);
+historyOutline.pop();
+for (const listener of historySessionListeners) listener();
+for (const [node, rect] of savedShortRects) node.rect = rect;
+window.dispatchEvent(new CustomEvent("scroll"));
+
+// 回归测试：对话流内部的行内消息编辑框（textarea）以及非零尺寸的 body 容器不得把 composerTopEdge 压扁或拉到顶边
+const savedScrollRectForComposer = { ...scroll.rect };
+const savedComposerRectForInline = { ...composer.rect };
+scroll.rect = { top: 80, bottom: 800, left: 0, right: 800 };
+composer.rect = { top: 720, bottom: 800, left: 40, right: 760 };
+body.rect = { top: 0, bottom: 800, left: 0, right: 800 };
+const inlineEditor = new FakeElement("textarea");
+inlineEditor.rect = { top: 100, bottom: 140, left: 40, right: 400 };
+scroll.appendChild(inlineEditor);
+window.dispatchEvent(new CustomEvent("resize"));
+assert.equal(overlays()[0].style._props["--dsh-desktop-prompt-overlay-avail"], "632px", "in-flow message editor and full-height body must not corrupt composerTopEdge");
+scroll.removeChild(inlineEditor);
+body.rect = { top: 0, bottom: 0, left: 0, right: 0 };
+scroll.rect = savedScrollRectForComposer;
+composer.rect = savedComposerRectForInline;
+window.dispatchEvent(new CustomEvent("resize"));
+
+// 回归测试：无关的 aria-current 按钮（无轮次语义或位于对话流内部）不得触发历史预览，
+// 且处于视口中下部的原生“加载更早”按钮不得提前触发 encounter-older 常驻高亮。
+const savedOlderForFar = { ...olderButton.rect };
+olderButton.rect = { top: 620, bottom: 656, left: 240, right: 320 };
+const unrelatedCurrentBtn = new FakeElement("button");
+unrelatedCurrentBtn.setAttribute("aria-current", "true");
+unrelatedCurrentBtn.setAttribute("aria-label", "Page 0");
+body.appendChild(unrelatedCurrentBtn);
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.doesNotMatch(overlays()[0].textContent, /archived prompt with attachment/, "unrelated aria-current button without turn semantics must be ignored");
+assert.equal(overlays()[0].hasAttribute("data-dsh-desktop-prompt-overlay-encounter-older"), false, "load-older button far below the top overlay region must not trigger encounter-older");
+body.removeChild(unrelatedCurrentBtn);
+olderButton.rect = savedOlderForFar;
+window.dispatchEvent(new CustomEvent("scroll"));
+
+// 回归测试：从溢出的长提示词切换到未截断的短提示词时，不得因残留旧 state.body 而误显“加载更早”
+const savedOlderForSwitch = { ...olderButton.rect };
+olderButton.rect = { top: -300, bottom: -260, left: 240, right: 320 };
+const currentOverlayBody = overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-body]");
+currentOverlayBody.scrollHeight = 400;
+currentOverlayBody.clientHeight = 160;
+currentOverlayBody.scrollTop = 0;
+currentOverlayBody.dispatchEvent({ type: "scroll" });
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.ok(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), "overflowing prompt in mid-conversation exposes load-older when older history exists");
+const savedU2ForSwitch = { ...u2.rect };
+const savedA2ForSwitch = { ...a2.rect };
+u2.rect = { top: 220, bottom: 280, left: 0, right: 400 };
+a2.rect = { top: 290, bottom: 900, left: 0, right: 400 };
+window.dispatchEvent(new CustomEvent("scroll"));
+assert.match(overlays()[0].textContent, /first prompt/, "switched to short prompt u1");
+assert.equal(overlays()[0].querySelector("[data-dsh-desktop-prompt-overlay-load-older]"), null, "switching from overflowing prompt to short prompt clears load-older button");
+u2.rect = savedU2ForSwitch;
+a2.rect = savedA2ForSwitch;
+olderButton.rect = savedOlderForSwitch;
+window.dispatchEvent(new CustomEvent("scroll"));
+
 // A session switch can be reported before the new history has hydrated. The old card must
 // disappear immediately instead of showing stale text or stale media from the previous session.
 const staleSessionText = overlay.textContent;
@@ -1871,3 +1974,6 @@ assert.match(tabText, /悬浮卡片最多显示的文案行数/, "the line-budge
 // Scoped to this block: the harness catalog is a deliberate subset, so other rows
 // legitimately fall back to their key here (the Go catalog test covers those).
 assert.doesNotMatch(tabText, /bridge\.enhanced_hover_title|bridge\.overlay_max_lines|bridge\.overlay_lines_value|tray\.open_settings/, "no raw catalog key reaches the floating-prompt block");
+assert.match(source, /endpoint === "setPromptOverlayMaxLines"/, "setPromptOverlayMaxLines is handled as a quiet pref update so the number input never blurs on change");
+assert.doesNotMatch(source, /markComposerCompact|COMPOSER_COMPACT_ATTR/, "unused per-frame composer compact DOM marker is removed");
+

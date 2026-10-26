@@ -122,4 +122,11 @@ func TestDesktopExternalJSOpensLinksAndStashesContext(t *testing.T) {
 	if !strings.Contains(other, "const useCustomMenu = true") || !strings.Contains(other, "--custom-contextmenu") {
 		t.Fatal("Windows/Linux must opt into the Wails context menu for search/open-link")
 	}
+	if !strings.Contains(other, "__DSH_DESKTOP_SET_CHROME_TITLES__") || !strings.Contains(other, ".dsh-desktop-config .dsh-desktop-chrome__drag") {
+		t.Fatal("Windows/Linux chrome must expose dynamic title updater and management drag inset")
+	}
+	syncJS := desktopChromeTitlesSyncJS()
+	if !strings.Contains(syncJS, "__DSH_DESKTOP_SET_CHROME_TITLES__") || !strings.Contains(syncJS, "Minimize") {
+		t.Fatalf("unexpected chrome title sync JS: %s", syncJS)
+	}
 }
