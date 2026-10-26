@@ -46,7 +46,7 @@ func (d *Service) createTrayIfNeeded() {
 	running := d.anyTrayRunning()
 	d.trayMu.Lock()
 	defer d.trayMu.Unlock()
-	if d.tray != nil {
+	if d.tray != nil || d.closing.Load() {
 		return
 	}
 	tray := app.SystemTray.New()

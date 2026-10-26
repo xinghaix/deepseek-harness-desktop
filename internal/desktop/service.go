@@ -25,31 +25,36 @@ import (
 
 type Service struct {
 	*dsh.Manager
-	nativeOpenPath     func(string) error // optional native-dispatch seam for tests
-	windowMu           sync.Mutex
-	updater            *update.Updater
-	stopAuto           context.CancelFunc
-	prefs              desktopPrefs
-	configHooked       bool
-	chatHookedID       uint
-	openedChatURL      string
-	configDirty        bool
-	configIsModal      bool
-	allowQuit          atomic.Bool
-	quitPromptOpen     atomic.Bool
-	quitProbeSettled   atomic.Bool
-	chatBusy           atomic.Bool
-	chatBusyKnown      atomic.Bool
-	icon               []byte
-	trayMu             sync.Mutex
-	tray               *application.SystemTray
-	trayRebuildTimer   *time.Timer
-	trayIconIdle       []byte
-	trayIconBusyFrames [][]byte
-	trayAnimTimer      *time.Ticker
-	trayAnimStop       chan struct{}
-	trayAnimFrame      int
-	trayIconRunning    bool
+	nativeOpenPath      func(string) error // optional native-dispatch seam for tests
+	windowMu            sync.Mutex
+	updater             *update.Updater
+	stopAuto            context.CancelFunc
+	prefs               desktopPrefs
+	configHooked        bool
+	chatHookedID        uint
+	openedChatURL       string
+	configDirty         bool
+	configIsModal       bool
+	allowQuit           atomic.Bool
+	quitStarted         atomic.Bool
+	closing             atomic.Bool
+	closeOnce           sync.Once
+	closeErr            error
+	nativeQuit          func() // 原生退出调用的测试适配点
+	quitPromptOpen      atomic.Bool
+	quitProbeSettled    atomic.Bool
+	chatBusy            atomic.Bool
+	chatBusyKnown       atomic.Bool
+	icon                []byte
+	trayMu              sync.Mutex
+	tray                *application.SystemTray
+	trayRebuildTimer    *time.Timer
+	trayIconIdle        []byte
+	trayIconBusyFrames  [][]byte
+	trayAnimTimer       *time.Ticker
+	trayAnimStop        chan struct{}
+	trayAnimFrame       int
+	trayIconRunning     bool
 	sessionsMu          sync.Mutex
 	sessions            []dsh.BridgeSession
 	trayErrorAcks       map[string]struct{} // local ack after tray click
@@ -358,6 +363,14 @@ func (d *Service) hookConfigWindow(window application.Window) {
 	}
 	d.configHooked = true
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		// Wails 清理时持有窗口表锁；退出获准后不要再查找/聚焦其它窗口。
+		if d.allowQuit.Load() {
+			return
+		}
+		if d.quitStarted.Load() {
+			event.Cancel()
+			return
+		}
 		if d.configDirty {
 			event.Cancel()
 			window.ExecJS(showDiscardConfigJS)
@@ -466,22 +479,18 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	go d.monitorChatWindowGeometry(window)
 
 	onClosing := func(event *application.WindowEvent) {
+		if d.allowQuit.Load() {
+			return
+		}
+		if d.quitStarted.Load() {
+			event.Cancel()
+			return
+		}
 		if d.prefs.getRememberWindowSize() {
 			d.recordChatWindowState(window)
 		}
 		d.flushPendingWindowState()
 		d.flushPendingLastSession()
-		if d.allowQuit.Load() {
-			d.configDirty = false
-			d.chatHookedID = 0
-			if config, ok := app.Window.GetByName(configWindowName); ok {
-				config.Close()
-			}
-			if setup, ok := app.Window.GetByName(setupWindowName); ok {
-				setup.Close()
-			}
-			return
-		}
 		// Always cancel the native close; either hide-to-tray or confirm quit.
 		event.Cancel()
 		if d.prefs.closeToTray.Load() {
@@ -515,7 +524,7 @@ func (d *Service) monitorChatWindowGeometry(window application.Window) {
 		d.windowMu.Lock()
 		hooked := d.chatHookedID == wid
 		d.windowMu.Unlock()
-		if !hooked || window == nil {
+		if !hooked || window == nil || d.closing.Load() {
 			return
 		}
 		if !d.prefs.getRememberWindowSize() {
@@ -526,16 +535,14 @@ func (d *Service) monitorChatWindowGeometry(window application.Window) {
 }
 
 func (d *Service) recordChatWindowState(window application.Window) {
-	if window == nil || !window.IsVisible() {
+	if d.closing.Load() || window == nil || !window.IsVisible() {
 		return
 	}
 	if window.IsMinimised() || window.IsFullscreen() {
 		return
 	}
 
-	d.windowStateMu.Lock()
-	defer d.windowStateMu.Unlock()
-
+	// 原生查询会同步等待 UI 线程；持锁查询会与退出/失焦回调中的刷盘互等。
 	screen, _ := window.GetScreen()
 	var dispID, dispName string
 	if screen != nil {
@@ -543,7 +550,25 @@ func (d *Service) recordChatWindowState(window application.Window) {
 		dispName = screen.Name
 	}
 
-	if window.IsMaximised() {
+	maximised := window.IsMaximised()
+	var w, h, x, y int
+	if !maximised {
+		w, h = window.Size()
+		if w < MinChatWidth {
+			w = MinChatWidth
+		}
+		if h < MinChatHeight {
+			h = MinChatHeight
+		}
+		x, y = window.Position()
+	}
+
+	d.windowStateMu.Lock()
+	defer d.windowStateMu.Unlock()
+	if d.closing.Load() {
+		return
+	}
+	if maximised {
 		if d.cachedWindowState == nil {
 			d.cachedWindowState = &desktopstate.WindowState{
 				Width:  DefaultChatWidth,
@@ -560,15 +585,6 @@ func (d *Service) recordChatWindowState(window application.Window) {
 		}
 		return
 	}
-
-	w, h := window.Size()
-	if w < MinChatWidth {
-		w = MinChatWidth
-	}
-	if h < MinChatHeight {
-		h = MinChatHeight
-	}
-	x, y := window.Position()
 
 	// Check if state actually changed
 	prev := d.cachedWindowState
@@ -596,10 +612,14 @@ func (d *Service) flushPendingWindowState() {
 		d.windowStateTimer.Stop()
 		d.windowStateTimer = nil
 	}
-	state := d.cachedWindowState
+	var state desktopstate.WindowState
+	hasState := d.cachedWindowState != nil
+	if hasState {
+		state = *d.cachedWindowState
+	}
 	d.windowStateMu.Unlock()
-	if state != nil {
-		_ = desktopstate.SaveWindowState(*state)
+	if hasState {
+		_ = desktopstate.SaveWindowState(state)
 	}
 }
 
@@ -612,7 +632,7 @@ func (d *Service) ReportCurrentSession(sessionID string) {
 		return
 	}
 	d.lastSessionMu.Lock()
-	if d.cachedLastSessionID == sessionID {
+	if d.closing.Load() || d.cachedLastSessionID == sessionID {
 		d.lastSessionMu.Unlock()
 		return
 	}

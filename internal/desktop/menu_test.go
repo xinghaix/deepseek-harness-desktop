@@ -120,6 +120,9 @@ func TestMainWiresSharedApplicationMenu(t *testing.T) {
 	if !strings.Contains(source, "desktop.ApplicationMenu(") {
 		t.Fatal("main must install the shared application menu")
 	}
+	if !strings.Contains(source, "service.ShouldQuit") {
+		t.Fatal("系统原生退出必须经过 Service.ShouldQuit，不能绕过确认与异步清理")
+	}
 	if strings.Contains(source, `AddSubmenu("设置")`) {
 		t.Fatal("main must not keep a separate 设置 submenu")
 	}

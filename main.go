@@ -71,8 +71,9 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false, // close-to-tray: Hide must not quit the app
 		},
-		Windows: desktop.ApplicationWindowsOptions(),
-		Linux:   desktop.ApplicationLinuxOptions(),
+		Windows:    desktop.ApplicationWindowsOptions(),
+		Linux:      desktop.ApplicationLinuxOptions(),
+		ShouldQuit: service.ShouldQuit,
 		OnShutdown: func() {
 			if err := service.Close(); err != nil {
 				log.Printf("关闭 DSH 进程失败: %v", err)

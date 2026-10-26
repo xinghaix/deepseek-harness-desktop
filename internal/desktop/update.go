@@ -34,12 +34,25 @@ func (s *Service) SetAutoCheckUpdate(enabled bool) (update.Snapshot, error) {
 }
 
 func (s *Service) Close() error {
-	s.flushPendingWindowState()
-	s.flushPendingLastSession()
-	if s.stopAuto != nil {
-		s.stopAuto()
-	}
-	return s.Manager.Close()
+	s.closeOnce.Do(func() {
+		s.closing.Store(true)
+		if s.stopAuto != nil {
+			s.stopAuto()
+		}
+		s.destroyTray()
+		s.statusEmitMu.Lock()
+		if s.statusEmitTimer != nil {
+			s.statusEmitTimer.Stop()
+			s.statusEmitTimer = nil
+		}
+		s.statusEmitMu.Unlock()
+		s.flushPendingWindowState()
+		s.flushPendingLastSession()
+		if s.Manager != nil {
+			s.closeErr = s.Manager.Close()
+		}
+	})
+	return s.closeErr
 }
 
 func (s *Service) OpenReleasePage() error {
@@ -57,8 +70,9 @@ func (s *Service) InstallUpdate() error {
 	if err := s.updater.Prepare(ctx); err != nil {
 		return err
 	}
-	s.allowQuit.Store(true)
-	_ = s.Close()
+	if err := s.Close(); err != nil {
+		return err
+	}
 	if err := s.updater.ApplyAndRelaunch(); err != nil {
 		return err
 	}
@@ -66,6 +80,7 @@ func (s *Service) InstallUpdate() error {
 	if app == nil {
 		return i18n.ErrorfActive("err.app_not_ready")
 	}
+	s.allowQuit.Store(true)
 	app.Quit()
 	return nil
 }

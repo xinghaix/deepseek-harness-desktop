@@ -15,6 +15,9 @@ const statusEmitDebounce = 16 * time.Millisecond
 func (d *Service) emitStatusChanged() {
 	d.statusEmitMu.Lock()
 	defer d.statusEmitMu.Unlock()
+	if d.closing.Load() {
+		return
+	}
 	if d.statusEmitTimer != nil {
 		d.statusEmitTimer.Stop()
 	}
