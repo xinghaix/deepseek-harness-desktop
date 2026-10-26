@@ -82,8 +82,6 @@
   "field.tray_session_limit": "Quantidade de tarefas na bandeja",
   "field.tray_session_limit_hint": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20, by recent activity.",
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
-  "field.show_copy_session_id": "Mostrar o menu «Copiar ID da sessão»",
-  "field.show_copy_session_id_hint": "Mostrar «Copiar ID da sessão» no menu de ações da sessão para depuração, scripts e relatórios de problemas.",
   "field.delete_session_actions": "Mostrar o menu «Excluir sessão»",
   "field.delete_session_actions_hint": "Mostrar «Excluir sessão» no menu de ações das sessões ativas e arquivadas. A exclusão remove permanentemente o registro local da sessão do disco.",
   "field.chat_content_visibility": "Renderização ao rolar o chat",

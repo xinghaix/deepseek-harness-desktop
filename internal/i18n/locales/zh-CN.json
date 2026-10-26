@@ -82,8 +82,6 @@
   "field.tray_session_limit": "任务显示数量",
   "field.tray_session_limit_hint": "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条，按最近活动排序。",
   "field.tray_session_limit_hint_dashboard": "需先开启系统托盘。托盘菜单中显示的最近会话条数。0 隐藏列表，最多 20 条。",
-  "field.show_copy_session_id": "显示“复制会话ID”菜单",
-  "field.show_copy_session_id_hint": "在会话右侧菜单中显示“复制会话ID”选项，便于调试、脚本调用和问题反馈。",
   "field.delete_session_actions": "显示“删除会话”菜单",
   "field.delete_session_actions_hint": "在活动会话和已归档会话的操作菜单中显示“删除会话”选项。删除将永久移除本地磁盘上的会话记录。",
   "field.chat_content_visibility": "Chat 滚动渲染优化",

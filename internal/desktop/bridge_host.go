@@ -86,7 +86,6 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		TrayEnabled:           prefs.TrayEnabled,
 		CloseToTray:           prefs.CloseToTray,
 		TraySessionLimit:      prefs.TraySessionLimit,
-		ShowCopySessionId:     prefs.ShowCopySessionId,
 		DeleteSessionActions:  prefs.DeleteSessionActions,
 		HoverMessageActions:   prefs.HoverMessageActions,
 		ChatContentVisibility: prefs.ChatContentVisibility,
@@ -146,13 +145,6 @@ func (a bridgeHostAdapter) SetCloseToTray(enabled bool) (dsh.BridgePrefs, error)
 
 func (a bridgeHostAdapter) SetTraySessionLimit(n int) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetTraySessionLimit(n); err != nil {
-		return a.BridgePrefs(), err
-	}
-	return a.BridgePrefs(), nil
-}
-
-func (a bridgeHostAdapter) SetShowCopySessionId(enabled bool) (dsh.BridgePrefs, error) {
-	if _, err := a.service.SetShowCopySessionId(enabled); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil

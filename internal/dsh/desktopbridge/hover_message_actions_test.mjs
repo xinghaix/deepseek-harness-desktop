@@ -576,7 +576,7 @@ client.apply({
     rpc: {
       call(_channel, method) {
         if (method === "prefs") {
-          return Promise.resolve({ ok: true, value: { hoverMessageActions: true, showCopySessionId: true, resolvedLocale: "zh-CN" } });
+          return Promise.resolve({ ok: true, value: { hoverMessageActions: true, resolvedLocale: "zh-CN" } });
         }
         // Mirrors GET /v1/locale-bundle: the shared embedded catalog.
         if (method === "localeBundle") {

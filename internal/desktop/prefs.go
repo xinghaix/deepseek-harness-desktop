@@ -31,7 +31,6 @@ type desktopPrefs struct {
 	trayEnabled           atomic.Bool
 	closeToTray           atomic.Bool
 	traySessionLimit      atomic.Int32
-	showCopySessionId     atomic.Bool
 	deleteSessionActions  atomic.Bool
 	hoverMessageActions   atomic.Bool
 	chatContentVisibility atomic.Bool
@@ -47,7 +46,6 @@ func (p *desktopPrefs) load() {
 	p.trayEnabled.Store(false)
 	p.closeToTray.Store(false)
 	p.traySessionLimit.Store(defaultTraySessionLimit)
-	p.showCopySessionId.Store(true)
 	p.deleteSessionActions.Store(true)
 	p.hoverMessageActions.Store(true)
 	p.chatContentVisibility.Store(true)
@@ -80,9 +78,6 @@ func (p *desktopPrefs) load() {
 	if prefs.TraySessionLimit != nil {
 		p.traySessionLimit.Store(int32(clampTraySessionLimit(*prefs.TraySessionLimit)))
 	}
-	if prefs.ShowCopySessionId != nil {
-		p.showCopySessionId.Store(*prefs.ShowCopySessionId)
-	}
 	if prefs.DeleteSessionActions != nil {
 		p.deleteSessionActions.Store(*prefs.DeleteSessionActions)
 	}
@@ -112,7 +107,6 @@ func (p *desktopPrefs) save() error {
 	trayEnabled := p.trayEnabled.Load()
 	closeToTray := p.closeToTray.Load() && trayEnabled
 	limit := int(p.traySessionLimit.Load())
-	showCopySessionId := p.showCopySessionId.Load()
 	deleteSessionActions := p.deleteSessionActions.Load()
 	hoverMessageActions := p.hoverMessageActions.Load()
 	chatContentVisibility := p.chatContentVisibility.Load()
@@ -125,7 +119,6 @@ func (p *desktopPrefs) save() error {
 		f.Prefs.TrayEnabled = &trayEnabled
 		f.Prefs.CloseToTray = &closeToTray
 		f.Prefs.TraySessionLimit = &limit
-		f.Prefs.ShowCopySessionId = &showCopySessionId
 		f.Prefs.DeleteSessionActions = &deleteSessionActions
 		f.Prefs.HoverMessageActions = &hoverMessageActions
 		f.Prefs.ChatContentVisibility = &chatContentVisibility

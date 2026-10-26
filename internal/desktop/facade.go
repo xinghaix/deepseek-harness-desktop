@@ -227,12 +227,6 @@ func (f *WailsFacade) SetTraySessionLimit(ctx context.Context, limit int) (Deskt
 	}
 	return f.service.SetTraySessionLimit(limit)
 }
-func (f *WailsFacade) SetShowCopySessionId(ctx context.Context, enabled bool) (DesktopPrefs, error) {
-	if err := f.management(ctx, "SetShowCopySessionId"); err != nil {
-		return DesktopPrefs{}, err
-	}
-	return f.service.SetShowCopySessionId(enabled)
-}
 func (f *WailsFacade) SetDeleteSessionActions(ctx context.Context, enabled bool) (DesktopPrefs, error) {
 	if err := f.management(ctx, "SetDeleteSessionActions"); err != nil {
 		return DesktopPrefs{}, err

@@ -70,7 +70,7 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"DSH_DESKTOP_BRIDGE_URL", "DSH_DESKTOP_BRIDGE_TOKEN", "DSH_DESKTOP_BRIDGE_ENDPOINT_FILE",
 		`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", `kind: "prefix"`,
 		"/desktop-bridge", "/v1/status", "/v1/restart", "/v1/reload-chat", "/v1/open-management", "/v1/report-chat-busy",
-		"/v1/prefs", "/v1/locale-bundle", "/v1/check-update", "/v1/set-show-copy-session-id", "/v1/set-delete-session-actions", "/v1/set-hover-message-actions", "/v1/set-chat-content-visibility",
+		"/v1/prefs", "/v1/locale-bundle", "/v1/check-update", "/v1/set-delete-session-actions", "/v1/set-hover-message-actions", "/v1/set-chat-content-visibility",
 		"/v1/set-prompt-overlay-max-lines",
 		"deleteSession",
 		"DELETE_SESSION_ID_PATTERN",
@@ -104,8 +104,6 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"anySessionRunning",
 		"sessions",
 		"role: \"switch\"",
-		"showCopySessionId",
-		"setShowCopySessionId",
 		"deleteSessionActions",
 		"setDeleteSessionActions",
 		"hoverMessageActions",
@@ -153,17 +151,12 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"installChatContentVisibility",
 		"content-visibility:auto",
 		`t("bridge.card_enhancements")`,
-		"dsh-desktop-show-copy-session-id",
-		"CopySessionIdMenuItem",
 		"DeleteSessionMenuItem",
 		"sessionMenuLocale",
 		"sidebar.workspaces.session.menu.item",
 		"MenuItemButton",
-		"deepseek-harness-desktop.copy-session-id",
-		"navigator.clipboard.writeText",
 		"role='menuitem'",
 		"deepseek-harness-desktop.delete-session",
-		"复制会话ID",
 		"blank: Boolean(s.blank)",
 		"archivedSessionIds",
 		"archived: archived.has(sid)",
@@ -192,10 +185,13 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if strings.Contains(client, "ctx.sessions.open(id)") {
 		t.Fatal("tray navigation must not bypass uiWorkspace.openSession")
 	}
-	for _, forbidden := range []string{"停止 DSH", `invoke("stop"`} {
+	for _, forbidden := range []string{"停止 DSH", `invoke("stop"`, "CopySessionIdMenuItem", "deepseek-harness-desktop.copy-session-id", "showCopySessionId", "setShowCopySessionId", "field.show_copy_session_id"} {
 		if strings.Contains(client, forbidden) {
-			t.Fatalf("client bridge must not expose stop: %q", forbidden)
+			t.Fatalf("客户端桥接不应包含已移除或禁止的入口：%q", forbidden)
 		}
+	}
+	if strings.Contains(host, "setShowCopySessionId") || strings.Contains(host, "/v1/set-show-copy-session-id") {
+		t.Fatal("宿主桥接不应再暴露复制会话 ID 设置接口")
 	}
 	if strings.Contains(host, `stop: Object.freeze`) || strings.Contains(host, `path: "/v1/stop"`) {
 		t.Fatal("host Cordis allowlist must not expose stop")

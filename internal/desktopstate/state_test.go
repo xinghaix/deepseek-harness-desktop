@@ -82,6 +82,47 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRetiredCopySessionIDPreferenceIsIgnored(t *testing.T) {
+	for _, retired := range []string{"true", "false"} {
+		t.Run(retired, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv(StateDirEnv, dir)
+			ResetCacheForTest()
+			path := filepath.Join(dir, FileName)
+			payload := `{"version":1,"prefs":{"showCopySessionId":` + retired + `,"deleteSessionActions":false,"language":"ja"}}`
+			if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			file, err := Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if file.Prefs.DeleteSessionActions == nil || *file.Prefs.DeleteSessionActions || file.Prefs.Language == nil || *file.Prefs.Language != "ja" {
+				t.Fatalf("旧复制开关不能影响删除会话或语言偏好：%+v", file.Prefs)
+			}
+			if err := Update(func(*File) {}); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var saved struct {
+				Prefs map[string]json.RawMessage `json:"prefs"`
+			}
+			if err := json.Unmarshal(raw, &saved); err != nil {
+				t.Fatal(err)
+			}
+			if _, exists := saved.Prefs["showCopySessionId"]; exists {
+				t.Fatal("保存时不应再写入已移除的复制会话 ID 偏好")
+			}
+			if string(saved.Prefs["deleteSessionActions"]) != "false" || string(saved.Prefs["language"]) != `"ja"` {
+				t.Fatalf("保存时必须保留删除会话及语言偏好：%s", raw)
+			}
+		})
+	}
+}
+
 func jsonMarshal(v any) ([]byte, error) {
 	return json.MarshalIndent(v, "", "  ")
 }
@@ -310,4 +351,3 @@ func TestValidateSessionIDCases(t *testing.T) {
 		}
 	}
 }
-

@@ -82,8 +82,6 @@
   "field.tray_session_limit": "Tray task count",
   "field.tray_session_limit_hint": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20, by recent activity.",
   "field.tray_session_limit_hint_dashboard": "Requires system tray. Recent sessions in the tray menu. 0 hides the list; max 20.",
-  "field.show_copy_session_id": "Show the “Copy session ID” menu",
-  "field.show_copy_session_id_hint": "Show “Copy session ID” in the session actions menu for debugging, scripts, and issue reports.",
   "field.delete_session_actions": "Show the “Delete session” menu",
   "field.delete_session_actions_hint": "Show “Delete session” in the session actions menu for active and archived sessions. Deleting permanently removes the local session record from disk.",
   "field.chat_content_visibility": "Chat scroll rendering",

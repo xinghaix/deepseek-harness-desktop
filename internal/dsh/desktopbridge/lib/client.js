@@ -198,18 +198,6 @@ window.__ModuleLoader__.load({
 		function linkLabel(link) {
 			return LINK_LABEL_KEYS[link] ? t(LINK_LABEL_KEYS[link]) : link;
 		}
-		const SHOW_COPY_SESSION_ID_GLOBAL = "__DSH_DESKTOP_SHOW_COPY_SESSION_ID__";
-		const SHOW_COPY_SESSION_ID_EVENT = "dsh-desktop-show-copy-session-id";
-		if (typeof window !== "undefined" && typeof window[SHOW_COPY_SESSION_ID_GLOBAL] !== "boolean") {
-			window[SHOW_COPY_SESSION_ID_GLOBAL] = true;
-		}
-		function publishShowCopySessionId(value) {
-			if (typeof value?.showCopySessionId !== "boolean" || typeof window === "undefined") return;
-			const enabled = value.showCopySessionId;
-			window[SHOW_COPY_SESSION_ID_GLOBAL] = enabled;
-			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
-			window.dispatchEvent(new CustomEvent(SHOW_COPY_SESSION_ID_EVENT, { detail: enabled }));
-		}
 		const DELETE_SESSION_ACTIONS_GLOBAL = "__DSH_DESKTOP_DELETE_SESSION_ACTIONS__";
 		const DELETE_SESSION_ACTIONS_EVENT = "dsh-desktop-delete-session-actions";
 		if (typeof window !== "undefined" && typeof window[DELETE_SESSION_ACTIONS_GLOBAL] !== "boolean") {
@@ -3573,24 +3561,9 @@ window.__ModuleLoader__.load({
 		}
 
 
-		// DSH 0.1.7 registers the sidebar session "..." menu as the list slot
-		// `sidebar.workspaces.session.menu.item` (pin 100 / rename 200 / fork 300 /
-		// archive 400). Prefer that slot over the pre-0.1.7 DOM scraper, which broke
-		// when row props stopped exposing onRename/onFork/onArchive and the menu
-		// moved into a portal.
+		// 复制会话 ID 使用官方入口，桌面只通过官方槽补充删除会话。
 		const SESSION_MENU_ITEM_SLOT = "sidebar.workspaces.session.menu.item";
-		const COPY_SESSION_MENU_ORDER = 500;
 		const DELETE_SESSION_MENU_ORDER = 600;
-		const COPY_SESSION_ID_LABELS = Object.freeze({
-			zh: Object.freeze({ copy: "复制会话ID", copied: "已复制", copyFailed: "复制失败" }),
-			en: Object.freeze({ copy: "Copy session ID", copied: "Copied", copyFailed: "Copy failed" }),
-			de: Object.freeze({ copy: "Sitzungs-ID kopieren", copied: "Kopiert", copyFailed: "Kopieren fehlgeschlagen" }),
-			fr: Object.freeze({ copy: "Copier l’identifiant de session", copied: "Copié", copyFailed: "Échec de la copie" }),
-			es: Object.freeze({ copy: "Copiar ID de sesión", copied: "Copiado", copyFailed: "Error al copiar" }),
-			ja: Object.freeze({ copy: "セッションIDをコピー", copied: "コピーしました", copyFailed: "コピーに失敗しました" }),
-			ko: Object.freeze({ copy: "세션 ID 복사", copied: "복사됨", copyFailed: "복사하지 못했습니다" }),
-			pt: Object.freeze({ copy: "Copiar ID da sessão", copied: "Copiado", copyFailed: "Falha ao copiar" })
-		});
 		const DELETE_SESSION_MENU_LABELS = Object.freeze({ zh: "删除会话", en: "Delete session", de: "Sitzung löschen", fr: "Supprimer la session", es: "Eliminar sesión", ja: "セッションを削除", ko: "세션 삭제", pt: "Excluir sessão" });
 		const DELETE_SESSION_CONFIRM_ATTRIBUTE = "data-dsh-delete-session-confirm";
 		const DELETE_SESSION_CONFIRM_PANEL_ATTRIBUTE = "data-dsh-delete-session-confirm-panel";
@@ -3697,10 +3670,6 @@ window.__ModuleLoader__.load({
 			return "en";
 		}
 
-		function copySessionIdLabels() {
-			return COPY_SESSION_ID_LABELS[sessionMenuLocaleKey()] || COPY_SESSION_ID_LABELS.en;
-		}
-
 		function deleteSessionMenuLabel() {
 			return DELETE_SESSION_MENU_LABELS[sessionMenuLocaleKey()] || DELETE_SESSION_MENU_LABELS.en;
 		}
@@ -3711,48 +3680,6 @@ window.__ModuleLoader__.load({
 			} catch (_) {
 				return null;
 			}
-		}
-
-		function copyTextToClipboard(text) {
-			const value = text == null ? "" : String(text);
-			const copyViaExec = () => {
-				if (typeof document === "undefined" || typeof document.createElement !== "function" || typeof document.execCommand !== "function") return false;
-				let success = false;
-				const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
-				const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-				try {
-					const area = document.createElement("textarea");
-					area.value = value;
-					area.setAttribute("readonly", "");
-					area.style.position = "fixed";
-					area.style.left = "-9999px";
-					area.style.top = "0";
-					area.style.opacity = "0";
-					(document.body || document.documentElement).appendChild(area);
-					area.focus({ preventScroll: true });
-					area.select();
-					area.setSelectionRange(0, area.value.length);
-					success = document.execCommand("copy");
-					area.remove();
-				} catch (_) {
-					success = false;
-				}
-				if (selectedRange && selection) {
-					try {
-						selection.removeAllRanges();
-						selection.addRange(selectedRange);
-					} catch (_) {}
-				}
-				return success;
-			};
-			if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-				try {
-					return Promise.resolve(navigator.clipboard.writeText(value)).then(() => true).catch(() => copyViaExec());
-				} catch (_) {
-					return Promise.resolve(copyViaExec());
-				}
-			}
-			return Promise.resolve(copyViaExec());
 		}
 
 		async function deleteSessionById(sessionId, ctx) {
@@ -3797,45 +3724,7 @@ window.__ModuleLoader__.load({
 			if (typeof ctx?.slots?.inject !== "function" || typeof ctx?.slots?.register !== "function") return () => {};
 			const primitives = loadSessionMenuPrimitives();
 			const MenuItemButton = primitives?.MenuItemButton;
-			const IconCopyOutlineRegular = primitives?.IconCopyOutlineRegular;
 			const IconTrashOutlineRegular = primitives?.IconTrashOutlineRegular;
-
-			function CopySessionIdMenuItem({ sessionId, useMenuOpenState }) {
-				const enabled = useDesktopBooleanFlag(SHOW_COPY_SESSION_ID_GLOBAL, SHOW_COPY_SESSION_ID_EVENT);
-				const labels = copySessionIdLabels();
-				const [label, setLabel] = react.useState(labels.copy);
-				react.useEffect(() => { setLabel(labels.copy); }, [labels.copy]);
-				if (!enabled || !sessionId) return null;
-				const onSelect = () => {
-					void copyTextToClipboard(sessionId).then((ok) => {
-						setLabel(ok ? labels.copied : labels.copyFailed);
-						if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
-							window.setTimeout(() => setLabel(labels.copy), ok ? 1000 : 1200);
-						}
-					});
-				};
-				const icon = IconCopyOutlineRegular ? jsx(IconCopyOutlineRegular, {}) : null;
-				if (typeof MenuItemButton === "function") {
-					return jsx(MenuItemButton, {
-						icon,
-						separatorBefore: true,
-						onSelect,
-						children: label
-					});
-				}
-				return jsxs("button", {
-					type: "button",
-					role: "menuitem",
-					"data-dsh-copy-session-id": "",
-					"data-dsh-copy-session-id-value": sessionId,
-					"aria-label": label,
-					onClick: (event) => { event.preventDefault(); event.stopPropagation(); onSelect(); },
-					children: [
-						icon ? jsx("span", { "aria-hidden": true, children: icon }) : null,
-						jsx("span", { "data-dsh-copy-session-id-label": "", children: label })
-					]
-				});
-			}
 
 			function DeleteSessionMenuItem({ sessionId, useMenuOpenState }) {
 				const enabled = useDesktopBooleanFlag(DELETE_SESSION_ACTIONS_GLOBAL, DELETE_SESSION_ACTIONS_EVENT);
@@ -3850,6 +3739,7 @@ window.__ModuleLoader__.load({
 				if (typeof MenuItemButton === "function") {
 					return jsx(MenuItemButton, {
 						icon,
+						separatorBefore: true,
 						danger: true,
 						onSelect,
 						children: label
@@ -3871,11 +3761,6 @@ window.__ModuleLoader__.load({
 
 			try {
 				const dispose = ctx.slots.inject(SESSION_MENU_ITEM_SLOT, function* () {
-					yield ctx.slots.register({
-						name: SESSION_MENU_ITEM_SLOT,
-						id: "deepseek-harness-desktop.copy-session-id",
-						order: COPY_SESSION_MENU_ORDER
-					}, CopySessionIdMenuItem);
 					yield ctx.slots.register({
 						name: SESSION_MENU_ITEM_SLOT,
 						id: "deepseek-harness-desktop.delete-session",
@@ -4741,7 +4626,6 @@ window.__ModuleLoader__.load({
 					]);
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
-					publishShowCopySessionId(nextPrefs);
 					publishDeleteSessionActions(nextPrefs);
 					publishHoverMessageActions(nextPrefs);
 					publishPromptOverlayLanguage(nextPrefs);
@@ -4794,13 +4678,12 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.showCopySessionId !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
 				if (looksLikeUpdate) setUpdate(value);
 				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
-				publishShowCopySessionId(value);
 				publishDeleteSessionActions(value);
 				publishHoverMessageActions(value);
 				publishPromptOverlayLanguage(value);
@@ -4818,7 +4701,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setShowCopySessionId" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -5560,30 +5443,6 @@ window.__ModuleLoader__.load({
 								jsxs("div", {
 									className: "dshDesktopBridgeRowText",
 									children: [
-										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.show_copy_session_id") }),
-										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.show_copy_session_id_hint") })
-									]
-								}),
-								jsx("div", {
-									className: "dshDesktopBridgeControl",
-									children: jsx("input", {
-										className: "dshDesktopBridgeToggle",
-										type: "checkbox",
-										role: "switch",
-										"aria-checked": prefs?.showCopySessionId !== false,
-										checked: prefs?.showCopySessionId !== false,
-										disabled: !connected || pending || !prefs || enhancementDisabled,
-										onChange: (event) => void invoke("setShowCopySessionId", { enabled: event.target.checked })
-									})
-								})
-							]
-						}),
-						jsxs("div", {
-							className: "dshDesktopBridgeRow",
-							children: [
-								jsxs("div", {
-									className: "dshDesktopBridgeRowText",
-									children: [
 										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.delete_session_actions") }),
 										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.delete_session_actions_hint") })
 									]
@@ -5909,7 +5768,6 @@ window.__ModuleLoader__.load({
 			};
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (!result?.ok) return;
-				publishShowCopySessionId(result.value);
 				publishDeleteSessionActions(result.value);
 				publishHoverMessageActions(result.value);
 				publishPromptOverlayLanguage(result.value);

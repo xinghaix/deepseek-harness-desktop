@@ -270,7 +270,7 @@ const sandbox = {
   console,
 };
 vm.createContext(sandbox);
-vm.runInContext(source, sandbox, { filename: "desktop-bridge-copy-session-menu.js" });
+vm.runInContext(source, sandbox, { filename: "desktop-bridge-session-menu.js" });
 assert.ok(registration, "client registration missing");
 
 const reactStates = [];
@@ -292,15 +292,7 @@ const react = {
   },
 };
 function MenuItemButton(props) { return { type: "MenuItemButton", props }; }
-function IconCopyOutlineRegular() { return { type: "IconCopy" }; }
 function IconTrashOutlineRegular() { return { type: "IconTrash" }; }
-let clipboardValue = "";
-let clipboardRejects = false;
-sandbox.navigator.clipboard.writeText = (value) => {
-  if (clipboardRejects) return Promise.reject(new Error("clipboard denied"));
-  clipboardValue = value;
-  return Promise.resolve();
-};
 const slotRegistrations = [];
 const client = registration.factory((name) => {
   if (name === "react") return react;
@@ -312,7 +304,7 @@ const client = registration.factory((name) => {
     };
   }
   if (name === "@deepseek-ai/dsh-client-ui-primitives") {
-    return { MenuItemButton, IconCopyOutlineRegular, IconTrashOutlineRegular };
+    return { MenuItemButton, IconTrashOutlineRegular };
   }
   throw new Error(`unexpected require ${name}`);
 });
@@ -356,7 +348,7 @@ const ctx = {
   connection: {
     rpc: {
       call(_channel, method, payload) {
-        if (method === "prefs") return Promise.resolve({ ok: true, value: { showCopySessionId: true, deleteSessionActions: true } });
+        if (method === "prefs") return Promise.resolve({ ok: true, value: { deleteSessionActions: true } });
         if (method === "deleteSession") {
           batchDeleteCalls.push(payload?.sessionId || "");
           return Promise.resolve({ ok: true, value: { sessionId: payload?.sessionId, deleted: true } });
@@ -372,9 +364,9 @@ const ctx = {
         getSnapshot() {
           return {
             items: [
-              { workspaceId: "ws-copy", sessionIds: ["session-copy-test"] },
+              { workspaceId: "ws-delete", sessionIds: ["session-delete-test"] },
               { workspaceId: "ws-active", sessionIds: ["session-active-current"] },
-              { workspaceId: "ws-copy-active", sessionIds: ["session-copy-test-active"] },
+              { workspaceId: "ws-delete-active", sessionIds: ["session-delete-test-active"] },
             ],
           };
         },
@@ -390,7 +382,7 @@ client.apply(ctx);
 await Promise.resolve();
 
 
-assert.equal(slotRegistrations.length, 2, "session menu must register copy + delete slots");
+assert.equal(slotRegistrations.length, 1, "桌面仅应注册删除会话，复制会话 ID 由官方提供");
 assert.deepEqual(
   slotRegistrations.map((entry) => ({
     id: entry.options.id,
@@ -398,63 +390,21 @@ assert.deepEqual(
     name: entry.options.name,
   })),
   [
-    { id: "deepseek-harness-desktop.copy-session-id", order: 500, name: "sidebar.workspaces.session.menu.item" },
     { id: "deepseek-harness-desktop.delete-session", order: 600, name: "sidebar.workspaces.session.menu.item" },
   ],
-  "copy/delete must follow official pin/rename/fork/archive orders",
+  "删除会话应排在官方菜单项之后",
 );
-
-reactStates.length = 0;
-const copyNode = slotRegistrations[0].component({
-  sessionId: "session-copy-test",
-  useMenuOpenState: () => [true, () => {}],
-});
-assert.equal(copyNode.type, MenuItemButton);
-assert.equal(copyNode.props.separatorBefore, true);
-assert.ok(copyNode.props.icon, "copy item must render an icon");
-
-clipboardValue = "";
-await copyNode.props.onSelect();
-await flushMicrotasks();
-assert.equal(clipboardValue, "session-copy-test", "clipboard must receive the session id");
-
-clipboardRejects = true;
-let execCommandCalled = false;
-sandbox.document.execCommand = (cmd) => {
-  if (cmd === "copy") {
-    execCommandCalled = true;
-    return true;
-  }
-  return false;
-};
-await copyNode.props.onSelect();
-await flushMicrotasks();
-assert.equal(execCommandCalled, true, "execCommand fallback must run when clipboard rejects");
-delete sandbox.document.execCommand;
-clipboardRejects = false;
-
-window.__DSH_DESKTOP_SHOW_COPY_SESSION_ID__ = false;
-window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: false });
-reactStates.length = 0;
-assert.equal(
-  slotRegistrations[0].component({
-    sessionId: "session-copy-test",
-    useMenuOpenState: () => [true, () => {}],
-  }),
-  null,
-  "disabled copy preference must hide the item",
-);
-window.__DSH_DESKTOP_SHOW_COPY_SESSION_ID__ = true;
-window.dispatchEvent({ type: "dsh-desktop-show-copy-session-id", detail: true });
 
 reactStates.length = 0;
 let menuOpen = true;
-const deleteNode = slotRegistrations[1].component({
-  sessionId: "session-copy-test",
+const deleteNode = slotRegistrations[0].component({
+  sessionId: "session-delete-test",
   useMenuOpenState: () => [menuOpen, (value) => { menuOpen = value; }],
 });
 assert.equal(deleteNode.type, MenuItemButton);
 assert.equal(deleteNode.props.danger, true);
+assert.equal(deleteNode.props.separatorBefore, true);
+assert.ok(deleteNode.props.icon, "删除会话应保留图标");
 deleteNode.props.onSelect();
 await flushMicrotasks();
 assert.equal(menuOpen, false, "delete should close the overflow menu");
@@ -462,7 +412,7 @@ const activeConfirm = document.querySelector("[data-dsh-delete-session-confirm]"
 assert.ok(activeConfirm, "delete click must open a confirmation dialog");
 activeConfirm.querySelector("[data-dsh-delete-session-confirm-submit]").dispatchEvent({ type: "click", preventDefault() {}, stopPropagation() {} });
 await flushMicrotasks();
-assert.equal(batchDeleteCalls.includes("session-copy-test"), true, "confirmed delete must call host deleteSession");
+assert.equal(batchDeleteCalls.includes("session-delete-test"), true, "confirmed delete must call host deleteSession");
 assert.equal(startSessionCalls.length, 0, "deleting an inactive session must not start a new session");
 assert.equal(clearMainCalls.length, 0, "deleting an inactive session must not clear main view");
 
@@ -470,8 +420,8 @@ window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = false;
 window.dispatchEvent({ type: "dsh-desktop-delete-session-actions", detail: false });
 reactStates.length = 0;
 assert.equal(
-  slotRegistrations[1].component({
-    sessionId: "session-copy-test",
+  slotRegistrations[0].component({
+    sessionId: "session-delete-test",
     useMenuOpenState: () => [true, () => {}],
   }),
   null,
@@ -610,4 +560,4 @@ firstClassPage.remove();
 
 for (const cleanup of cleanups) cleanup();
 assert.equal(slotRegistrations.length, 0, "dispose must drop session menu slot registrations");
-console.log("ok - session menu slots register copy/delete after archive, gate on prefs, and clean up");
+console.log("ok - desktop session menu only adds delete, gates on prefs, and cleans up");

@@ -83,7 +83,7 @@ go run -tags wails,production ./tools/navigation-probe -bridge
 go test -race ./...
 go test -race -tags wails ./...
 node internal/dsh/desktopbridge/client_test.mjs
-node internal/dsh/desktopbridge/copy_session_menu_test.mjs
+node internal/dsh/desktopbridge/session_menu_test.mjs
 node internal/dsh/desktopbridge/hover_message_actions_test.mjs
 node internal/dsh/webviewboot/hook_test.mjs
 swift scripts/test-navigation-webkit.swift

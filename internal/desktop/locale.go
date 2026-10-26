@@ -16,7 +16,6 @@ type DesktopPrefs struct {
 	TrayEnabled           bool              `json:"trayEnabled"`
 	CloseToTray           bool              `json:"closeToTray"`
 	TraySessionLimit      int               `json:"traySessionLimit"`
-	ShowCopySessionId     bool              `json:"showCopySessionId"`
 	DeleteSessionActions  bool              `json:"deleteSessionActions"`
 	HoverMessageActions   bool              `json:"hoverMessageActions"`
 	ChatContentVisibility bool              `json:"chatContentVisibility"`
@@ -55,7 +54,6 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		TrayEnabled:           trayOn,
 		CloseToTray:           trayOn && d.prefs.closeToTray.Load(),
 		TraySessionLimit:      int(d.prefs.traySessionLimit.Load()),
-		ShowCopySessionId:     d.prefs.showCopySessionId.Load(),
 		DeleteSessionActions:  d.prefs.deleteSessionActions.Load(),
 		HoverMessageActions:   d.prefs.hoverMessageActions.Load(),
 		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
@@ -119,14 +117,6 @@ func (d *Service) SetTraySessionLimit(n int) (DesktopPrefs, error) {
 		return d.DesktopPrefs(), err
 	}
 	d.refreshTrayMenu()
-	return d.DesktopPrefs(), nil
-}
-
-func (d *Service) SetShowCopySessionId(enabled bool) (DesktopPrefs, error) {
-	d.prefs.showCopySessionId.Store(enabled)
-	if err := d.prefs.save(); err != nil {
-		return d.DesktopPrefs(), err
-	}
 	return d.DesktopPrefs(), nil
 }
 

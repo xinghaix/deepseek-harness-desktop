@@ -38,7 +38,6 @@ const routes = Object.freeze({
 	setTrayEnabled: Object.freeze({ method: "POST", path: "/v1/set-tray-enabled" }),
 	setCloseToTray: Object.freeze({ method: "POST", path: "/v1/set-close-to-tray" }),
 	setTraySessionLimit: Object.freeze({ method: "POST", path: "/v1/set-tray-session-limit" }),
-	setShowCopySessionId: Object.freeze({ method: "POST", path: "/v1/set-show-copy-session-id" }),
 	setDeleteSessionActions: Object.freeze({ method: "POST", path: "/v1/set-delete-session-actions" }),
 	setHoverMessageActions: Object.freeze({ method: "POST", path: "/v1/set-hover-message-actions" }),
 	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
