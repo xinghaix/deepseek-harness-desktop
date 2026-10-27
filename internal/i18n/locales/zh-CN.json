@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "对视口外的对话节点使用 content-visibility，减轻长会话滚动绘制。关闭后立即恢复默认。加载更早历史时滚动位置可能轻微跳动。",
   "field.eye_care_theme": "新增护眼暗色主题",
   "field.eye_care_theme_hint": "在通用设置「外观」中提供柔和中性浅黑色的「护眼暗色」主题，并跨重启保存；关闭或通过 dsh web 等非本桌面端打开时自动回退至官方深色主题。",
+  "field.full_agent_presets": "完整显示 Agent 预设模式",
+  "field.full_agent_presets_hint": "在新任务模式切换与「Agent 预设」设置页中始终完整显示全部预设模式（包括 PTC 模式、极简模式及后续新增模式），不受通用设置「显示代码工作视图」关闭的影响。",
   "field.language": "界面语言",
   "field.language_hint": "跟随系统语言，或选择固定语言。保存在 desktop-state.json。",
   "lang.system": "跟随系统",

@@ -92,6 +92,7 @@ type ClipboardHost interface {
 type ThemePreferenceHost interface {
 	SetThemePreference(preference string) (BridgePrefs, error)
 	SetEyeCareTheme(enabled bool) (BridgePrefs, error)
+	SetFullAgentPresets(enabled bool) (BridgePrefs, error)
 }
 
 type PrefsHost interface {
@@ -168,6 +169,7 @@ type BridgePrefs struct {
 	HoverMessageActions   bool                 `json:"hoverMessageActions"`
 	ChatContentVisibility bool                 `json:"chatContentVisibility"`
 	EyeCareTheme          bool                 `json:"eyeCareTheme"`
+	FullAgentPresets      bool                 `json:"fullAgentPresets"`
 	PromptOverlayMaxLines int                  `json:"promptOverlayMaxLines"`
 	RestoreLastSession    bool                 `json:"restoreLastSession"`
 	RememberWindowSize    bool                 `json:"rememberWindowSize"`
@@ -912,6 +914,34 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetRememberWindowSize(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-full-agent-presets":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		themeHost, ok := host.(ThemePreferenceHost)
+		if !ok {
+			writeBridgeJSON(w, http.StatusOK, host.BridgePrefs())
+			return
+		}
+		prefs, err := themeHost.SetFullAgentPresets(body.Enabled)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return

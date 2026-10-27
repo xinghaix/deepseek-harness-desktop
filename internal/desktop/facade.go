@@ -253,6 +253,13 @@ func (f *WailsFacade) SetEyeCareTheme(ctx context.Context, enabled bool) (Deskto
 	return f.service.SetEyeCareTheme(enabled)
 }
 
+func (f *WailsFacade) SetFullAgentPresets(ctx context.Context, enabled bool) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetFullAgentPresets"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetFullAgentPresets(enabled)
+}
+
 func (f *WailsFacade) SetThemePreference(ctx context.Context, preference string) (DesktopPrefs, error) {
 	if err := f.management(ctx, "SetThemePreference"); err != nil {
 		return DesktopPrefs{}, err

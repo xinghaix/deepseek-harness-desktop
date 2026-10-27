@@ -20,6 +20,7 @@ type DesktopPrefs struct {
 	HoverMessageActions   bool              `json:"hoverMessageActions"`
 	ChatContentVisibility bool              `json:"chatContentVisibility"`
 	EyeCareTheme          bool              `json:"eyeCareTheme"`
+	FullAgentPresets      bool              `json:"fullAgentPresets"`
 	PromptOverlayMaxLines int               `json:"promptOverlayMaxLines"`
 	RestoreLastSession    bool              `json:"restoreLastSession"`
 	RememberWindowSize    bool              `json:"rememberWindowSize"`
@@ -60,6 +61,7 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		HoverMessageActions:   d.prefs.hoverMessageActions.Load(),
 		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
 		EyeCareTheme:          d.prefs.eyeCareTheme.Load(),
+		FullAgentPresets:      d.prefs.fullAgentPresets.Load(),
 		PromptOverlayMaxLines: int(d.prefs.promptOverlayMaxLines.Load()),
 		RestoreLastSession:    d.prefs.getRestoreLastSession(),
 		RememberWindowSize:    d.prefs.getRememberWindowSize(),
@@ -150,6 +152,14 @@ func (d *Service) SetChatContentVisibility(enabled bool) (DesktopPrefs, error) {
 
 func (d *Service) SetEyeCareTheme(enabled bool) (DesktopPrefs, error) {
 	d.prefs.eyeCareTheme.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetFullAgentPresets(enabled bool) (DesktopPrefs, error) {
+	d.prefs.fullAgentPresets.Store(enabled)
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}

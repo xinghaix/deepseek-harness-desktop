@@ -334,6 +334,8 @@ window.__ModuleLoader__.load({
 			"bridge.theme_system": "System",
 			"field.eye_care_theme": "Add Eye-Care Dark theme",
 			"field.eye_care_theme_hint": "Provide a neutral soft-charcoal “Eye-Care Dark” option under General → Appearance and persist it across restarts; falls back to the official Dark theme when disabled or opened outside this desktop app.",
+			"field.full_agent_presets": "Show all Agent preset modes",
+			"field.full_agent_presets_hint": "Always display the complete list of Agent presets (including PTC mode, Minimal mode, and any future presets) in the new-task switcher and Agent presets settings, regardless of whether “Show coding view” is turned off.",
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -4706,6 +4708,7 @@ window.__ModuleLoader__.load({
 					publishPromptOverlayMaxLines(nextPrefs);
 					publishChatContentVisibility(nextPrefs);
 					publishEyeCareTheme(nextPrefs);
+					publishFullAgentPresets(nextPrefs);
 					publishThemePreference(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
@@ -4754,7 +4757,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.eyeCareTheme !== undefined || value.themePreference !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.eyeCareTheme !== undefined || value.fullAgentPresets !== undefined || value.themePreference !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setFullAgentPresets" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -4766,6 +4769,7 @@ window.__ModuleLoader__.load({
 				publishPromptOverlayMaxLines(value);
 				publishChatContentVisibility(value);
 				publishEyeCareTheme(value);
+				publishFullAgentPresets(value);
 				publishThemePreference(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
@@ -4779,7 +4783,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setFullAgentPresets" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -5654,6 +5658,30 @@ window.__ModuleLoader__.load({
 									})
 								})
 							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.full_agent_presets") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.full_agent_presets_hint") })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.fullAgentPresets !== false,
+										checked: prefs?.fullAgentPresets !== false,
+										disabled: !connected || pending || !prefs || enhancementDisabled,
+										onChange: (event) => void invoke("setFullAgentPresets", { enabled: event.target.checked })
+									})
+								})
+							]
 						})
 						]
 					}),
@@ -5961,12 +5989,33 @@ window.__ModuleLoader__.load({
 		});
 		const EYE_CARE_THEME_GLOBAL = "__DSH_DESKTOP_EYE_CARE_THEME__";
 		const EYE_CARE_THEME_EVENT = "dsh-desktop-eye-care-theme";
+		const FULL_AGENT_PRESETS_GLOBAL = "__DSH_DESKTOP_FULL_AGENT_PRESETS__";
+		const FULL_AGENT_PRESETS_EVENT = "dsh-desktop-full-agent-presets";
 		const THEME_PREFERENCE_GLOBAL = "__DSH_DESKTOP_THEME_PREFERENCE__";
 		const THEME_PREFERENCE_EVENT = "dsh-desktop-theme-preference";
 		if (typeof window !== "undefined" && typeof window[EYE_CARE_THEME_GLOBAL] !== "boolean") {
 			window[EYE_CARE_THEME_GLOBAL] = true;
 		}
+		if (typeof window !== "undefined" && typeof window[FULL_AGENT_PRESETS_GLOBAL] !== "boolean") {
+			window[FULL_AGENT_PRESETS_GLOBAL] = true;
+		}
 		let durableDesktopThemePreference = "";
+
+		function isFullAgentPresetsEnabled() {
+			if (typeof window !== "undefined" && typeof window[FULL_AGENT_PRESETS_GLOBAL] === "boolean") {
+				return window[FULL_AGENT_PRESETS_GLOBAL];
+			}
+			return true;
+		}
+
+		function publishFullAgentPresets(value) {
+			if (typeof value?.fullAgentPresets !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.fullAgentPresets;
+			if (window[FULL_AGENT_PRESETS_GLOBAL] === enabled) return;
+			window[FULL_AGENT_PRESETS_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(FULL_AGENT_PRESETS_EVENT, { detail: enabled }));
+		}
 
 		function normalizeDesktopThemePreference(raw) {
 			const trimmed = typeof raw === "string" ? raw.trim() : "";
@@ -6636,6 +6685,295 @@ window.__ModuleLoader__.load({
 			};
 		}
 
+		// 完整显示 Agent 预设模式：使新任务模式切换胶囊（conversation.hero.agentPreset）与
+		// 设置中的「Agent 预设」页面（settings.section id="agent-presets"）始终展示全部预设模式
+		// （包括内置标准、PTC、极简、创造模式及后续新增模式），不受「显示代码工作视图」关闭影响。
+		function installFullAgentPresets(ctx) {
+			const cleanups = [];
+			const listeners = new Set();
+			const patchedEntries = new WeakSet();
+			const wrappedSources = new WeakMap();
+
+			const notifyListeners = () => {
+				for (const fn of [...listeners]) {
+					try { fn(); } catch (_) { /* listener isolation */ }
+				}
+			};
+
+			const wrapDeveloperToolsSource = (origSource) => {
+				if (!origSource || typeof origSource !== "object") return origSource;
+				let cached = wrappedSources.get(origSource);
+				if (cached) return cached;
+				cached = {
+					getSnapshot: () => {
+						if (isFullAgentPresetsEnabled()) return true;
+						return typeof origSource.getSnapshot === "function" ? Boolean(origSource.getSnapshot()) : true;
+					},
+					subscribe: (listener) => {
+						const offOrig = typeof origSource.subscribe === "function"
+							? origSource.subscribe(listener)
+							: () => {};
+						listeners.add(listener);
+						return () => {
+							listeners.delete(listener);
+							if (typeof offOrig === "function") offOrig();
+						};
+					}
+				};
+				wrappedSources.set(origSource, cached);
+				return cached;
+			};
+
+			const notifySlotDirty = (slotKey) => {
+				try {
+					const core = ctx?.slots?._core;
+					if (core && typeof core.markDirty === "function" && core.records && typeof core.records.get === "function") {
+						const rec = core.records.get(slotKey);
+						if (rec) core.markDirty(slotKey, rec);
+					}
+				} catch (_) { /* optional internal refresh */ }
+			};
+
+			const patchAgentPresetEntry = (entry, slotKey) => {
+				if (!entry || typeof entry !== "object" || patchedEntries.has(entry)) return false;
+				patchedEntries.add(entry);
+				let modified = false;
+
+				if (typeof entry.inject === "function") {
+					const origInject = entry.inject;
+					try {
+						entry.inject = (...args) => {
+							const result = origInject(...args);
+							if (result && typeof result === "object" && result.hooks && typeof result.hooks === "object" && result.hooks.developerTools) {
+								return {
+									...result,
+									hooks: {
+										...result.hooks,
+										developerTools: wrapDeveloperToolsSource(result.hooks.developerTools)
+									}
+								};
+							}
+							return result;
+						};
+						cleanups.push(() => {
+							try { entry.inject = origInject; } catch (_) {}
+						});
+						modified = true;
+					} catch (_) { /* ignore non-writable */ }
+				}
+
+				if (typeof entry.component === "function") {
+					const OrigComp = entry.component;
+					try {
+						const WrappedComp = function DesktopFullAgentPresetsEntry(props) {
+							const [, setTick] = react.useState(0);
+							if (typeof react.useEffect === "function") {
+								react.useEffect(() => {
+									const onToggle = () => setTick((n) => n + 1);
+									listeners.add(onToggle);
+									return () => {
+										listeners.delete(onToggle);
+									};
+								}, []);
+							}
+							const origUseDevTools = props?.useDeveloperTools;
+							const useDeveloperTools = typeof origUseDevTools === "function"
+								? (selector, equal) => {
+									const realVal = origUseDevTools(selector, equal);
+									if (!isFullAgentPresetsEnabled()) return realVal;
+									return typeof selector === "function" ? selector(true) : true;
+								}
+								: ((selector) => (typeof selector === "function" ? selector(true) : true));
+							return jsx(OrigComp, { ...props, useDeveloperTools });
+						};
+						entry.component = WrappedComp;
+						cleanups.push(() => {
+							try { entry.component = OrigComp; } catch (_) {}
+						});
+						modified = true;
+					} catch (_) { /* ignore non-writable */ }
+				}
+
+				if (modified && slotKey) {
+					notifySlotDirty(slotKey);
+				}
+				return modified;
+			};
+
+			const scanAndPatchSlots = () => {
+				try {
+					if (typeof ctx?.slots?.entries !== "function") return;
+					const heroEntries = ctx.slots.entries("conversation.hero.agentPreset") || [];
+					for (const entry of heroEntries) {
+						patchAgentPresetEntry(entry, "conversation.hero.agentPreset");
+					}
+					const sectionEntries = ctx.slots.entries("settings.section") || [];
+					for (const entry of sectionEntries) {
+						if (entry?.options?.id === "agent-presets") {
+							patchAgentPresetEntry(entry, "settings.section");
+						}
+					}
+				} catch (_) { /* ignore */ }
+			};
+
+			scanAndPatchSlots();
+
+			if (typeof ctx?.slots?.subscribe === "function") {
+				try {
+					const offHero = ctx.slots.subscribe("conversation.hero.agentPreset", scanAndPatchSlots);
+					if (typeof offHero === "function") cleanups.push(offHero);
+				} catch (_) {}
+				try {
+					const offSection = ctx.slots.subscribe("settings.section", scanAndPatchSlots);
+					if (typeof offSection === "function") cleanups.push(offSection);
+				} catch (_) {}
+			}
+
+			if (typeof ctx?.on === "function") {
+				try {
+					const offSlotChanged = ctx.on("slots/changed", (key) => {
+						if (!key || key === "conversation.hero.agentPreset" || key === "settings.section") {
+							scanAndPatchSlots();
+						}
+					});
+					if (typeof offSlotChanged === "function") cleanups.push(offSlotChanged);
+				} catch (_) {}
+			}
+
+			// 防止关闭「显示代码工作视图」时 reconcileCodingTools 自动把用户已设为默认的 PTC / 极简模式重置回 standard：
+			// 1) 在 configForms.get("agent-preset-registry") 上将 getSnapshot().writable 置为 false，使 reconcileCodingTools 在首行直接 return，不触发 load/save 与版本冲突报错；
+			// 2) 在 ctx.get("remote.settings") 与 ctx.remote.invoke 层拦截带 expectedRevision 的自动降级重置。
+			let presetFormPatched = false;
+			const resolveServiceFrom = (scope, serviceName) => {
+				if (!scope) return null;
+				if (typeof scope.get === "function") {
+					try {
+						const byGet = scope.get(serviceName);
+						if (byGet) return byGet;
+					} catch (_) { /* ignore */ }
+				}
+				return null;
+			};
+			const patchConfigForms = (configForms) => {
+				if (presetFormPatched || !configForms || typeof configForms.get !== "function") return;
+				try {
+					const presetForm = configForms.get("agent-preset-registry");
+					if (presetForm && typeof presetForm.getSnapshot === "function") {
+						const origGetSnapshot = presetForm.getSnapshot.bind(presetForm);
+						presetForm.getSnapshot = () => {
+							const snap = origGetSnapshot();
+							if (isFullAgentPresetsEnabled() && snap && typeof snap === "object") {
+								return { ...snap, writable: false };
+							}
+							return snap;
+						};
+						presetFormPatched = true;
+						cleanups.push(() => {
+							try { presetForm.getSnapshot = origGetSnapshot; } catch (_) {}
+							presetFormPatched = false;
+						});
+					}
+				} catch (_) { /* ignore */ }
+			};
+			patchConfigForms(resolveServiceFrom(ctx, "configForms"));
+			if (!presetFormPatched && typeof ctx?.inject === "function") {
+				try {
+					const stopConfigFormsInject = ctx.inject(["configForms"], (scope) => {
+						patchConfigForms(resolveServiceFrom(scope, "configForms") || resolveServiceFrom(ctx, "configForms"));
+					});
+					if (typeof stopConfigFormsInject === "function") cleanups.push(stopConfigFormsInject);
+				} catch (_) {}
+			}
+
+			const isAutoStandardReset = (ns, patch, expectedRevision) => (
+				isFullAgentPresetsEnabled() &&
+				ns === "agent-preset-registry" &&
+				patch &&
+				typeof patch === "object" &&
+				patch.selectedDefault === "standard" &&
+				expectedRevision !== undefined
+			);
+
+			let remoteSettingsPatched = false;
+			const patchRemoteSettings = (remoteSettings) => {
+				if (remoteSettingsPatched || !remoteSettings || typeof remoteSettings.update !== "function") return;
+				try {
+					const origUpdate = remoteSettings.update.bind(remoteSettings);
+					remoteSettings.update = (ns, patch, expectedRevision, ...rest) => {
+						if (isAutoStandardReset(ns, patch, expectedRevision)) {
+							return Promise.resolve({ ok: true, value: undefined });
+						}
+						return origUpdate(ns, patch, expectedRevision, ...rest);
+					};
+					remoteSettingsPatched = true;
+					cleanups.push(() => {
+						try { remoteSettings.update = origUpdate; } catch (_) {}
+						remoteSettingsPatched = false;
+					});
+				} catch (_) { /* ignore non-writable */ }
+			};
+			patchRemoteSettings(resolveServiceFrom(ctx, "remote.settings"));
+			if (!remoteSettingsPatched) {
+				try {
+					const fromNamespaces = ctx?.remote?.namespaces?.get?.("settings")?.service;
+					if (fromNamespaces) patchRemoteSettings(fromNamespaces);
+				} catch (_) {}
+			}
+			if (!remoteSettingsPatched) {
+				try {
+					if (ctx?.remote?.settings) patchRemoteSettings(ctx.remote.settings);
+				} catch (_) { /* Cordis proxy throws when remote.settings is not in fiber inject */ }
+			}
+			if (!remoteSettingsPatched && typeof ctx?.inject === "function") {
+				try {
+					const stopRemoteSettingsInject = ctx.inject(["remote.settings"], (scope) => {
+						patchRemoteSettings(
+							resolveServiceFrom(scope, "remote.settings") ||
+							resolveServiceFrom(ctx, "remote.settings") ||
+							ctx?.remote?.namespaces?.get?.("settings")?.service
+						);
+					});
+					if (typeof stopRemoteSettingsInject === "function") cleanups.push(stopRemoteSettingsInject);
+				} catch (_) {}
+			}
+			try {
+				const remoteRoot = resolveServiceFrom(ctx, "remote") || ctx?.remote;
+				if (remoteRoot && typeof remoteRoot.invoke === "function") {
+					const origInvoke = remoteRoot.invoke.bind(remoteRoot);
+					remoteRoot.invoke = (descriptor, projection, token, callerCtx, values, boundIdentity) => {
+						if (
+							descriptor?.namespace === "settings" &&
+							descriptor?.method === "update" &&
+							Array.isArray(values) &&
+							isAutoStandardReset(values[0], values[1], values[2])
+						) {
+							return Promise.resolve({ ok: true, value: undefined });
+						}
+						return origInvoke(descriptor, projection, token, callerCtx, values, boundIdentity);
+					};
+					cleanups.push(() => {
+						try { remoteRoot.invoke = origInvoke; } catch (_) {}
+					});
+				}
+			} catch (_) {}
+
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				const onFullPresetsToggle = () => {
+					notifyListeners();
+				};
+				window.addEventListener(FULL_AGENT_PRESETS_EVENT, onFullPresetsToggle);
+				cleanups.push(() => {
+					window.removeEventListener(FULL_AGENT_PRESETS_EVENT, onFullPresetsToggle);
+				});
+			}
+
+			return () => {
+				for (const fn of cleanups.splice(0, cleanups.length)) {
+					try { if (typeof fn === "function") fn(); } catch (_) { /* ignore */ }
+				}
+			};
+		}
+
 		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout", "locale"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
@@ -6700,6 +7038,7 @@ window.__ModuleLoader__.load({
 				publishPromptOverlayMaxLines(result.value);
 				publishChatContentVisibility(result.value);
 				publishEyeCareTheme(result.value);
+				publishFullAgentPresets(result.value);
 				publishThemePreference(result.value);
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
@@ -6710,6 +7049,7 @@ window.__ModuleLoader__.load({
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
 			const stopChatContentVisibility = installChatContentVisibility();
 			const stopDesktopThemes = installDesktopThemes(ctx);
+			const stopFullAgentPresets = installFullAgentPresets(ctx);
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
@@ -6719,6 +7059,7 @@ window.__ModuleLoader__.load({
 					stopHoverMessageActions();
 					stopChatContentVisibility();
 					stopDesktopThemes();
+					stopFullAgentPresets();
 				});
 			}
 			// First-class settings nav entry (same slot as Models / Plugins / Market).

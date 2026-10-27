@@ -820,6 +820,120 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   delete window.__DSH_DESKTOP_THEME_PREFERENCE__;
   window.dispatchEvent(new CustomEvent("dsh-desktop-theme-preference", { detail: "idea-dark" }));
   assert.equal(realThemeRuntime.preference, "idea-dark", "remote themePreference from desktop-state.json must restore idea-dark across port changes");
+
+  // Verify fullAgentPresets keeps all Agent preset modes visible (including ptc, minimal, and future presets)
+  // even when "Show coding view" (developerTools) is disabled, and prevents reconcileCodingTools from resetting default to standard.
+  let codingViewEnabled = false;
+  const devToolsSource = {
+    getSnapshot: () => codingViewEnabled,
+    subscribe: () => () => {},
+  };
+  const allPresets = [
+    { id: "standard" },
+    { id: "ptc" },
+    { id: "minimal" },
+    { id: "cordis" },
+    { id: "future-advanced-mode" },
+  ];
+  const requiresCodingTools = (preset) => preset.id === "ptc" || preset.id === "minimal" || preset.id === "future-advanced-mode";
+  const renderPresetIds = ({ useDeveloperTools }) => {
+    const devTools = useDeveloperTools((v) => v);
+    return allPresets.filter((p) => devTools || !requiresCodingTools(p)).map((p) => p.id);
+  };
+  const heroEntry = {
+    options: { name: "conversation.hero.agentPreset" },
+    inject: () => ({ hooks: { developerTools: devToolsSource } }),
+    component: renderPresetIds,
+  };
+  const sectionEntry = {
+    options: { name: "settings.section", id: "agent-presets" },
+    inject: () => ({ hooks: { developerTools: devToolsSource } }),
+    component: renderPresetIds,
+  };
+  const settingsUpdates = [];
+  const presetForm = {
+    getSnapshot: () => ({ status: "ready", writable: true, revision: 5, value: { selectedDefault: "ptc" } }),
+  };
+  const presetCtx = {
+    ...ctx,
+    get(key) {
+      if (key === "configForms") {
+        return {
+          get(ns) {
+            if (ns === "agent-preset-registry") return presetForm;
+            return undefined;
+          },
+        };
+      }
+      if (key === "remote.settings") {
+        return presetCtx.remote.settings;
+      }
+      return undefined;
+    },
+    remote: {
+      ...ctx.remote,
+      settings: {
+        update(ns, patch, expectedRevision) {
+          settingsUpdates.push({ ns, patch, expectedRevision });
+          return Promise.resolve({ ok: true, value: undefined });
+        },
+      },
+    },
+    slots: {
+      entries(slotName) {
+        if (slotName === "conversation.hero.agentPreset") return [heroEntry];
+        if (slotName === "settings.section") return [sectionEntry];
+        return [];
+      },
+      subscribe() { return () => {}; },
+      inject(_s, fn) { return fn(); },
+      register() { return () => {}; },
+    },
+  };
+  window.__DSH_DESKTOP_FULL_AGENT_PRESETS__ = true;
+  themeClient.apply(presetCtx);
+
+  assert.equal(
+    presetForm.getSnapshot().writable,
+    false,
+    "configForms.get('agent-preset-registry').getSnapshot().writable must be false when fullAgentPresets is enabled so reconcileCodingTools exits immediately without race errors"
+  );
+
+  const heroInjected = heroEntry.inject();
+  assert.equal(heroInjected.hooks.developerTools.getSnapshot(), true, "hero developerTools source must stay true when fullAgentPresets is enabled");
+  const sectionInjected = sectionEntry.inject();
+  assert.equal(sectionInjected.hooks.developerTools.getSnapshot(), true, "section developerTools source must stay true when fullAgentPresets is enabled");
+
+  // Component wrapper also guarantees full mode list even if original useDeveloperTools returned false
+  const wrappedRendered = heroEntry.component({
+    useDeveloperTools: (sel) => (typeof sel === "function" ? sel(codingViewEnabled) : codingViewEnabled),
+  });
+  const visibleViaWrapper = wrappedRendered.type(wrappedRendered.props);
+  assert.deepEqual(
+    visibleViaWrapper,
+    ["standard", "ptc", "minimal", "cordis", "future-advanced-mode"],
+    "all preset modes (including ptc, minimal, and future modes) must remain visible when coding view is off"
+  );
+
+  // Automatic reconcileCodingTools reset (with expectedRevision) must be blocked while fullAgentPresets is on
+  await presetCtx.remote.settings.update("agent-preset-registry", { selectedDefault: "standard" }, 7);
+  assert.equal(settingsUpdates.length, 0, "reconcileCodingTools auto-reset to standard must be blocked when fullAgentPresets is enabled");
+  // Explicit user default selection (without expectedRevision) must still pass through
+  await presetCtx.remote.settings.update("agent-preset-registry", { selectedDefault: "standard" }, undefined);
+  assert.equal(settingsUpdates.length, 1, "explicit user default preset change must pass through");
+
+  // Disabling fullAgentPresets restores native developerTools gating
+  window.dispatchEvent(new CustomEvent("dsh-desktop-full-agent-presets", { detail: false }));
+  window.__DSH_DESKTOP_FULL_AGENT_PRESETS__ = false;
+  assert.equal(heroInjected.hooks.developerTools.getSnapshot(), false, "disabling fullAgentPresets must restore native developerTools snapshot");
+  const wrappedWhenOff = heroEntry.component({
+    useDeveloperTools: (sel) => (typeof sel === "function" ? sel(codingViewEnabled) : codingViewEnabled),
+  });
+  assert.deepEqual(
+    wrappedWhenOff.type(wrappedWhenOff.props),
+    ["standard", "cordis"],
+    "disabling fullAgentPresets must restore native coding-view filtering"
+  );
 }
 console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and persistence verified");
 

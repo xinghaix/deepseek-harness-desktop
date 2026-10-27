@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "Skip painting off-screen transcript nodes with CSS content-visibility. Helps long-session scrolling. Turning off restores default drawing immediately. Loading earlier history may jump slightly.",
   "field.eye_care_theme": "Add Eye-Care Dark theme",
   "field.eye_care_theme_hint": "Provide a neutral soft-charcoal “Eye-Care Dark” option under General → Appearance and persist it across restarts; falls back to the official Dark theme when disabled or opened outside this desktop app.",
+  "field.full_agent_presets": "Show all Agent preset modes",
+  "field.full_agent_presets_hint": "Always display the complete list of Agent presets (including PTC mode, Minimal mode, and any future presets) in the new-task switcher and Agent presets settings, regardless of whether “Show coding view” is turned off.",
   "field.language": "Interface language",
   "field.language_hint": "Follow the system language, or pick a fixed language. Saved in desktop-state.json.",
   "lang.system": "System",

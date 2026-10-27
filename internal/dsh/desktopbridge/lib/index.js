@@ -42,6 +42,7 @@ const routes = Object.freeze({
 	setHoverMessageActions: Object.freeze({ method: "POST", path: "/v1/set-hover-message-actions" }),
 	setChatContentVisibility: Object.freeze({ method: "POST", path: "/v1/set-chat-content-visibility" }),
 	setEyeCareTheme: Object.freeze({ method: "POST", path: "/v1/set-eye-care-theme" }),
+	setFullAgentPresets: Object.freeze({ method: "POST", path: "/v1/set-full-agent-presets" }),
 	setThemePreference: Object.freeze({ method: "POST", path: "/v1/set-theme-preference" }),
 	setPromptOverlayMaxLines: Object.freeze({ method: "POST", path: "/v1/set-prompt-overlay-max-lines" }),
 	setRestoreLastSession: Object.freeze({ method: "POST", path: "/v1/set-restore-last-session" }),

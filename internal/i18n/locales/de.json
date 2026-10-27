@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "Blendet das Zeichnen von Transkript-Knoten außerhalb des Viewports per CSS content-visibility aus. Hilft bei langen Sitzungen. Aus schaltet sofort die Standardzeichnung zurück. Beim Laden älterer Historie kann die Scrollposition leicht springen.",
   "field.eye_care_theme": "Augenschonendes dunkles Thema hinzufügen",
   "field.eye_care_theme_hint": "Stellt unter Allgemein → Erscheinungsbild ein neutrales „Augenschonend Dunkel“-Thema bereit und speichert es über Neustarts hinweg; fällt beim Deaktivieren oder außerhalb dieser Desktop-App automatisch auf das offizielle dunkle Thema zurück.",
+  "field.full_agent_presets": "Alle Agent-Preset-Modi vollständig anzeigen",
+  "field.full_agent_presets_hint": "Zeigt in der Modusauswahl für neue Aufgaben und unter „Agent-Presets“ stets alle Modi (einschließlich PTC-Modus, Minimalmodus und künftiger Modi) vollständig an, unabhängig davon, ob „Code-Arbeitsansicht anzeigen“ deaktiviert ist.",
   "field.language": "Oberflächensprache",
   "field.language_hint": "Systemsprache folgen oder eine feste Sprache wählen. Gespeichert in desktop-state.json.",
   "lang.system": "System",

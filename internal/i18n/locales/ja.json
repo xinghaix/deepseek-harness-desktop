@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "画面外の会話ノードを CSS content-visibility で描画スキップし、長いセッションのスクロールを軽くします。オフにするとすぐ既定描画に戻ります。より前の履歴を読み込むとき、位置が少し跳ぶことがあります。",
   "field.eye_care_theme": "目に優しいダークテーマを追加",
   "field.eye_care_theme_hint": "一般設定の「外観」にニュートラルな浅黒色の「目に優しいダーク」テーマを追加し、再起動後も保持します。オフにした場合や dsh web など本デスクトップ以外で開いた場合は公式ダークテーマに自動フォールバックします。",
+  "field.full_agent_presets": "すべての Agent プリセットモードを表示",
+  "field.full_agent_presets_hint": "一般設定の「コード作業ビューを表示」がオフでも、新規タスクのモード切替と「Agent プリセット」設定ですべてのプリセット（PTC モード、ミニマルモードおよび今後追加されるモード）を常に完全表示します。",
   "field.language": "インターフェース言語",
   "field.language_hint": "システム言語に従うか、固定言語を選びます。desktop-state.json に保存されます。",
   "lang.system": "システム",

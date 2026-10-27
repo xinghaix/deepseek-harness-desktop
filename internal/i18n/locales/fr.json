@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "Ignore le dessin des nœuds hors écran avec CSS content-visibility. Aide les longues sessions. Désactiver rétablit immédiatement le dessin par défaut. Charger un historique plus ancien peut légèrement sauter.",
   "field.eye_care_theme": "Ajouter le thème sombre doux",
   "field.eye_care_theme_hint": "Propose le thème neutre « Sombre doux » dans Général → Apparence et le conserve après redémarrage ; revient automatiquement au thème sombre officiel s’il est désactivé ou ouvert hors de cette application de bureau.",
+  "field.full_agent_presets": "Afficher tous les modes de préréglage de l’Agent",
+  "field.full_agent_presets_hint": "Affiche toujours la liste complète des préréglages d’Agent (y compris le mode PTC, le mode minimal et les futurs modes) dans le sélecteur de nouvelle tâche et les paramètres de préréglages, même lorsque « Afficher la vue de code » est désactivé.",
   "field.language": "Langue de l’interface",
   "field.language_hint": "Suivre la langue système, ou choisir une langue fixe. Enregistré dans desktop-state.json.",
   "lang.system": "Système",

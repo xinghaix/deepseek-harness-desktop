@@ -91,6 +91,7 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		HoverMessageActions:   prefs.HoverMessageActions,
 		ChatContentVisibility: prefs.ChatContentVisibility,
 		EyeCareTheme:          prefs.EyeCareTheme,
+		FullAgentPresets:      prefs.FullAgentPresets,
 		PromptOverlayMaxLines: prefs.PromptOverlayMaxLines,
 		RestoreLastSession:    prefs.RestoreLastSession,
 		RememberWindowSize:    prefs.RememberWindowSize,
@@ -127,6 +128,13 @@ func (a bridgeHostAdapter) SetThemePreference(preference string) (dsh.BridgePref
 
 func (a bridgeHostAdapter) SetEyeCareTheme(enabled bool) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetEyeCareTheme(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetFullAgentPresets(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetFullAgentPresets(enabled); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil

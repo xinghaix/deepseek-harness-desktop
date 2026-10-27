@@ -44,6 +44,7 @@ type desktopPrefs struct {
 	hoverMessageActions   atomic.Bool
 	chatContentVisibility atomic.Bool
 	eyeCareTheme          atomic.Bool
+	fullAgentPresets      atomic.Bool
 	promptOverlayMaxLines atomic.Int32
 	restoreLastSession    atomic.Bool
 	rememberWindowSize    atomic.Bool
@@ -61,6 +62,7 @@ func (p *desktopPrefs) load() {
 	p.hoverMessageActions.Store(true)
 	p.chatContentVisibility.Store(true)
 	p.eyeCareTheme.Store(true)
+	p.fullAgentPresets.Store(true)
 	p.promptOverlayMaxLines.Store(defaultPromptOverlayMaxLines)
 	p.restoreLastSession.Store(true)
 	p.rememberWindowSize.Store(true)
@@ -103,6 +105,9 @@ func (p *desktopPrefs) load() {
 	if prefs.EyeCareTheme != nil {
 		p.eyeCareTheme.Store(*prefs.EyeCareTheme)
 	}
+	if prefs.FullAgentPresets != nil {
+		p.fullAgentPresets.Store(*prefs.FullAgentPresets)
+	}
 	if prefs.PromptOverlayMaxLines != nil {
 		p.promptOverlayMaxLines.Store(int32(clampPromptOverlayMaxLines(*prefs.PromptOverlayMaxLines)))
 	}
@@ -130,6 +135,7 @@ func (p *desktopPrefs) save() error {
 	hoverMessageActions := p.hoverMessageActions.Load()
 	chatContentVisibility := p.chatContentVisibility.Load()
 	eyeCareTheme := p.eyeCareTheme.Load()
+	fullAgentPresets := p.fullAgentPresets.Load()
 	promptOverlayMaxLines := int(p.promptOverlayMaxLines.Load())
 	restoreLastSession := p.restoreLastSession.Load()
 	rememberWindowSize := p.rememberWindowSize.Load()
@@ -143,6 +149,7 @@ func (p *desktopPrefs) save() error {
 		f.Prefs.HoverMessageActions = &hoverMessageActions
 		f.Prefs.ChatContentVisibility = &chatContentVisibility
 		f.Prefs.EyeCareTheme = &eyeCareTheme
+		f.Prefs.FullAgentPresets = &fullAgentPresets
 		f.Prefs.PromptOverlayMaxLines = &promptOverlayMaxLines
 		f.Prefs.RestoreLastSession = &restoreLastSession
 		f.Prefs.RememberWindowSize = &rememberWindowSize

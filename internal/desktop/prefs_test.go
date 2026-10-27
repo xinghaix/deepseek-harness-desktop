@@ -315,11 +315,15 @@ func TestEyeCareThemeAndThemePreferencePersist(t *testing.T) {
 	if !p.eyeCareTheme.Load() {
 		t.Fatal("eyeCareTheme must default to on")
 	}
+	if !p.fullAgentPresets.Load() {
+		t.Fatal("fullAgentPresets must default to on")
+	}
 	if p.getThemePreference() != "" {
 		t.Fatalf("themePreference default = %q, want empty", p.getThemePreference())
 	}
 	p.setThemePreference("idea-dark")
 	p.eyeCareTheme.Store(false)
+	p.fullAgentPresets.Store(false)
 	if err := p.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -330,6 +334,9 @@ func TestEyeCareThemeAndThemePreferencePersist(t *testing.T) {
 	if file.Prefs.EyeCareTheme == nil || *file.Prefs.EyeCareTheme {
 		t.Fatalf("eyeCareTheme persisted = %v, want false", file.Prefs.EyeCareTheme)
 	}
+	if file.Prefs.FullAgentPresets == nil || *file.Prefs.FullAgentPresets {
+		t.Fatalf("fullAgentPresets persisted = %v, want false", file.Prefs.FullAgentPresets)
+	}
 	if file.Prefs.ThemePreference == nil || *file.Prefs.ThemePreference != "idea-dark" {
 		t.Fatalf("themePreference persisted = %v, want idea-dark", file.Prefs.ThemePreference)
 	}
@@ -338,6 +345,9 @@ func TestEyeCareThemeAndThemePreferencePersist(t *testing.T) {
 	p2.load()
 	if p2.eyeCareTheme.Load() {
 		t.Fatal("disabled eyeCareTheme was not reloaded")
+	}
+	if p2.fullAgentPresets.Load() {
+		t.Fatal("disabled fullAgentPresets was not reloaded")
 	}
 	if got := p2.getThemePreference(); got != "idea-dark" {
 		t.Fatalf("reloaded themePreference = %q, want idea-dark", got)

@@ -88,6 +88,8 @@
   "field.chat_content_visibility_hint": "뷰포트 밖 대화 노드를 CSS content-visibility로 그리지 않아 긴 세션 스크롤을 가볍게 합니다. 끄면 바로 기본 그리기로 돌아갑니다. 이전 기록을 불러올 때 위치가 살짝 뛸 수 있습니다.",
   "field.eye_care_theme": "눈 보호 다크 테마 추가",
   "field.eye_care_theme_hint": "일반 설정의 ‘외관’에 중성 차콜 톤의 ‘눈 보호 다크’ 테마를 제공하고 재시작 후에도 유지합니다. 끄거나 dsh web 등 데스크톱 앱 외부에서 열면 공식 다크 테마로 자동 전환됩니다.",
+  "field.full_agent_presets": "모든 Agent 프리셋 모드 전체 표시",
+  "field.full_agent_presets_hint": "일반 설정의 ‘코드 작업 뷰 표시’가 꺼져 있어도 새 작업 모드 전환 및 ‘Agent 프리셋’ 설정에서 모든 프리셋(PTC 모드, 미니멀 모드 및 향후 추가되는 모드)을 항상 완전히 표시합니다.",
   "field.language": "인터페이스 언어",
   "field.language_hint": "시스템 언어를 따르거나 고정 언어를 선택합니다. desktop-state.json에 저장됩니다.",
   "lang.system": "시스템",
