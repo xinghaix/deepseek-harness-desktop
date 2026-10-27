@@ -86,6 +86,8 @@
   "field.delete_session_actions_hint": "在活动会话和已归档会话的操作菜单中显示“删除会话”选项。删除将永久移除本地磁盘上的会话记录。",
   "field.chat_content_visibility": "Chat 滚动渲染优化",
   "field.chat_content_visibility_hint": "对视口外的对话节点使用 content-visibility，减轻长会话滚动绘制。关闭后立即恢复默认。加载更早历史时滚动位置可能轻微跳动。",
+  "field.eye_care_theme": "新增护眼暗色主题",
+  "field.eye_care_theme_hint": "在通用设置「外观」中提供柔和中性浅黑色的「护眼暗色」主题，并跨重启保存；关闭或通过 dsh web 等非本桌面端打开时自动回退至官方深色主题。",
   "field.language": "界面语言",
   "field.language_hint": "跟随系统语言，或选择固定语言。保存在 desktop-state.json。",
   "lang.system": "跟随系统",

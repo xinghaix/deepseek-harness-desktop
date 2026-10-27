@@ -85,6 +85,15 @@ type ClipboardHost interface {
 	WriteClipboard(text string) error
 }
 
+// ThemePreferenceHost is optional; implementations persist the desktop theme
+// preference (e.g. "idea-dark", "dark", "light", "system") and eye-care dark
+// theme toggle in desktop-state.json so they survive ephemeral loopback port
+// changes across restarts.
+type ThemePreferenceHost interface {
+	SetThemePreference(preference string) (BridgePrefs, error)
+	SetEyeCareTheme(enabled bool) (BridgePrefs, error)
+}
+
 type PrefsHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
@@ -158,9 +167,11 @@ type BridgePrefs struct {
 	DeleteSessionActions  bool                 `json:"deleteSessionActions"`
 	HoverMessageActions   bool                 `json:"hoverMessageActions"`
 	ChatContentVisibility bool                 `json:"chatContentVisibility"`
+	EyeCareTheme          bool                 `json:"eyeCareTheme"`
 	PromptOverlayMaxLines int                  `json:"promptOverlayMaxLines"`
 	RestoreLastSession    bool                 `json:"restoreLastSession"`
 	RememberWindowSize    bool                 `json:"rememberWindowSize"`
+	ThemePreference       string               `json:"themePreference,omitempty"`
 	Language              string               `json:"language"`
 	ResolvedLocale        string               `json:"resolvedLocale"`
 	SystemLocale          string               `json:"systemLocale"`
@@ -901,6 +912,62 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		prefs, err := host.SetRememberWindowSize(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-eye-care-theme":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		themeHost, ok := host.(ThemePreferenceHost)
+		if !ok {
+			writeBridgeJSON(w, http.StatusOK, host.BridgePrefs())
+			return
+		}
+		prefs, err := themeHost.SetEyeCareTheme(body.Enabled)
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-theme-preference":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Preference string `json:"preference"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		themeHost, ok := host.(ThemePreferenceHost)
+		if !ok {
+			writeBridgeJSON(w, http.StatusOK, host.BridgePrefs())
+			return
+		}
+		prefs, err := themeHost.SetThemePreference(body.Preference)
 		if err != nil {
 			writeBridgeError(w, http.StatusConflict, err.Error())
 			return

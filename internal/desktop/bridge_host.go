@@ -19,6 +19,7 @@ var _ dsh.ExternalURLHost = bridgeHostAdapter{}
 var _ dsh.ChatWindowActionHost = bridgeHostAdapter{}
 var _ dsh.ChatContextMenuHost = bridgeHostAdapter{}
 var _ dsh.ClipboardHost = bridgeHostAdapter{}
+var _ dsh.ThemePreferenceHost = bridgeHostAdapter{}
 
 func (a bridgeHostAdapter) WriteClipboard(text string) error {
 	app, err := desktopApp()
@@ -89,9 +90,11 @@ func (a bridgeHostAdapter) BridgePrefs() dsh.BridgePrefs {
 		DeleteSessionActions:  prefs.DeleteSessionActions,
 		HoverMessageActions:   prefs.HoverMessageActions,
 		ChatContentVisibility: prefs.ChatContentVisibility,
+		EyeCareTheme:          prefs.EyeCareTheme,
 		PromptOverlayMaxLines: prefs.PromptOverlayMaxLines,
 		RestoreLastSession:    prefs.RestoreLastSession,
 		RememberWindowSize:    prefs.RememberWindowSize,
+		ThemePreference:       prefs.ThemePreference,
 		Language:              prefs.Language,
 		ResolvedLocale:        prefs.ResolvedLocale,
 		SystemLocale:          prefs.SystemLocale,
@@ -110,6 +113,20 @@ func (a bridgeHostAdapter) SetRestoreLastSession(enabled bool) (dsh.BridgePrefs,
 
 func (a bridgeHostAdapter) SetRememberWindowSize(enabled bool) (dsh.BridgePrefs, error) {
 	if _, err := a.service.SetRememberWindowSize(enabled); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetThemePreference(preference string) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetThemePreference(preference); err != nil {
+		return a.BridgePrefs(), err
+	}
+	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) SetEyeCareTheme(enabled bool) (dsh.BridgePrefs, error) {
+	if _, err := a.service.SetEyeCareTheme(enabled); err != nil {
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil

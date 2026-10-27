@@ -26,6 +26,15 @@ func clampPromptOverlayMaxLines(n int) int {
 	return n
 }
 
+func normalizeThemePreference(pref string) string {
+	switch strings.TrimSpace(pref) {
+	case "light", "dark", "idea-dark", "system":
+		return strings.TrimSpace(pref)
+	default:
+		return ""
+	}
+}
+
 type desktopPrefs struct {
 	confirmQuitWhenBusy   atomic.Bool
 	trayEnabled           atomic.Bool
@@ -34,9 +43,11 @@ type desktopPrefs struct {
 	deleteSessionActions  atomic.Bool
 	hoverMessageActions   atomic.Bool
 	chatContentVisibility atomic.Bool
+	eyeCareTheme          atomic.Bool
 	promptOverlayMaxLines atomic.Int32
 	restoreLastSession    atomic.Bool
 	rememberWindowSize    atomic.Bool
+	themePreference       atomic.Value // string; "" = unset, or "light" | "dark" | "idea-dark" | "system"
 	language              atomic.Value // string; "" / "system" = follow system
 	shortcuts             atomic.Value // map[string]string overrides; nil/empty = all defaults
 }
@@ -49,9 +60,11 @@ func (p *desktopPrefs) load() {
 	p.deleteSessionActions.Store(true)
 	p.hoverMessageActions.Store(true)
 	p.chatContentVisibility.Store(true)
+	p.eyeCareTheme.Store(true)
 	p.promptOverlayMaxLines.Store(defaultPromptOverlayMaxLines)
 	p.restoreLastSession.Store(true)
 	p.rememberWindowSize.Store(true)
+	p.themePreference.Store("")
 	p.language.Store("")
 	p.shortcuts.Store(map[string]string(nil))
 	file, err := desktopstate.Load()
@@ -87,6 +100,9 @@ func (p *desktopPrefs) load() {
 	if prefs.ChatContentVisibility != nil {
 		p.chatContentVisibility.Store(*prefs.ChatContentVisibility)
 	}
+	if prefs.EyeCareTheme != nil {
+		p.eyeCareTheme.Store(*prefs.EyeCareTheme)
+	}
 	if prefs.PromptOverlayMaxLines != nil {
 		p.promptOverlayMaxLines.Store(int32(clampPromptOverlayMaxLines(*prefs.PromptOverlayMaxLines)))
 	}
@@ -95,6 +111,9 @@ func (p *desktopPrefs) load() {
 	}
 	if prefs.RememberWindowSize != nil {
 		p.rememberWindowSize.Store(*prefs.RememberWindowSize)
+	}
+	if prefs.ThemePreference != nil {
+		p.themePreference.Store(normalizeThemePreference(*prefs.ThemePreference))
 	}
 	if prefs.Language != nil {
 		p.language.Store(*prefs.Language)
@@ -110,6 +129,7 @@ func (p *desktopPrefs) save() error {
 	deleteSessionActions := p.deleteSessionActions.Load()
 	hoverMessageActions := p.hoverMessageActions.Load()
 	chatContentVisibility := p.chatContentVisibility.Load()
+	eyeCareTheme := p.eyeCareTheme.Load()
 	promptOverlayMaxLines := int(p.promptOverlayMaxLines.Load())
 	restoreLastSession := p.restoreLastSession.Load()
 	rememberWindowSize := p.rememberWindowSize.Load()
@@ -122,9 +142,16 @@ func (p *desktopPrefs) save() error {
 		f.Prefs.DeleteSessionActions = &deleteSessionActions
 		f.Prefs.HoverMessageActions = &hoverMessageActions
 		f.Prefs.ChatContentVisibility = &chatContentVisibility
+		f.Prefs.EyeCareTheme = &eyeCareTheme
 		f.Prefs.PromptOverlayMaxLines = &promptOverlayMaxLines
 		f.Prefs.RestoreLastSession = &restoreLastSession
 		f.Prefs.RememberWindowSize = &rememberWindowSize
+		if themePref := p.getThemePreference(); themePref != "" {
+			themeCopy := themePref
+			f.Prefs.ThemePreference = &themeCopy
+		} else {
+			f.Prefs.ThemePreference = nil
+		}
 		if lang := p.getLanguage(); lang != "" {
 			langCopy := lang
 			f.Prefs.Language = &langCopy
@@ -133,6 +160,15 @@ func (p *desktopPrefs) save() error {
 		}
 		f.Prefs.Shortcuts = shortcuts
 	})
+}
+
+func (p *desktopPrefs) getThemePreference() string {
+	v, _ := p.themePreference.Load().(string)
+	return normalizeThemePreference(v)
+}
+
+func (p *desktopPrefs) setThemePreference(pref string) {
+	p.themePreference.Store(normalizeThemePreference(pref))
 }
 
 func (p *desktopPrefs) getLanguage() string {

@@ -419,7 +419,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := string(clientBytes)
-	for _, fragment := range []string{"settings.section", `t("tray.open_settings")`, `t("bridge.card_enhancements")`, "hoverMessageActions", "setHoverMessageActions", "chatContentVisibility", `t("field.chat_content_visibility")`, "setRestoreLastSession", "setRememberWindowSize", `t("field.restore_last_session")`, `t("field.remember_window_size")`, `t("dashboard.shortcuts_title")`, "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
+	for _, fragment := range []string{"settings.section", `t("tray.open_settings")`, `t("bridge.card_enhancements")`, "hoverMessageActions", "setHoverMessageActions", "chatContentVisibility", `t("field.chat_content_visibility")`, "eyeCareTheme", "setEyeCareTheme", `t("field.eye_care_theme")`, "setThemePreference", "setRestoreLastSession", "setRememberWindowSize", `t("field.restore_last_session")`, `t("field.remember_window_size")`, `t("dashboard.shortcuts_title")`, "setShortcuts", "CAPABILITIES_SCHEMA", "ensureDesktopHandshake", "http-fallback"} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client overlay missing %q", fragment)
 		}
@@ -442,7 +442,7 @@ func TestWriteDesktopBridgeOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := string(hostBytes)
-	for _, fragment := range []string{`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", "kind: \"prefix\"", "configFromEndpointFile", "setRestoreLastSession", "setRememberWindowSize"} {
+	for _, fragment := range []string{`inject = ["connection", "webServer"]`, `ctx.inject(["connection", "webServer"]`, "webServer.register", "kind: \"prefix\"", "configFromEndpointFile", "setRestoreLastSession", "setRememberWindowSize", "setEyeCareTheme", "setThemePreference"} {
 		if !strings.Contains(host, fragment) {
 			t.Fatalf("host overlay missing %q", fragment)
 		}

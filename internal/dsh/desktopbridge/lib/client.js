@@ -332,6 +332,8 @@ window.__ModuleLoader__.load({
 			"bridge.theme_dark": "Dark",
 			"bridge.theme_idea_dark": "Eye-Care Dark",
 			"bridge.theme_system": "System",
+			"field.eye_care_theme": "Add Eye-Care Dark theme",
+			"field.eye_care_theme_hint": "Provide a neutral soft-charcoal “Eye-Care Dark” option under General → Appearance and persist it across restarts; falls back to the official Dark theme when disabled or opened outside this desktop app.",
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -4703,6 +4705,8 @@ window.__ModuleLoader__.load({
 					publishPromptOverlayLanguage(nextPrefs);
 					publishPromptOverlayMaxLines(nextPrefs);
 					publishChatContentVisibility(nextPrefs);
+					publishEyeCareTheme(nextPrefs);
+					publishThemePreference(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
 					if (syncDraft) {
@@ -4750,7 +4754,7 @@ window.__ModuleLoader__.load({
 				if (!value || typeof value !== "object") return;
 				// Update payloads also have `state`; never treat them as DSH process status.
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
-				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
+				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.eyeCareTheme !== undefined || value.themePreference !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
 				if (looksLikeStatus) setStatus(value);
 				if (looksLikePrefs) setPrefs(value);
@@ -4761,6 +4765,8 @@ window.__ModuleLoader__.load({
 				publishPromptOverlayLanguage(value);
 				publishPromptOverlayMaxLines(value);
 				publishChatContentVisibility(value);
+				publishEyeCareTheme(value);
+				publishThemePreference(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
 					if (key) {
@@ -4773,7 +4779,7 @@ window.__ModuleLoader__.load({
 			// light actions must not flip the whole page into "busy/reconnecting".
 			const invoke = async (endpoint, payload, okText, opts = {}) => {
 				const heavy = opts.heavy === true;
-				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
+				const quiet = opts.quiet === true || endpoint === "reportCurrentSession" || endpoint === "clearLastSession" || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "setAutoCheckUpdate";
 				if (!quiet) setPending(true);
 				if (!okText && !quiet) setMessage("");
 				try {
@@ -5624,6 +5630,30 @@ window.__ModuleLoader__.load({
 									})
 								})
 							]
+						}),
+						jsxs("div", {
+							className: "dshDesktopBridgeRow",
+							children: [
+								jsxs("div", {
+									className: "dshDesktopBridgeRowText",
+									children: [
+										jsx("div", { className: "dshDesktopBridgeTitle", children: t("field.eye_care_theme") }),
+										jsx("div", { className: "dshDesktopBridgeDesc", children: t("field.eye_care_theme_hint") })
+									]
+								}),
+								jsx("div", {
+									className: "dshDesktopBridgeControl",
+									children: jsx("input", {
+										className: "dshDesktopBridgeToggle",
+										type: "checkbox",
+										role: "switch",
+										"aria-checked": prefs?.eyeCareTheme !== false,
+										checked: prefs?.eyeCareTheme !== false,
+										disabled: !connected || pending || !prefs || enhancementDisabled,
+										onChange: (event) => void invoke("setEyeCareTheme", { enabled: event.target.checked })
+									})
+								})
+							]
 						})
 						]
 					}),
@@ -5929,27 +5959,95 @@ window.__ModuleLoader__.load({
 			colorScheme: "dark",
 			tokens: IDEA_DARK_THEME_TOKENS
 		});
+		const EYE_CARE_THEME_GLOBAL = "__DSH_DESKTOP_EYE_CARE_THEME__";
+		const EYE_CARE_THEME_EVENT = "dsh-desktop-eye-care-theme";
+		const THEME_PREFERENCE_GLOBAL = "__DSH_DESKTOP_THEME_PREFERENCE__";
+		const THEME_PREFERENCE_EVENT = "dsh-desktop-theme-preference";
+		if (typeof window !== "undefined" && typeof window[EYE_CARE_THEME_GLOBAL] !== "boolean") {
+			window[EYE_CARE_THEME_GLOBAL] = true;
+		}
+		let durableDesktopThemePreference = "";
 
-		function readSavedDesktopThemePreference() {
-			try {
-				if (typeof window !== "undefined" && window.localStorage) {
-					const raw = window.localStorage.getItem(DESKTOP_THEME_STORAGE_KEY);
-					return typeof raw === "string" ? raw.trim() : "";
-				}
-			} catch (_) { /* storage unavailable */ }
+		function normalizeDesktopThemePreference(raw) {
+			const trimmed = typeof raw === "string" ? raw.trim() : "";
+			if (trimmed === "light" || trimmed === "dark" || trimmed === IDEA_DARK_THEME_ID || trimmed === "system") {
+				return trimmed;
+			}
 			return "";
 		}
 
-		function writeSavedDesktopThemePreference(preference) {
+		function isEyeCareThemeEnabled() {
+			if (typeof window !== "undefined" && typeof window[EYE_CARE_THEME_GLOBAL] === "boolean") {
+				return window[EYE_CARE_THEME_GLOBAL];
+			}
+			return true;
+		}
+
+		function publishEyeCareTheme(value) {
+			if (typeof value?.eyeCareTheme !== "boolean" || typeof window === "undefined") return;
+			const enabled = value.eyeCareTheme;
+			if (window[EYE_CARE_THEME_GLOBAL] === enabled) return;
+			window[EYE_CARE_THEME_GLOBAL] = enabled;
+			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+			window.dispatchEvent(new CustomEvent(EYE_CARE_THEME_EVENT, { detail: enabled }));
+		}
+
+		function publishThemePreference(value) {
+			let pref = normalizeDesktopThemePreference(value?.themePreference);
+			let persistDefault = false;
+			if (!pref && value?.eyeCareTheme === true && !readSavedDesktopThemePreference()) {
+				pref = IDEA_DARK_THEME_ID;
+				persistDefault = true;
+			}
+			if (!pref) return;
+			const current = readSavedDesktopThemePreference();
+			writeSavedDesktopThemePreference(pref, { persistRemote: persistDefault });
+			if (current === pref) return;
+			if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+				window.dispatchEvent(new CustomEvent(THEME_PREFERENCE_EVENT, { detail: pref }));
+			}
+		}
+
+		function readSavedDesktopThemePreference() {
+			if (typeof window !== "undefined") {
+				if (typeof window[THEME_PREFERENCE_GLOBAL] === "string") {
+					const fromWindow = normalizeDesktopThemePreference(window[THEME_PREFERENCE_GLOBAL]);
+					if (fromWindow) return fromWindow;
+				}
+				try {
+					if (window.localStorage) {
+						const raw = window.localStorage.getItem(DESKTOP_THEME_STORAGE_KEY);
+						const fromStorage = normalizeDesktopThemePreference(raw);
+						if (fromStorage) return fromStorage;
+					}
+				} catch (_) { /* storage unavailable */ }
+				return "";
+			}
+			return normalizeDesktopThemePreference(durableDesktopThemePreference);
+		}
+
+		function writeSavedDesktopThemePreference(preference, opts = {}) {
+			const normalized = normalizeDesktopThemePreference(preference);
+			durableDesktopThemePreference = normalized;
+			if (typeof window !== "undefined") {
+				if (normalized) {
+					window[THEME_PREFERENCE_GLOBAL] = normalized;
+				} else {
+					delete window[THEME_PREFERENCE_GLOBAL];
+				}
+			}
 			try {
 				if (typeof window !== "undefined" && window.localStorage) {
-					if (preference) {
-						window.localStorage.setItem(DESKTOP_THEME_STORAGE_KEY, String(preference));
+					if (normalized) {
+						window.localStorage.setItem(DESKTOP_THEME_STORAGE_KEY, normalized);
 					} else {
 						window.localStorage.removeItem(DESKTOP_THEME_STORAGE_KEY);
 					}
 				}
 			} catch (_) { /* storage unavailable */ }
+			if (opts.persistRemote !== false && localeConnection) {
+				void callDesktopRPC(localeConnection, "setThemePreference", { preference: normalized || String(preference || "") }).catch(() => {});
+			}
 		}
 
 		function syncBodyDesktopThemeAttribute(activeId) {
@@ -6140,11 +6238,18 @@ window.__ModuleLoader__.load({
 		function installDesktopThemes(ctx) {
 			const listeners = new Set();
 			let activeThemeService = null;
+			let activeThemeHooks = null;
+			let disposeAppearanceSlot = null;
+			let eyeCareEnabled = isEyeCareThemeEnabled();
 			let currentPreference = readSavedDesktopThemePreference() || "system";
 
 			const getPreference = () => {
 				const snapPref = readThemeSnapshot(activeThemeService)?.preference;
-				if (typeof snapPref === "string" && snapPref) return snapPref;
+				if (typeof snapPref === "string" && snapPref) {
+					if (snapPref === IDEA_DARK_THEME_ID && !eyeCareEnabled) return "dark";
+					return snapPref;
+				}
+				if (currentPreference === IDEA_DARK_THEME_ID && !eyeCareEnabled) return "dark";
 				return currentPreference || "system";
 			};
 
@@ -6152,46 +6257,84 @@ window.__ModuleLoader__.load({
 				if (typeof nextPref === "string" && nextPref) {
 					currentPreference = nextPref;
 				}
+				const effective = currentPreference === IDEA_DARK_THEME_ID && !eyeCareEnabled ? "dark" : currentPreference;
 				for (const fn of [...listeners]) {
-					try { fn(currentPreference); } catch (_) { /* listener isolation */ }
+					try { fn(effective); } catch (_) { /* listener isolation */ }
 				}
 			};
 
-			const selectTheme = (id) => {
+			const selectTheme = (id, opts = {}) => {
 				if (!id || typeof id !== "string") return;
-				writeSavedDesktopThemePreference(id);
+				const targetId = (id === IDEA_DARK_THEME_ID && !eyeCareEnabled) ? "dark" : id;
+				if (opts.persistRemote !== false) {
+					writeSavedDesktopThemePreference(targetId);
+				} else {
+					writeSavedDesktopThemePreference(targetId, { persistRemote: false });
+				}
 				if (activeThemeService && typeof activeThemeService.setTheme === "function") {
 					try {
-						activeThemeService.setTheme(id);
+						if (activeThemeHooks) activeThemeHooks.suppressRemotePersist = opts.persistRemote === false;
+						activeThemeService.setTheme(targetId);
 					} catch (_) {
-						syncBodyDesktopThemeAttribute(id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+						syncBodyDesktopThemeAttribute(targetId === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+					} finally {
+						if (activeThemeHooks) activeThemeHooks.suppressRemotePersist = false;
 					}
 				} else {
-					syncBodyDesktopThemeAttribute(id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+					syncBodyDesktopThemeAttribute(targetId === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
 				}
-				notify(id);
+				notify(targetId);
 			};
 
 			const attachThemeService = (theme) => {
 				if (!theme || activeThemeService === theme) return () => {};
 				activeThemeService = theme;
 				let disposeRegisteredTheme = null;
-				try {
-					if (!hasRegisteredTheme(theme, IDEA_DARK_THEME_ID) && typeof theme.register === "function") {
-						disposeRegisteredTheme = theme.register(IDEA_DARK_THEME_DEFINITION);
+				const ensureIdeaThemeRegistered = () => {
+					if (!eyeCareEnabled) return false;
+					if (hasRegisteredTheme(theme, IDEA_DARK_THEME_ID)) return true;
+					if (typeof theme.register === "function") {
+						try {
+							disposeRegisteredTheme = theme.register(IDEA_DARK_THEME_DEFINITION);
+							return true;
+						} catch (_) { /* registration guarded */ }
 					}
-				} catch (_) { /* registration guarded */ }
+					return hasRegisteredTheme(theme, IDEA_DARK_THEME_ID);
+				};
+				const unregisterIdeaTheme = () => {
+					if (typeof disposeRegisteredTheme === "function") {
+						try { disposeRegisteredTheme(); } catch (_) { /* ignore */ }
+						disposeRegisteredTheme = null;
+					}
+				};
+				ensureIdeaThemeRegistered();
 
 				const origSetTheme = typeof theme.setTheme === "function" ? theme.setTheme.bind(theme) : null;
 				const origAdopt = typeof theme.adopt === "function" ? theme.adopt.bind(theme) : null;
 				const origPublish = typeof theme.publish === "function" ? theme.publish.bind(theme) : null;
 				let internalWrite = false;
 				let inAdopt = false;
+				const hooks = {
+					suppressRemotePersist: false,
+					ensureIdeaThemeRegistered,
+					unregisterIdeaTheme,
+					fallbackToOfficialDark: () => {
+						internalWrite = true;
+						try {
+							if (origSetTheme) origSetTheme("dark");
+						} catch (_) { /* ignore */ } finally {
+							internalWrite = false;
+						}
+						syncBodyDesktopThemeAttribute("");
+						notify("dark");
+					}
+				};
+				activeThemeHooks = hooks;
 
 				if (origPublish) {
 					try {
 						theme.publish = () => {
-							if (inAdopt && readSavedDesktopThemePreference() === IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, IDEA_DARK_THEME_ID)) {
+							if (inAdopt && eyeCareEnabled && readSavedDesktopThemePreference() === IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, IDEA_DARK_THEME_ID)) {
 								theme.preference = IDEA_DARK_THEME_ID;
 							}
 							return origPublish();
@@ -6202,10 +6345,15 @@ window.__ModuleLoader__.load({
 				if (origSetTheme) {
 					try {
 						theme.setTheme = (id) => {
+							const builtinTheme = id === "light" || id === "dark" || id === "system";
+							const ideaAvailable = id === IDEA_DARK_THEME_ID && eyeCareEnabled && ensureIdeaThemeRegistered();
+							const customAvailable = !builtinTheme && id !== IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, id);
+							// 若目标主题不存在或护眼暗色主题开关已关闭，自动回退到官方 dark 主题
+							const resolvedId = (builtinTheme || ideaAvailable || customAvailable) ? id : "dark";
 							if (!internalWrite) {
-								writeSavedDesktopThemePreference(id);
+								writeSavedDesktopThemePreference(resolvedId, { persistRemote: !hooks.suppressRemotePersist });
 							}
-							if (id === IDEA_DARK_THEME_ID) {
+							if (resolvedId === IDEA_DARK_THEME_ID) {
 								internalWrite = true;
 								try {
 									const durablePref = theme.host?.getSnapshot?.()?.value?.preference;
@@ -6221,11 +6369,12 @@ window.__ModuleLoader__.load({
 									internalWrite = false;
 								}
 							} else {
-								origSetTheme(id);
+								origSetTheme(resolvedId);
 							}
 							const snap = readThemeSnapshot(theme);
-							syncBodyDesktopThemeAttribute(snap?.active?.id || (id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : ""));
-							notify(snap?.preference || id);
+							const activeId = snap?.active?.id || (resolvedId === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+							syncBodyDesktopThemeAttribute(activeId === IDEA_DARK_THEME_ID && eyeCareEnabled ? IDEA_DARK_THEME_ID : "");
+							notify(snap?.preference || resolvedId);
 						};
 					} catch (_) { /* ignore non-writable */ }
 				}
@@ -6240,7 +6389,7 @@ window.__ModuleLoader__.load({
 								inAdopt = false;
 							}
 							const saved = readSavedDesktopThemePreference();
-							if (saved === IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, IDEA_DARK_THEME_ID) && theme.preference !== IDEA_DARK_THEME_ID) {
+							if (saved === IDEA_DARK_THEME_ID && eyeCareEnabled && ensureIdeaThemeRegistered() && theme.preference !== IDEA_DARK_THEME_ID) {
 								theme.preference = IDEA_DARK_THEME_ID;
 								if (typeof theme.publish === "function") {
 									theme.publish();
@@ -6253,25 +6402,33 @@ window.__ModuleLoader__.load({
 				}
 
 				const saved = readSavedDesktopThemePreference();
-				if (saved === IDEA_DARK_THEME_ID && typeof theme.setTheme === "function") {
-					try { theme.setTheme(IDEA_DARK_THEME_ID); } catch (_) { /* ignore */ }
+				if (saved === IDEA_DARK_THEME_ID && eyeCareEnabled && ensureIdeaThemeRegistered() && typeof theme.setTheme === "function") {
+					hooks.suppressRemotePersist = true;
+					try {
+						theme.setTheme(IDEA_DARK_THEME_ID);
+					} catch (_) { /* ignore */ } finally {
+						hooks.suppressRemotePersist = false;
+					}
+				} else if (saved === IDEA_DARK_THEME_ID && !eyeCareEnabled) {
+					hooks.fallbackToOfficialDark();
 				} else {
 					const snap = readThemeSnapshot(theme);
 					if (snap?.preference) {
 						currentPreference = snap.preference;
 					}
-					syncBodyDesktopThemeAttribute(snap?.active?.id || "");
+					syncBodyDesktopThemeAttribute(snap?.active?.id === IDEA_DARK_THEME_ID && eyeCareEnabled ? IDEA_DARK_THEME_ID : "");
 				}
 
 				return () => {
 					try { if (origSetTheme) theme.setTheme = origSetTheme; } catch (_) {}
 					try { if (origAdopt) theme.adopt = origAdopt; } catch (_) {}
 					try { if (origPublish) theme.publish = origPublish; } catch (_) {}
-					if (typeof disposeRegisteredTheme === "function") {
-						try { disposeRegisteredTheme(); } catch (_) { /* ignore */ }
-					}
+					unregisterIdeaTheme();
 					syncBodyDesktopThemeAttribute("");
-					if (activeThemeService === theme) activeThemeService = null;
+					if (activeThemeService === theme) {
+						activeThemeService = null;
+						activeThemeHooks = null;
+					}
 				};
 			};
 
@@ -6315,16 +6472,19 @@ window.__ModuleLoader__.load({
 				try {
 					const offThemeChange = ctx.on("theme/change", (snapshot) => {
 						const saved = readSavedDesktopThemePreference();
-						if (saved === IDEA_DARK_THEME_ID && snapshot?.preference && snapshot.preference !== IDEA_DARK_THEME_ID && activeThemeService) {
+						if (saved === IDEA_DARK_THEME_ID && eyeCareEnabled && snapshot?.preference && snapshot.preference !== IDEA_DARK_THEME_ID && activeThemeService) {
 							const hasIdea = snapshot.themes?.some?.((item) => item && item.id === IDEA_DARK_THEME_ID) || hasRegisteredTheme(activeThemeService, IDEA_DARK_THEME_ID);
 							if (hasIdea && typeof activeThemeService.setTheme === "function") {
 								try {
+									if (activeThemeHooks) activeThemeHooks.suppressRemotePersist = true;
 									activeThemeService.setTheme(IDEA_DARK_THEME_ID);
 									return;
-								} catch (_) { /* fall through */ }
+								} catch (_) { /* fall through */ } finally {
+									if (activeThemeHooks) activeThemeHooks.suppressRemotePersist = false;
+								}
 							}
 						}
-						syncBodyDesktopThemeAttribute(snapshot?.active?.id || (snapshot?.preference === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : ""));
+						syncBodyDesktopThemeAttribute((snapshot?.active?.id === IDEA_DARK_THEME_ID || snapshot?.preference === IDEA_DARK_THEME_ID) && eyeCareEnabled ? IDEA_DARK_THEME_ID : "");
 						if (typeof snapshot?.preference === "string") {
 							notify(snapshot.preference);
 						}
@@ -6336,11 +6496,16 @@ window.__ModuleLoader__.load({
 			function DesktopAppearanceRow(slotProps) {
 				const slotT = slotProps && typeof slotProps.t === "function" ? slotProps.t : null;
 				const [preference, setPreference] = react.useState(() => getPreference());
+				const [showEyeCare, setShowEyeCare] = react.useState(() => eyeCareEnabled);
 				const [, setLocaleTick] = react.useState(0);
 				if (typeof react.useEffect === "function") {
 					react.useEffect(() => {
 						setPreference(getPreference());
-						const onPref = (next) => setPreference(next);
+						setShowEyeCare(eyeCareEnabled);
+						const onPref = (next) => {
+							setPreference(next);
+							setShowEyeCare(eyeCareEnabled);
+						};
 						listeners.add(onPref);
 						const offLoc = onLocaleChange(() => setLocaleTick((n) => n + 1));
 						return () => {
@@ -6351,6 +6516,7 @@ window.__ModuleLoader__.load({
 				}
 				const activeDshLocale = readActiveDshLocale(ctx);
 				const titleText = resolveSlotTranslation(slotT, ["appearance.title", "title"]) || t("bridge.theme_appearance_title");
+				const cubes = DESKTOP_APPEARANCE_CUBES.filter((cube) => showEyeCare || cube.id !== IDEA_DARK_THEME_ID);
 
 				return jsxs("div", {
 					className: "dshDesktopBridgeAppearanceGroup",
@@ -6364,7 +6530,7 @@ window.__ModuleLoader__.load({
 							className: "dshDesktopBridgeAppearanceCubeRow",
 							role: "radiogroup",
 							"aria-label": titleText,
-							children: DESKTOP_APPEARANCE_CUBES.map((cube) => {
+							children: cubes.map((cube) => {
 								const selected = preference === cube.id;
 								const Icon = cube.Icon;
 								const label = resolveAppearanceLabel(slotT, cube, activeDshLocale);
@@ -6386,18 +6552,82 @@ window.__ModuleLoader__.load({
 				});
 			}
 
-			try {
-				if (typeof ctx?.slots?.inject === "function" && typeof ctx?.slots?.register === "function") {
-					const disposeSlot = ctx.slots.inject("settings.general.item", () => ctx.slots.register({
-						name: "settings.general.item",
-						id: "appearance",
-						order: 10,
-						priority: -10,
-						locale: "settings.theme"
-					}, DesktopAppearanceRow));
-					if (typeof disposeSlot === "function") cleanups.push(disposeSlot);
+			const syncAppearanceSlot = () => {
+				if (!eyeCareEnabled) {
+					if (typeof disposeAppearanceSlot === "function") {
+						try { disposeAppearanceSlot(); } catch (_) { /* ignore */ }
+						disposeAppearanceSlot = null;
+					}
+					return;
 				}
-			} catch (_) { /* ignore */ }
+				if (disposeAppearanceSlot) return;
+				try {
+					if (typeof ctx?.slots?.inject === "function" && typeof ctx?.slots?.register === "function") {
+						disposeAppearanceSlot = ctx.slots.inject("settings.general.item", () => ctx.slots.register({
+							name: "settings.general.item",
+							id: "appearance",
+							order: 10,
+							priority: -10,
+							locale: "settings.theme"
+						}, DesktopAppearanceRow));
+					}
+				} catch (_) { /* ignore */ }
+			};
+			syncAppearanceSlot();
+			cleanups.push(() => {
+				if (typeof disposeAppearanceSlot === "function") {
+					try { disposeAppearanceSlot(); } catch (_) { /* ignore */ }
+					disposeAppearanceSlot = null;
+				}
+			});
+
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				const onEyeCareToggle = (event) => {
+					const nextEnabled = event?.detail !== false;
+					if (nextEnabled === eyeCareEnabled) return;
+					eyeCareEnabled = nextEnabled;
+					syncAppearanceSlot();
+					if (nextEnabled) {
+						activeThemeHooks?.ensureIdeaThemeRegistered?.();
+						if (readSavedDesktopThemePreference() === IDEA_DARK_THEME_ID) {
+							selectTheme(IDEA_DARK_THEME_ID, { persistRemote: false });
+						} else {
+							notify(getPreference());
+						}
+					} else {
+						if (currentPreference === IDEA_DARK_THEME_ID || readThemeSnapshot(activeThemeService)?.active?.id === IDEA_DARK_THEME_ID) {
+							if (activeThemeHooks?.fallbackToOfficialDark) {
+								activeThemeHooks.fallbackToOfficialDark();
+							} else {
+								syncBodyDesktopThemeAttribute("");
+								notify("dark");
+							}
+						} else {
+							notify(getPreference());
+						}
+						activeThemeHooks?.unregisterIdeaTheme?.();
+					}
+				};
+				const onRemoteThemePreference = (event) => {
+					const pref = normalizeDesktopThemePreference(event?.detail);
+					if (!pref) return;
+					if (pref === IDEA_DARK_THEME_ID) {
+						if (eyeCareEnabled) {
+							selectTheme(IDEA_DARK_THEME_ID, { persistRemote: false });
+						} else if (activeThemeHooks?.fallbackToOfficialDark) {
+							activeThemeHooks.fallbackToOfficialDark();
+						}
+					} else if (pref !== getPreference()) {
+						selectTheme(pref, { persistRemote: false });
+					}
+				};
+				window.addEventListener(EYE_CARE_THEME_EVENT, onEyeCareToggle);
+				window.addEventListener(THEME_PREFERENCE_EVENT, onRemoteThemePreference);
+				cleanups.push(() => {
+					window.removeEventListener(EYE_CARE_THEME_EVENT, onEyeCareToggle);
+					window.removeEventListener(THEME_PREFERENCE_EVENT, onRemoteThemePreference);
+				});
+			}
 
 			return () => {
 				for (const fn of cleanups.splice(0, cleanups.length)) {
@@ -6469,6 +6699,8 @@ window.__ModuleLoader__.load({
 				publishPromptOverlayLanguage(result.value);
 				publishPromptOverlayMaxLines(result.value);
 				publishChatContentVisibility(result.value);
+				publishEyeCareTheme(result.value);
+				publishThemePreference(result.value);
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
 			const stopNavIcon = installDesktopNavIcon();

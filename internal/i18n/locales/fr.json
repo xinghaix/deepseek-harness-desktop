@@ -86,6 +86,8 @@
   "field.delete_session_actions_hint": "Afficher « Supprimer la session » dans le menu d’actions des sessions actives et archivées. La suppression retire définitivement l’enregistrement local de la session du disque.",
   "field.chat_content_visibility": "Rendu du défilement du chat",
   "field.chat_content_visibility_hint": "Ignore le dessin des nœuds hors écran avec CSS content-visibility. Aide les longues sessions. Désactiver rétablit immédiatement le dessin par défaut. Charger un historique plus ancien peut légèrement sauter.",
+  "field.eye_care_theme": "Ajouter le thème sombre doux",
+  "field.eye_care_theme_hint": "Propose le thème neutre « Sombre doux » dans Général → Apparence et le conserve après redémarrage ; revient automatiquement au thème sombre officiel s’il est désactivé ou ouvert hors de cette application de bureau.",
   "field.language": "Langue de l’interface",
   "field.language_hint": "Suivre la langue système, ou choisir une langue fixe. Enregistré dans desktop-state.json.",
   "lang.system": "Système",

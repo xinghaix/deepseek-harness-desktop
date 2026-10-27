@@ -51,9 +51,11 @@ type Prefs struct {
 	DeleteSessionActions  *bool             `json:"deleteSessionActions,omitempty"`
 	HoverMessageActions   *bool             `json:"hoverMessageActions,omitempty"`
 	ChatContentVisibility *bool             `json:"chatContentVisibility,omitempty"`
+	EyeCareTheme          *bool             `json:"eyeCareTheme,omitempty"`
 	PromptOverlayMaxLines *int              `json:"promptOverlayMaxLines,omitempty"`
 	RestoreLastSession    *bool             `json:"restoreLastSession,omitempty"`
 	RememberWindowSize    *bool             `json:"rememberWindowSize,omitempty"`
+	ThemePreference       *string           `json:"themePreference,omitempty"`
 	Language              *string           `json:"language,omitempty"`
 	Shortcuts             map[string]string `json:"shortcuts,omitempty"`
 }
@@ -188,7 +190,7 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
-	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.DeleteSessionActions != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
+	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.DeleteSessionActions != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.EyeCareTheme != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.ThemePreference != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}
 	if f.Update.AutoCheck != nil {
@@ -427,6 +429,15 @@ func ValidateFile(f *File) {
 			f.Prefs.Language = nil
 		} else {
 			f.Prefs.Language = &lang
+		}
+	}
+	if f.Prefs.ThemePreference != nil {
+		theme := sanitizeString(*f.Prefs.ThemePreference, 32)
+		switch theme {
+		case "light", "dark", "idea-dark", "system":
+			f.Prefs.ThemePreference = &theme
+		default:
+			f.Prefs.ThemePreference = nil
 		}
 	}
 	if f.Prefs.CloseToTray != nil && *f.Prefs.CloseToTray {

@@ -246,6 +246,20 @@ func (f *WailsFacade) SetChatContentVisibility(ctx context.Context, enabled bool
 	return f.service.SetChatContentVisibility(enabled)
 }
 
+func (f *WailsFacade) SetEyeCareTheme(ctx context.Context, enabled bool) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetEyeCareTheme"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetEyeCareTheme(enabled)
+}
+
+func (f *WailsFacade) SetThemePreference(ctx context.Context, preference string) (DesktopPrefs, error) {
+	if err := f.management(ctx, "SetThemePreference"); err != nil {
+		return DesktopPrefs{}, err
+	}
+	return f.service.SetThemePreference(preference)
+}
+
 func (f *WailsFacade) SetPromptOverlayMaxLines(ctx context.Context, n int) (DesktopPrefs, error) {
 	if err := f.management(ctx, "SetPromptOverlayMaxLines"); err != nil {
 		return DesktopPrefs{}, err

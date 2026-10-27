@@ -86,6 +86,8 @@
   "field.delete_session_actions_hint": "アクティブなセッションとアーカイブ済みセッションの操作メニューに「セッションを削除」を表示します。削除するとローカルディスクのセッション記録が完全に消去されます。",
   "field.chat_content_visibility": "チャットのスクロール描画",
   "field.chat_content_visibility_hint": "画面外の会話ノードを CSS content-visibility で描画スキップし、長いセッションのスクロールを軽くします。オフにするとすぐ既定描画に戻ります。より前の履歴を読み込むとき、位置が少し跳ぶことがあります。",
+  "field.eye_care_theme": "目に優しいダークテーマを追加",
+  "field.eye_care_theme_hint": "一般設定の「外観」にニュートラルな浅黒色の「目に優しいダーク」テーマを追加し、再起動後も保持します。オフにした場合や dsh web など本デスクトップ以外で開いた場合は公式ダークテーマに自動フォールバックします。",
   "field.language": "インターフェース言語",
   "field.language_hint": "システム言語に従うか、固定言語を選びます。desktop-state.json に保存されます。",
   "lang.system": "システム",

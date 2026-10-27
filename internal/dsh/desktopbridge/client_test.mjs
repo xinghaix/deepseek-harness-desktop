@@ -22,6 +22,11 @@ const window = {
   removeEventListener(name, fn) {
     if (listeners.get(name) === fn) listeners.delete(name);
   },
+  dispatchEvent(event) {
+    const fn = listeners.get(event?.type);
+    if (typeof fn === "function") fn(event);
+    return true;
+  },
   __ModuleLoader__: {
     load(value) {
       registration = value;
@@ -793,6 +798,28 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   realThemeRuntime.adopt();
   assert.equal(realThemeRuntime.preference, "idea-dark");
   assert.ok(publishedSnapshots.every((s) => s.preference === "idea-dark"), "adopt() must never emit a transient non-idea-dark snapshot");
+
+  // Verify disabling eyeCareTheme via desktop prefs unregisters idea-dark and falls back to official dark
+  window.dispatchEvent(new CustomEvent("dsh-desktop-eye-care-theme", { detail: false }));
+  assert.equal(realThemeRuntime.preference, "dark", "disabling eyeCareTheme must fall back to official dark theme");
+  assert.ok(!realThemeRuntime.themes.some((t) => t.id === "idea-dark"), "disabling eyeCareTheme must unregister idea-dark");
+  assert.equal(document.body.dataset.dshDesktopTheme, undefined, "disabling eyeCareTheme must clear body attribute");
+
+  // Re-enabling eyeCareTheme restores idea-dark registration and preference
+  window.dispatchEvent(new CustomEvent("dsh-desktop-eye-care-theme", { detail: true }));
+  assert.ok(realThemeRuntime.themes.some((t) => t.id === "idea-dark"), "re-enabling eyeCareTheme must re-register idea-dark");
+  assert.equal(realThemeRuntime.preference, "idea-dark", "re-enabling eyeCareTheme must restore saved idea-dark preference");
+  assert.equal(document.body.dataset.dshDesktopTheme, "idea-dark");
+
+  // Requesting an unknown theme ID falls back to official dark
+  realThemeRuntime.setTheme("unknown-nonexistent-theme");
+  assert.equal(realThemeRuntime.preference, "dark", "unknown theme must fall back to official dark");
+
+  // Cross-restart restoration when localStorage is empty (new ephemeral port) and desktop-state.json returns themePreference
+  storageMap.clear();
+  delete window.__DSH_DESKTOP_THEME_PREFERENCE__;
+  window.dispatchEvent(new CustomEvent("dsh-desktop-theme-preference", { detail: "idea-dark" }));
+  assert.equal(realThemeRuntime.preference, "idea-dark", "remote themePreference from desktop-state.json must restore idea-dark across port changes");
 }
 console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and persistence verified");
 

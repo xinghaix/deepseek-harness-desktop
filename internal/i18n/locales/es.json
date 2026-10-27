@@ -86,6 +86,8 @@
   "field.delete_session_actions_hint": "Muestra «Eliminar sesión» en el menú de acciones de las sesiones activas y archivadas. Al eliminar, el registro local de la sesión se borra permanentemente del disco.",
   "field.chat_content_visibility": "Renderizado al desplazarse en el chat",
   "field.chat_content_visibility_hint": "Omite pintar nodos del transcript fuera de la vista con CSS content-visibility. Ayuda en sesiones largas. Al desactivar se restaura el dibujo predeterminado de inmediato. Cargar historial anterior puede saltar un poco.",
+  "field.eye_care_theme": "Añadir tema oscuro suave",
+  "field.eye_care_theme_hint": "Ofrece el tema neutro «Oscuro suave» en General → Apariencia y lo conserva tras reiniciar; vuelve automáticamente al tema oscuro oficial al desactivarlo o abrir fuera de esta app de escritorio.",
   "field.language": "Idioma de la interfaz",
   "field.language_hint": "Seguir el idioma del sistema o elegir uno fijo. Se guarda en desktop-state.json.",
   "lang.system": "Sistema",

@@ -19,9 +19,11 @@ type DesktopPrefs struct {
 	DeleteSessionActions  bool              `json:"deleteSessionActions"`
 	HoverMessageActions   bool              `json:"hoverMessageActions"`
 	ChatContentVisibility bool              `json:"chatContentVisibility"`
+	EyeCareTheme          bool              `json:"eyeCareTheme"`
 	PromptOverlayMaxLines int               `json:"promptOverlayMaxLines"`
 	RestoreLastSession    bool              `json:"restoreLastSession"`
 	RememberWindowSize    bool              `json:"rememberWindowSize"`
+	ThemePreference       string            `json:"themePreference,omitempty"`
 	Language              string            `json:"language"`
 	ResolvedLocale        string            `json:"resolvedLocale"`
 	SystemLocale          string            `json:"systemLocale"`
@@ -57,9 +59,11 @@ func (d *Service) DesktopPrefs() DesktopPrefs {
 		DeleteSessionActions:  d.prefs.deleteSessionActions.Load(),
 		HoverMessageActions:   d.prefs.hoverMessageActions.Load(),
 		ChatContentVisibility: d.prefs.chatContentVisibility.Load(),
+		EyeCareTheme:          d.prefs.eyeCareTheme.Load(),
 		PromptOverlayMaxLines: int(d.prefs.promptOverlayMaxLines.Load()),
 		RestoreLastSession:    d.prefs.getRestoreLastSession(),
 		RememberWindowSize:    d.prefs.getRememberWindowSize(),
+		ThemePreference:       d.prefs.getThemePreference(),
 		Language:              pref,
 		ResolvedLocale:        resolved,
 		SystemLocale:          i18n.Normalize(system),
@@ -144,6 +148,14 @@ func (d *Service) SetChatContentVisibility(enabled bool) (DesktopPrefs, error) {
 	return d.DesktopPrefs(), nil
 }
 
+func (d *Service) SetEyeCareTheme(enabled bool) (DesktopPrefs, error) {
+	d.prefs.eyeCareTheme.Store(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
 func (d *Service) SetRestoreLastSession(enabled bool) (DesktopPrefs, error) {
 	d.prefs.setRestoreLastSession(enabled)
 	if err := d.prefs.save(); err != nil {
@@ -154,6 +166,14 @@ func (d *Service) SetRestoreLastSession(enabled bool) (DesktopPrefs, error) {
 
 func (d *Service) SetRememberWindowSize(enabled bool) (DesktopPrefs, error) {
 	d.prefs.setRememberWindowSize(enabled)
+	if err := d.prefs.save(); err != nil {
+		return d.DesktopPrefs(), err
+	}
+	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) SetThemePreference(preference string) (DesktopPrefs, error) {
+	d.prefs.setThemePreference(preference)
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
