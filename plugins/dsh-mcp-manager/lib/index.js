@@ -26,6 +26,33 @@ function profileDir(ctx) {
   return dirname(ctx.configEditor.documentPath);
 }
 
+function prefsFilePath(ctx) {
+  return join(profileDir(ctx), "mcp-bundles", ".preferences.json");
+}
+
+async function readManagerPrefs(ctx) {
+  try {
+    const raw = JSON.parse(await readFile(prefsFilePath(ctx), "utf8"));
+    return {
+      showSidebarEntry: raw?.showSidebarEntry !== false,
+    };
+  } catch {
+    return { showSidebarEntry: true };
+  }
+}
+
+async function writeManagerPrefs(ctx, patch) {
+  const current = await readManagerPrefs(ctx);
+  const next = {
+    ...current,
+    ...(typeof patch?.showSidebarEntry === "boolean" ? { showSidebarEntry: patch.showSidebarEntry } : {}),
+  };
+  const file = prefsFilePath(ctx);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(next, null, 2) + "\n", "utf8");
+  return next;
+}
+
 // 单次扫描 ctx.tools.schemas()，避免多台服务器重复触发 dsh-tools 全量 schema 克隆
 function collectToolsByServer(ctx, activeServerNames) {
   const byServer = new Map();
@@ -462,6 +489,10 @@ async function runJob(ctx, job, listWorkspaces, lastErrors) {
     }
     return { notice: "approved", noticeParams: { count: added }, application: "" };
   }
+  if (job.op === "setPrefs") {
+    await writeManagerPrefs(ctx, { showSidebarEntry: job.showSidebarEntry !== false });
+    return { notice: "", application: "" };
+  }
   throw new CodedError("badRequest");
 }
 
@@ -475,10 +506,18 @@ export function apply(ctx) {
   let busy = Promise.resolve();
 
   async function state() {
-    const list = await servers(ctx, lastErrors);
-    const workspaces = await listWorkspaces();
+    const [list, workspaces, prefs] = await Promise.all([
+      servers(ctx, lastErrors),
+      listWorkspaces(),
+      readManagerPrefs(ctx),
+    ]);
     const project = await projectScan(workspaces, list.map((item) => item.serverName));
-    return { servers: list, project: publicProject(project), templates: model.TEMPLATES.map((t) => ({ id: t.id, transport: t.transport })) };
+    return {
+      servers: list,
+      project: publicProject(project),
+      templates: model.TEMPLATES.map((t) => ({ id: t.id, transport: t.transport })),
+      prefs,
+    };
   }
 
   ctx.effect(() => ctx.connection.fetch.register({

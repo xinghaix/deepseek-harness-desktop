@@ -112,5 +112,7 @@
   "tools.copyHint": "Klicken zum Kopieren von {name}",
   "tools.copied": "Kopiert",
   "error.renameOwned": "Der Name eines Servers kann nach dem Anlegen nicht geändert werden. Löschen und unter neuem Namen erneut hinzufügen.",
-  "error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden."
+  "error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
+  "sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
+  "sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an."
 }

@@ -112,5 +112,7 @@
   "tools.copyHint": "点击复制 {name}",
   "tools.copied": "已复制",
   "error.renameOwned": "服务器创建后不能改名。请删除后用新名字重新添加。",
-  "error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。"
+  "error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
+  "sidebar.toggleLabel": "在侧边栏显示入口",
+  "sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。"
 }

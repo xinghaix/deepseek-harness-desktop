@@ -112,5 +112,7 @@
   "tools.copyHint": "Click to copy {name}",
   "tools.copied": "Copied",
   "error.renameOwned": "A server's name cannot be changed after it is created. Delete it and add it again under the new name.",
-  "error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled."
+  "error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
+  "sidebar.toggleLabel": "Show entry in sidebar",
+  "sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly."
 }

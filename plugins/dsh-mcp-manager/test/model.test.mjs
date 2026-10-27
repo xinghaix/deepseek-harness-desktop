@@ -493,22 +493,51 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
       if (id === "react/jsx-runtime") return jsxRuntime;
       return {};
     });
+    let registeredMainPage = null;
+    let sidebarRegistration = null;
     clientMod.apply({
       effect: (fn) => fn(),
       locale: { register() {} },
       slots: {
         inject: (_slot, fn) => fn(),
-        register: (_meta, Comp) => {
-          registeredPage = Comp;
+        register: (meta, Comp) => {
+          if (meta?.name === "plugins.bundle.config") registeredPage = Comp;
+          if (meta?.name === "main" && meta?.key === "dsh-mcp-manager") registeredMainPage = Comp;
+          if (meta?.name === "sidebar.panellist" && meta?.id === "dsh-mcp-manager") {
+            sidebarRegistration = { meta, Comp };
+            return () => {
+              sidebarRegistration = null;
+            };
+          }
+          return () => {};
         },
       },
     });
     assert.equal(typeof registeredPage, "function");
+    assert.equal(typeof registeredMainPage, "function");
+    assert.ok(sidebarRegistration, "sidebar.panellist entry must be registered by default");
+    assert.equal(sidebarRegistration.meta.order, 15);
 
     // Pre-populate state slot (index 0 in Manager: [state, setState])
     states[0] = statePayload;
     cursor = 0;
     const tree1 = expand(registeredPage({ t: (k) => k }));
+
+    // Sidebar toggle row is rendered at the top of the plugin settings page
+    const sidebarPrefRow = findAll(tree1, (n) => n.props && "data-sidebar-pref" in n.props);
+    assert.equal(sidebarPrefRow.length, 1);
+    const sidebarToggleSwitch = findAll(sidebarPrefRow[0], (n) => n.props?.role === "switch")[0];
+    assert.ok(sidebarToggleSwitch);
+    assert.equal(sidebarToggleSwitch.props["aria-checked"], "true");
+
+    // Toggling off unregisters sidebar.panellist immediately; toggling on re-registers it
+    sidebarToggleSwitch.props.onClick();
+    assert.equal(sidebarRegistration, null, "disabling sidebar toggle must unregister sidebar.panellist");
+    cursor = 0;
+    const treeSidebarOff = expand(registeredPage({ t: (k) => k }));
+    const sidebarToggleSwitchOff = findAll(findAll(treeSidebarOff, (n) => n.props && "data-sidebar-pref" in n.props)[0], (n) => n.props?.role === "switch")[0];
+    sidebarToggleSwitchOff.props.onClick();
+    assert.ok(sidebarRegistration, "re-enabling sidebar toggle must re-register sidebar.panellist");
 
     // 1) Main view does NOT render [data-project] when no workspace has .dsh/mcp*.json
     assert.equal(findAll(tree1, (n) => n.props && "data-project" in n.props).length, 0);
@@ -529,7 +558,8 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     const cancelBtn = findAll(treeImport, (n) => n.type === "button" && n.props?.children === "Cancel")[0];
     assert.ok(cancelBtn);
     cancelBtn.props.onClick();
-    const switchBtn = findAll(tree1, (n) => n.props?.role === "switch")[0];
+    const serverRowNode = findAll(tree1, (n) => n.props?.["data-server"] === "alpha")[0];
+    const switchBtn = findAll(serverRowNode, (n) => n.props?.role === "switch")[0];
     assert.ok(switchBtn);
     switchBtn.props.onClick();
     cursor = 0;

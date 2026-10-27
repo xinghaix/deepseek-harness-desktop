@@ -592,7 +592,9 @@ module.exports = {
 		"tools.copyHint": "Click to copy {name}",
 		"tools.copied": "Copied",
 		"error.renameOwned": "A server's name cannot be changed after it is created. Delete it and add it again under the new name.",
-		"error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled."
+		"error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
+		"sidebar.toggleLabel": "Show entry in sidebar",
+		"sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly."
 	},
 	"zh": {
 		"title": "MCP 服务器",
@@ -708,7 +710,9 @@ module.exports = {
 		"tools.copyHint": "点击复制 {name}",
 		"tools.copied": "已复制",
 		"error.renameOwned": "服务器创建后不能改名。请删除后用新名字重新添加。",
-		"error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。"
+		"error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
+		"sidebar.toggleLabel": "在侧边栏显示入口",
+		"sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。"
 	},
 	"de": {
 		"title": "MCP-Server",
@@ -824,7 +828,9 @@ module.exports = {
 		"tools.copyHint": "Klicken zum Kopieren von {name}",
 		"tools.copied": "Kopiert",
 		"error.renameOwned": "Der Name eines Servers kann nach dem Anlegen nicht geändert werden. Löschen und unter neuem Namen erneut hinzufügen.",
-		"error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden."
+		"error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
+		"sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
+		"sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an."
 	},
 	"fr": {
 		"title": "Serveurs MCP",
@@ -940,7 +946,9 @@ module.exports = {
 		"tools.copyHint": "Cliquer pour copier {name}",
 		"tools.copied": "Copié",
 		"error.renameOwned": "Le nom d'un serveur ne peut pas être modifié après sa création. Supprimez-le puis ajoutez-le sous le nouveau nom.",
-		"error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé."
+		"error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé.",
+		"sidebar.toggleLabel": "Afficher l’entrée dans la barre latérale",
+		"sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion."
 	},
 	"es": {
 		"title": "Servidores MCP",
@@ -1056,7 +1064,9 @@ module.exports = {
 		"tools.copyHint": "Haz clic para copiar {name}",
 		"tools.copied": "Copiado",
 		"error.renameOwned": "El nombre de un servidor no se puede cambiar después de crearlo. Elimínalo y vuelve a añadirlo con el nuevo nombre.",
-		"error.editDisabled": "Este servidor proviene de una configuración externa; solo se puede editar mientras está activado."
+		"error.editDisabled": "Este servidor proviene de una configuración externa; solo se puede editar mientras está activado.",
+		"sidebar.toggleLabel": "Mostrar acceso en la barra lateral",
+		"sidebar.toggleHint": "Muestra un acceso directo a «Servidores MCP» en la navegación izquierda para abrir el panel directamente."
 	},
 	"ja": {
 		"title": "MCP サーバー",
@@ -1172,7 +1182,9 @@ module.exports = {
 		"tools.copyHint": "クリックして {name} をコピー",
 		"tools.copied": "コピー済み",
 		"error.renameOwned": "サーバー名は作成後に変更できません。削除して新しい名前で追加し直してください。",
-		"error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。"
+		"error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。",
+		"sidebar.toggleLabel": "サイドバーにショートカットを表示",
+		"sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。"
 	},
 	"ko": {
 		"title": "MCP 서버",
@@ -1288,7 +1300,9 @@ module.exports = {
 		"tools.copyHint": "클릭하여 {name} 복사",
 		"tools.copied": "복사됨",
 		"error.renameOwned": "서버 이름은 만든 뒤에 바꿀 수 없습니다. 삭제한 뒤 새 이름으로 다시 추가하세요.",
-		"error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다."
+		"error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
+		"sidebar.toggleLabel": "사이드바에 바로가기 표시",
+		"sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다."
 	},
 	"pt": {
 		"title": "Servidores MCP",
@@ -1404,7 +1418,9 @@ module.exports = {
 		"tools.copyHint": "Clique para copiar {name}",
 		"tools.copied": "Copiado",
 		"error.renameOwned": "O nome de um servidor não pode ser alterado depois de criado. Exclua-o e adicione-o novamente com o novo nome.",
-		"error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado."
+		"error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado.",
+		"sidebar.toggleLabel": "Mostrar atalho na barra lateral",
+		"sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente."
 	}
 };
 		// END EMBEDDED LOCALES
@@ -1427,6 +1443,58 @@ module.exports = {
 	color: var(--dsw-alias-label-primary, #0f1115);
 	font-size: 13px;
 	line-height: 20px;
+}
+.dsh-mcp-main-page {
+	width: 100%;
+	min-width: 0;
+	height: 100%;
+	min-height: 0;
+	color: var(--dsw-alias-label-primary, #0f1115);
+	background: var(--dsw-alias-bg-base, transparent);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.dsh-mcp-main-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	scrollbar-gutter: stable;
+}
+.dsh-mcp-main-content {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 28px clamp(24px, 4vw, 48px) 48px;
+}
+[data-platform="darwin"] .dsh-mcp-main-content {
+	padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+.dsh-mcp-pref-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 14px;
+	border-radius: var(--dsw-radius-lg, 10px);
+	background: var(--dsw-alias-bg-layer-1, rgba(128,128,128,0.04));
+	border: 0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.18));
+}
+.dsh-mcp-pref-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.dsh-mcp-pref-title {
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 19px;
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-pref-hint {
+	font-size: 12px;
+	line-height: 17px;
+	color: var(--dsw-alias-label-tertiary, #81858c);
 }
 .dsh-mcp-head {
 	display: flex;
@@ -2133,6 +2201,65 @@ module.exports = {
 		const EYE_PATH = `${EYE_CONTOUR}M10 8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8Z`;
 		const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`;
 
+		const PANEL_ID = "dsh-mcp-manager";
+		const SIDEBAR_PREF_STORAGE_KEY = "dsh.mcp-manager.showSidebarEntry";
+		const sidebarPrefListeners = new Set();
+
+		function readStoredSidebarPref() {
+			try {
+				if (typeof window !== "undefined" && window.localStorage) {
+					const raw = window.localStorage.getItem(SIDEBAR_PREF_STORAGE_KEY);
+					if (raw === "false") return false;
+					if (raw === "true") return true;
+				}
+			} catch { /* ignore */ }
+			return true;
+		}
+
+		let sidebarPrefEnabled = readStoredSidebarPref();
+
+		function publishSidebarPref(enabled, opts = {}) {
+			const next = enabled !== false;
+			const changed = sidebarPrefEnabled !== next;
+			sidebarPrefEnabled = next;
+			try {
+				if (typeof window !== "undefined" && window.localStorage) {
+					window.localStorage.setItem(SIDEBAR_PREF_STORAGE_KEY, next ? "true" : "false");
+				}
+			} catch { /* ignore */ }
+			if (changed) {
+				for (const fn of [...sidebarPrefListeners]) {
+					try { fn(next); } catch { /* ignore */ }
+				}
+			}
+			if (opts.persistRemote === true && typeof fetch === "function") {
+				void call("action", { op: "setPrefs", showSidebarEntry: next }).catch(() => {});
+			}
+		}
+
+		function McpPanelIcon(props) {
+			const size = props?.size || 16;
+			return jsxs("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: 1.3,
+				strokeLinecap: "round",
+				strokeLinejoin: "round",
+				"aria-hidden": "true",
+				children: [
+					jsx("rect", { x: 2, y: 2.5, width: 6.5, height: 11, rx: 1.6 }),
+					jsx("path", { d: "M4.2 5.5H6.3M4.2 8H6.3" }),
+					jsx("circle", { cx: 5.25, cy: 10.8, r: 0.7, fill: "currentColor", stroke: "none" }),
+					jsx("path", { d: "M8.5 5.5H11.2M8.5 10.5H11.2" }),
+					jsx("circle", { cx: 12.6, cy: 5.5, r: 1.4 }),
+					jsx("circle", { cx: 12.6, cy: 10.5, r: 1.4 }),
+				],
+			});
+		}
+
 		const muted = { color: "var(--dsw-alias-label-secondary)", fontSize: 12 };
 
 		function StatusDot(props) {
@@ -2186,13 +2313,30 @@ module.exports = {
 		function Page(props) {
 			const tr = translator(props.t);
 			if (props.view === "summary") return tr("description");
-			return jsx(Manager, { tr });
+			return jsx(Manager, { tr, isMainPanel: false });
+		}
+
+		function MainPanelPage(props) {
+			const tr = translator(props.t);
+			return jsx("section", {
+				"aria-label": tr("title"),
+				"data-dsh-mcp-main-panel": "",
+				className: "dsh-mcp-main-page",
+				children: jsx("div", {
+					className: "dsh-mcp-main-scroll",
+					children: jsx("div", {
+						className: "dsh-mcp-main-content",
+						children: jsx(Manager, { tr, isMainPanel: true }),
+					}),
+				}),
+			});
 		}
 
 		// ---------- main page ----------
 		function Manager(props) {
 			const tr = props.tr;
 			const [state, setState] = React.useState(null);
+			const [showSidebar, setShowSidebar] = React.useState(() => sidebarPrefEnabled);
 			const [loadError, setLoadError] = React.useState("");
 			const [busy, setBusy] = React.useState(false);
 			const [refreshing, setRefreshing] = React.useState(false);
@@ -2209,12 +2353,21 @@ module.exports = {
 
 			React.useEffect(() => {
 				ensureStyles();
+				setShowSidebar(sidebarPrefEnabled);
+				const onSidebarPref = (next) => setShowSidebar(next);
+				sidebarPrefListeners.add(onSidebarPref);
+				return () => {
+					sidebarPrefListeners.delete(onSidebarPref);
+				};
 			}, []);
 
 			const refresh = React.useCallback(async () => {
 				try {
 					const data = await call("state");
 					if (data && data.error) { setLoadError(data.error); return; }
+					if (typeof data?.prefs?.showSidebarEntry === "boolean") {
+						publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
+					}
 					setState(data);
 					setLoadError("");
 				} catch (error) {
@@ -2374,6 +2527,28 @@ module.exports = {
 				"data-dsh-mcp-manager": "",
 				className: "dsh-mcp-root",
 				children: [
+					!props.isMainPanel ? jsxs("div", {
+						"data-sidebar-pref": "",
+						className: "dsh-mcp-pref-row",
+						children: [
+							jsxs("div", {
+								className: "dsh-mcp-pref-text",
+								children: [
+									jsx("span", { className: "dsh-mcp-pref-title", children: tr("sidebar.toggleLabel") }),
+									jsx("span", { className: "dsh-mcp-pref-hint", children: tr("sidebar.toggleHint") }),
+								],
+							}),
+							jsx(Switch, {
+								checked: showSidebar,
+								label: tr("sidebar.toggleLabel"),
+								onClick: () => {
+									const next = !sidebarPrefEnabled;
+									setShowSidebar(next);
+									publishSidebarPref(next, { persistRemote: true });
+								},
+							}),
+						],
+					}) : null,
 					jsxs("div", {
 						className: "dsh-mcp-head",
 						children: [
@@ -3437,6 +3612,71 @@ module.exports = {
 				locale: NS,
 				inject: () => ({}),
 			}, Page));
+
+			// 注册主面板槽位，供左侧边栏「MCP 服务器」入口点击打开
+			ctx.slots.inject("main", () => ctx.slots.register({
+				name: "main",
+				key: PANEL_ID,
+				locale: NS,
+				inject: () => ({}),
+			}, MainPanelPage));
+
+			let disposeSidebarEntry = null;
+			const resolveSidebarLabel = () => {
+				try {
+					if (typeof ctx.locale?.bind === "function") {
+						const bound = ctx.locale.bind(NS);
+						const val = typeof bound === "function" ? bound("title") : "";
+						if (val && val !== "title" && val !== NS + ".title") return val;
+					}
+				} catch { /* ignore */ }
+				return LOCALES.zh?.title || "MCP 服务器";
+			};
+
+			const syncSidebarEntry = () => {
+				if (!sidebarPrefEnabled) {
+					if (typeof disposeSidebarEntry === "function") {
+						try { disposeSidebarEntry(); } catch { /* ignore */ }
+						disposeSidebarEntry = null;
+					}
+					return;
+				}
+				if (disposeSidebarEntry) return;
+				try {
+					if (typeof ctx.slots?.inject === "function" && typeof ctx.slots?.register === "function") {
+						disposeSidebarEntry = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({
+							name: "sidebar.panellist",
+							id: PANEL_ID,
+							order: 15,
+							locale: NS,
+							label: resolveSidebarLabel,
+						}, McpPanelIcon));
+					}
+				} catch { /* ignore */ }
+			};
+
+			syncSidebarEntry();
+			const onSidebarPrefChange = () => syncSidebarEntry();
+			sidebarPrefListeners.add(onSidebarPrefChange);
+
+			// 启动时从 Host 同步一次持久化偏好（防止新回环端口下 localStorage 为空时与磁盘状态不一致）
+			if (typeof fetch === "function") {
+				void call("state").then((data) => {
+					if (typeof data?.prefs?.showSidebarEntry === "boolean") {
+						publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
+					}
+				}).catch(() => {});
+			}
+
+			if (typeof ctx.effect === "function") {
+				ctx.effect(() => () => {
+					sidebarPrefListeners.delete(onSidebarPrefChange);
+					if (typeof disposeSidebarEntry === "function") {
+						try { disposeSidebarEntry(); } catch { /* ignore */ }
+						disposeSidebarEntry = null;
+					}
+				}, "dsh-mcp-manager: sidebar entry lifecycle");
+			}
 		}
 
 		exports.apply = apply;

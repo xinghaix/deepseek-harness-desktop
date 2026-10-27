@@ -112,5 +112,7 @@
   "tools.copyHint": "클릭하여 {name} 복사",
   "tools.copied": "복사됨",
   "error.renameOwned": "서버 이름은 만든 뒤에 바꿀 수 없습니다. 삭제한 뒤 새 이름으로 다시 추가하세요.",
-  "error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다."
+  "error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
+  "sidebar.toggleLabel": "사이드바에 바로가기 표시",
+  "sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다."
 }

@@ -112,5 +112,7 @@
   "tools.copyHint": "クリックして {name} をコピー",
   "tools.copied": "コピー済み",
   "error.renameOwned": "サーバー名は作成後に変更できません。削除して新しい名前で追加し直してください。",
-  "error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。"
+  "error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。",
+  "sidebar.toggleLabel": "サイドバーにショートカットを表示",
+  "sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。"
 }

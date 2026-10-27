@@ -112,5 +112,7 @@
   "tools.copyHint": "Clique para copiar {name}",
   "tools.copied": "Copiado",
   "error.renameOwned": "O nome de um servidor não pode ser alterado depois de criado. Exclua-o e adicione-o novamente com o novo nome.",
-  "error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado."
+  "error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado.",
+  "sidebar.toggleLabel": "Mostrar atalho na barra lateral",
+  "sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente."
 }
