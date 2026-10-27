@@ -543,3 +543,256 @@ window.__DSH_DESKTOP_OPEN_SESSION__("session-archived", 89);
 await flushMicrotasks();
 assert.equal(opened.length, openedCountBefore, "archived session must not be opened and must fall back");
 console.log("ok - current session reporting and deleted/archived fallback verified");
+
+// Test IDEA-inspired low-contrast eye-care dark theme (idea-dark) & AppearanceRow slot
+assert.match(source, /installDesktopThemes/, "desktop theme installer missing");
+assert.match(source, /IDEA_DARK_THEME_ID = "idea-dark"/, "idea-dark theme ID missing");
+assert.match(source, /"--dsw-alias-bg-base": "#242424"/, "IDEA neutral light-black base background token missing");
+assert.match(source, /"--dsw-alias-label-primary": "#e3e3e3"/, "IDEA clear neutral primary label token missing");
+assert.match(source, /"--dsw-alias-brand-primary": "#366ace"/, "IDEA soft blue brand primary token missing");
+assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background:\s*var\(--dsw-alias-label-primary-foreground/, "toggle switch checked thumb must use --dsw-alias-label-primary-foreground instead of glaring white");
+
+{
+  const storageMap = new Map();
+  window.localStorage = {
+    getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null; },
+    setItem(k, v) { storageMap.set(k, String(v)); },
+    removeItem(k) { storageMap.delete(k); },
+  };
+  const bodyAttrs = new Map();
+  document.body = {
+    dataset: {},
+    setAttribute(k, v) { bodyAttrs.set(k, String(v)); },
+    removeAttribute(k) { bodyAttrs.delete(k); },
+    getAttribute(k) { return bodyAttrs.get(k) ?? null; },
+  };
+  const jsxTree = (type, props, key) => ({ type, props: props || {}, key });
+  const effectCleanups = [];
+  const reactForTheme = {
+    useState: (init) => [typeof init === "function" ? init() : init, () => {}],
+    useRef: (v) => ({ current: v }),
+    useCallback: (fn) => fn,
+    useEffect: (fn) => {
+      const cleanup = fn();
+      if (cleanup !== undefined) effectCleanups.push(cleanup);
+    },
+  };
+  const themeClient = registration.factory((name) => {
+    if (name === "react") return reactForTheme;
+    if (name === "react/jsx-runtime") return { jsx: jsxTree, jsxs: jsxTree, Fragment: Symbol("Fragment") };
+    throw new Error(`unexpected require ${name}`);
+  });
+
+  const registeredThemes = [
+    { id: "light", colorScheme: "light", tokens: {} },
+    { id: "dark", colorScheme: "dark", tokens: {} },
+  ];
+  const slotRegistrations = [];
+  let hostPreference = "dark";
+  const setThemeCalls = [];
+  const themeService = {
+    preference: "dark",
+    host: {
+      getSnapshot: () => ({ value: { preference: hostPreference } }),
+    },
+    getSnapshot() {
+      const active = registeredThemes.find((t) => t.id === this.preference) || registeredThemes[1];
+      return {
+        preference: this.preference,
+        themes: [...registeredThemes],
+        active,
+      };
+    },
+    register(def) {
+      registeredThemes.push(def);
+      return () => {
+        const idx = registeredThemes.indexOf(def);
+        if (idx >= 0) registeredThemes.splice(idx, 1);
+      };
+    },
+    setTheme(id) {
+      setThemeCalls.push(id);
+      this.preference = id;
+      if (id === "light" || id === "dark" || id === "system") {
+        hostPreference = id;
+      }
+    },
+    adopt() {
+      this.preference = hostPreference;
+    },
+    publish() {},
+  };
+
+  const themeCtx = {
+    ...ctx,
+    theme: themeService,
+    slots: {
+      inject(slotName, fn) {
+        return fn();
+      },
+      register(options, component) {
+        slotRegistrations.push({ options, component });
+        return () => {};
+      },
+    },
+  };
+
+  themeClient.apply(themeCtx);
+
+  const ideaDef = registeredThemes.find((t) => t.id === "idea-dark");
+  assert.ok(ideaDef, "idea-dark theme must be registered in ctx.theme");
+  assert.equal(ideaDef.colorScheme, "dark");
+  assert.equal(ideaDef.tokens["--dsw-alias-bg-base"], "#242424");
+  assert.equal(ideaDef.tokens["--dsw-specific-sidebar-fill"], "#2b2b2b");
+  assert.equal(ideaDef.tokens["--dsw-alias-label-primary"], "#e3e3e3");
+  assert.equal(ideaDef.tokens["--dsw-alias-label-secondary"], "#b8b8b8");
+  assert.equal(ideaDef.tokens["--dsw-alias-label-tertiary"], "#949494");
+  assert.equal(ideaDef.tokens["--dsw-alias-brand-primary"], "#366ace");
+
+  const appearanceSlot = slotRegistrations.find(
+    (entry) => entry.options?.name === "settings.general.item" && entry.options?.id === "appearance"
+  );
+  assert.ok(appearanceSlot, "settings.general.item id='appearance' slot must be registered");
+  assert.equal(appearanceSlot.options.order, 10, "appearance row order must stay at 10");
+  assert.ok(appearanceSlot.options.priority < 0, "appearance row priority must shadow built-in priority 0");
+
+  effectCleanups.length = 0;
+  const rendered = appearanceSlot.component({
+    t: (k) => ({ title: "外观", light: "浅色", dark: "深色", system: "跟随系统" }[k] || k),
+  });
+  assert.equal(effectCleanups.length, 1, "DesktopAppearanceRow must register a useEffect cleanup");
+  assert.doesNotThrow(() => {
+    for (const cleanup of effectCleanups) cleanup();
+  }, "unmounting DesktopAppearanceRow when closing Settings must never throw and abdicate sidebar.settings");
+  const cubeGroup = rendered.props.children[1];
+  const cubes = cubeGroup.props.children;
+  assert.deepEqual(
+    Array.from(cubes, (c) => c.props["data-theme-id"]),
+    ["light", "dark", "idea-dark", "system"],
+    "appearance row must expose light, dark, idea-dark, and system cubes"
+  );
+  const ideaCube = cubes.find((c) => c.props["data-theme-id"] === "idea-dark");
+  assert.equal(ideaCube.props.children[1].props.children, "护眼暗色");
+
+  // Selecting idea-dark updates preference, localStorage, and body dataset
+  ideaCube.props.onClick();
+  assert.equal(themeService.preference, "idea-dark");
+  assert.equal(storageMap.get("dsh.desktop.theme.preference"), "idea-dark");
+  assert.equal(document.body.dataset.dshDesktopTheme, "idea-dark");
+
+  // Running theme.adopt() (e.g. after font size change) must keep idea-dark active
+  themeService.adopt();
+  assert.equal(themeService.preference, "idea-dark", "adopt() must not clobber idea-dark back to dark");
+
+  // Selecting light clears custom body theme attribute and updates preference
+  const lightCube = cubes.find((c) => c.props["data-theme-id"] === "light");
+  lightCube.props.onClick();
+  assert.equal(themeService.preference, "light");
+  assert.equal(storageMap.get("dsh.desktop.theme.preference"), "light");
+  assert.equal(document.body.dataset.dshDesktopTheme, undefined);
+
+  // Verify Cordis Context Proxy compatibility: accessing ctx.theme when "theme" is not
+  // in desktop-bridge's inject throws `Error: cannot get property "theme" without inject`,
+  // whereas ctx.get("theme") returns ThemeRuntime (which exposes getTheme() rather than getSnapshot()).
+  const cordisThemes = [
+    { id: "light", colorScheme: "light", tokens: {} },
+    { id: "dark", colorScheme: "dark", tokens: {} },
+  ];
+  const publishedSnapshots = [];
+  const realThemeRuntime = {
+    preference: "dark",
+    themes: cordisThemes,
+    host: {
+      getSnapshot: () => ({ value: { preference: "dark" } }),
+      set: async () => {},
+    },
+    write(op) {
+      Promise.resolve(op()).finally(() => this.adopt());
+    },
+    getTheme() {
+      const active = this.themes.find((t) => t.id === this.preference) || this.themes[1];
+      return {
+        preference: this.preference,
+        themes: [...this.themes],
+        active,
+      };
+    },
+    register(def) {
+      this.themes = [...this.themes, def];
+      this.publish();
+      return () => {
+        this.themes = this.themes.filter((t) => t !== def);
+      };
+    },
+    setTheme(id) {
+      if (id !== "system" && !this.themes.some((t) => t.id === id)) {
+        throw new Error(`theme "${id}" is not registered`);
+      }
+      this.preference = id;
+      this.publish();
+    },
+    adopt() {
+      this.preference = "dark";
+      this.publish();
+    },
+    publish() {
+      publishedSnapshots.push(this.getTheme());
+    },
+  };
+  const cordisSlots = [];
+  const baseCordisCtx = {
+    ...ctx,
+    get(key) {
+      if (key === "theme") return realThemeRuntime;
+      if (key === "locale") return { getLocale: () => ({ active: "zh" }) };
+      return undefined;
+    },
+    slots: {
+      inject(_slot, fn) { return fn(); },
+      register(options, component) {
+        cordisSlots.push({ options, component });
+        return () => {};
+      },
+    },
+  };
+  const cordisProxyCtx = new Proxy(baseCordisCtx, {
+    get(target, prop, receiver) {
+      if (prop === "theme") {
+        throw new Error('cannot get property "theme" without inject');
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+
+  // Must not throw on Cordis Proxy during apply()
+  themeClient.apply(cordisProxyCtx);
+  assert.ok(realThemeRuntime.themes.some((t) => t.id === "idea-dark"), "idea-dark must register via ctx.get('theme') on Cordis proxy");
+
+  const cordisAppearance = cordisSlots.find(
+    (entry) => entry.options?.name === "settings.general.item" && entry.options?.id === "appearance"
+  );
+  assert.ok(cordisAppearance);
+  const renderedWithDshKeys = cordisAppearance.component({
+    t: (k) => ({
+      "appearance.title": "外观",
+      "appearance.light": "浅色",
+      "appearance.dark": "深色",
+      "appearance.system": "跟随系统",
+    }[k] || k),
+  });
+  assert.equal(renderedWithDshKeys.props.children[0].props.children, "外观");
+  const cordisCubes = renderedWithDshKeys.props.children[1].props.children;
+  assert.equal(cordisCubes[0].props.children[1].props.children, "浅色");
+  assert.equal(cordisCubes[1].props.children[1].props.children, "深色");
+  assert.equal(cordisCubes[2].props.children[1].props.children, "护眼暗色");
+  assert.equal(cordisCubes[3].props.children[1].props.children, "跟随系统");
+
+  cordisCubes[2].props.onClick();
+  assert.equal(realThemeRuntime.preference, "idea-dark");
+  publishedSnapshots.length = 0;
+  realThemeRuntime.adopt();
+  assert.equal(realThemeRuntime.preference, "idea-dark");
+  assert.ok(publishedSnapshots.every((s) => s.preference === "idea-dark"), "adopt() must never emit a transient non-idea-dark snapshot");
+}
+console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and persistence verified");
+

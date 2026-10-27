@@ -448,5 +448,10 @@
   "bridge.overlay_max_lines": "Max. Eingabezeilen",
   "bridge.overlay_max_lines_hint": "Wie viele Zeilen Eingabetext die schwebende Karte anzeigt, bevor sie scrollt. Die Karte verkleinert sich weiterhin, um in den Platz über dem Chat-Eingabefeld zu passen, sodass sie das Eingabefeld nie verdeckt.",
   "bridge.overlay_load_older": "Ältere laden",
-  "bridge.overlay_loading": "Wird geladen…"
+  "bridge.overlay_loading": "Wird geladen…",
+  "bridge.theme_appearance_title": "Erscheinungsbild",
+  "bridge.theme_light": "Hell",
+  "bridge.theme_dark": "Dunkel",
+  "bridge.theme_idea_dark": "Augenschonend Dunkel",
+  "bridge.theme_system": "System"
 }

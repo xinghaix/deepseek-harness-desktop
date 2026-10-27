@@ -448,5 +448,10 @@
   "bridge.overlay_max_lines": "Lignes d’invite max",
   "bridge.overlay_max_lines_hint": "Nombre de lignes de texte d’invite que la carte flottante affiche avant de défiler. La carte se réduit encore pour s’ajuster à l’espace au-dessus du champ de saisie du Chat, afin de ne jamais recouvrir la zone de saisie.",
   "bridge.overlay_load_older": "Charger plus anciens",
-  "bridge.overlay_loading": "Chargement…"
+  "bridge.overlay_loading": "Chargement…",
+  "bridge.theme_appearance_title": "Apparence",
+  "bridge.theme_light": "Clair",
+  "bridge.theme_dark": "Sombre",
+  "bridge.theme_idea_dark": "Sombre doux",
+  "bridge.theme_system": "Système"
 }

@@ -327,6 +327,11 @@ window.__ModuleLoader__.load({
 			"bridge.archived_batch_done": "Completed {0} of {1}",
 			"bridge.archived_batch_partial": "Completed {0} of {1}; {2} failed.",
 			"bridge.archived_batch_close": "Close",
+			"bridge.theme_appearance_title": "Appearance",
+			"bridge.theme_light": "Light",
+			"bridge.theme_dark": "Dark",
+			"bridge.theme_idea_dark": "Eye-Care Dark",
+			"bridge.theme_system": "System",
 		});
 		let localeCatalog = Object.create(null);
 		let localeCode = "";
@@ -372,7 +377,11 @@ window.__ModuleLoader__.load({
 		// subscribe here and re-register when the language really changes.
 		const localeChangeHandlers = new Set();
 		function onLocaleChange(handler) {
+			if (typeof handler !== "function") return () => {};
 			localeChangeHandlers.add(handler);
+			return () => {
+				localeChangeHandlers.delete(handler);
+			};
 		}
 		function setLocaleBundle(bundle) {
 			if (!bundle || typeof bundle !== "object") return false;
@@ -2981,11 +2990,11 @@ window.__ModuleLoader__.load({
 					-webkit-appearance: none;
 					box-sizing: border-box;
 					margin: 0;
-					width: 40px;
-					height: 24px;
+					width: 36px;
+					height: 20px;
 					border: none;
-					border-radius: 12px;
-					background: var(--dsw-alias-fill-secondary, rgba(120, 120, 128, .32));
+					border-radius: 999px;
+					background: var(--dsw-alias-border-l3, rgba(120, 120, 128, .32));
 					position: relative;
 					flex: none;
 					cursor: pointer;
@@ -2996,17 +3005,18 @@ window.__ModuleLoader__.load({
 					position: absolute;
 					top: 2px;
 					left: 2px;
-					width: 20px;
-					height: 20px;
+					width: 16px;
+					height: 16px;
 					border-radius: 50%;
-					background: #fff;
-					box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
-					transition: transform .15s ease;
+					background: var(--dsw-alias-switch-thumb, #fff);
+					box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+					transition: transform .15s ease, background-color .15s ease;
 				}
 				.dshDesktopBridgeToggle:checked {
 					background: var(--dsw-alias-brand-primary, var(--dsw-alias-label-primary, #111));
 				}
 				.dshDesktopBridgeToggle:checked::before {
+					background: var(--dsw-alias-label-primary-foreground, #fff);
 					transform: translateX(16px);
 				}
 				.dshDesktopBridgeToggle:disabled {
@@ -3016,6 +3026,68 @@ window.__ModuleLoader__.load({
 				.dshDesktopBridgeToggle:focus-visible {
 					outline: 2px solid var(--dsw-alias-brand-primary);
 					outline-offset: 2px;
+				}
+				.dshDesktopBridgeAppearanceGroup {
+					border-bottom: .5px solid var(--dsw-alias-border-l2);
+					flex-direction: column;
+					gap: 8px;
+					padding: 16px 0;
+					display: flex;
+				}
+				.dshDesktopBridgeAppearanceTitle {
+					color: var(--dsw-alias-label-primary);
+					font-size: 14px;
+					font-weight: 400;
+					line-height: 22px;
+				}
+				.dshDesktopBridgeAppearanceCubeRow {
+					flex-wrap: wrap;
+					align-items: stretch;
+					gap: 8px;
+					display: flex;
+				}
+				.dshDesktopBridgeThemeCube {
+					box-sizing: border-box;
+					border: .5px solid var(--dsw-alias-border-l4);
+					border-radius: var(--dsw-radius-xl, 20px);
+					font: inherit;
+					color: var(--dsw-alias-label-primary);
+					cursor: pointer;
+					background: 0 0;
+					flex-direction: column;
+					flex: 1 1 120px;
+					justify-content: center;
+					align-items: center;
+					gap: 4px;
+					padding: 20px 16px;
+					font-size: 14px;
+					line-height: 22px;
+					display: flex;
+					transition: background-color .15s ease, border-color .15s ease;
+				}
+				.dshDesktopBridgeThemeCube:hover {
+					background: var(--dsw-alias-interactive-bg-hover);
+				}
+				.dshDesktopBridgeThemeCube:focus-visible {
+					outline: 2px solid var(--dsw-alias-brand-primary);
+					outline-offset: 2px;
+				}
+				.dshDesktopBridgeThemeCube.is-selected,
+				.dshDesktopBridgeThemeCube.is-selected:hover {
+					background: var(--dsw-alias-bg-module-platform);
+					border-color: var(--dsw-static-neutral-bluish-400, var(--dsw-alias-border-l4));
+				}
+				body[data-dsh-desktop-theme="idea-dark"] div:has(> [data-slot="sidebar"]) {
+					background: var(--dsw-specific-sidebar-fill) !important;
+				}
+				body[data-dsh-desktop-theme="idea-dark"] .dshDesktopBridgePrimary {
+					background: var(--dsw-alias-button-primary-fill) !important;
+					color: var(--dsw-alias-label-primary-foreground) !important;
+				}
+				body[data-dsh-desktop-theme="idea-dark"] .dshDesktopBridgePrimary:hover:not(:disabled) {
+					background: var(--dsw-alias-button-primary-hover) !important;
+					color: var(--dsw-alias-label-primary-foreground) !important;
+					opacity: 1;
 				}
 				.dshDesktopBridgeShortcutRow {
 					display: flex;
@@ -5710,6 +5782,630 @@ window.__ModuleLoader__.load({
 			return false;
 		}
 
+		const IDEA_DARK_THEME_ID = "idea-dark";
+		const DESKTOP_THEME_STORAGE_KEY = "dsh.desktop.theme.preference";
+		const DESKTOP_THEME_ATTRIBUTE = "data-dsh-desktop-theme";
+		// 纯正中性浅黑色（Darcula / Neutral Soft Charcoal，R=G=B 不偏蓝），兼顾柔和背景与清晰不费力的文字层级
+		const IDEA_DARK_THEME_TOKENS = Object.freeze({
+			"--dsw-static-neutral-700": "#404040",
+			"--dsw-static-neutral-800": "#343434",
+			"--dsw-static-neutral-850": "#2b2b2b",
+			"--dsw-static-neutral-900": "#1e1e1e",
+			"--dsw-static-neutral-bluish-50": "#e3e3e3",
+			"--dsw-static-neutral-bluish-60": "#e3e3e3",
+			"--dsw-static-neutral-bluish-75": "#dedede",
+			"--dsw-static-neutral-bluish-100": "#d8d8d8",
+			"--dsw-static-neutral-bluish-150": "#d1d1d1",
+			"--dsw-static-neutral-bluish-200": "#c7c7c7",
+			"--dsw-static-neutral-bluish-300": "#b8b8b8",
+			"--dsw-static-neutral-bluish-400": "#949494",
+			"--dsw-static-neutral-bluish-500": "#8a8a8a",
+			"--dsw-static-neutral-bluish-600": "#7a7a7a",
+			"--dsw-static-neutral-bluish-700": "#525252",
+			"--dsw-static-neutral-bluish-750": "#424242",
+			"--dsw-static-neutral-bluish-800": "#363636",
+			"--dsw-static-neutral-bluish-850": "#2f2f2f",
+			"--dsw-static-neutral-bluish-875": "#2a2a2a",
+			"--dsw-static-neutral-bluish-900": "#2b2b2b",
+			"--dsw-static-neutral-bluish-950": "#242424",
+			"--dsw-static-neutral-bluish-1000": "#141414",
+			"--dsw-alias-bg-base": "#242424",
+			"--dsw-alias-bg-document-preview": "#202020",
+			"--dsw-alias-bg-document-selection": "color-mix(in srgb, #366ace 40%, transparent)",
+			"--dsw-alias-label-document-preview": "#b8b8b8",
+			"--dsw-alias-bg-l1": "#2a2a2a",
+			"--dsw-alias-bg-l2": "#2f2f2f",
+			"--dsw-alias-bg-layer-1": "#2a2a2a",
+			"--dsw-alias-bg-layer-2": "#2f2f2f",
+			"--dsw-alias-bg-layer-3": "#363636",
+			"--dsw-alias-bg-layer-4": "#3d3d3d",
+			"--dsw-alias-bg-mask-1": "#00000066",
+			"--dsw-alias-bg-mask-2": "#00000033",
+			"--dsw-alias-bg-mask-3": "#00000080",
+			"--dsw-alias-bg-mask-drop": "#242424b3",
+			"--dsw-alias-bg-module-platform": "#ffffff12",
+			"--dsw-alias-bg-multi-select": "#ffffff12",
+			"--dsw-alias-bg-overlay": "#383838",
+			"--dsw-alias-bg-skeleton": "#ffffff0d",
+			"--dsw-alias-border-inverted": "#ffffff14",
+			"--dsw-alias-border-inverted2": "#ffffff1a",
+			"--dsw-alias-border-l1": "#ffffff0d",
+			"--dsw-alias-border-l2": "#ffffff17",
+			"--dsw-alias-border-l2-darkmode-thin": "#ffffff14",
+			"--dsw-alias-border-l3": "#ffffff21",
+			"--dsw-alias-border-l4": "#ffffff2b",
+			"--dsw-alias-settings-card-fill": "#2f2f2f",
+			"--dsw-alias-settings-card-stroke": "#ffffff1a",
+			"--dsw-alias-brand-primary": "#366ace",
+			"--dsw-alias-brand-primary-invert": "#e3e3e3",
+			"--dsw-alias-brand-primary-new-colorprimary-new-color": "#528bff",
+			"--dsw-alias-brand-business-primary": "#568af2",
+			"--dsw-alias-brand-business-secondary": "#467cda24",
+			"--dsw-alias-brand-deepseek": "#568af2",
+			"--dsw-alias-button-contrast-fill": "#e3e3e3",
+			"--dsw-alias-button-elevated-fill": "#383838",
+			"--dsw-alias-button-floating-fill": "#2f2f2f",
+			"--dsw-alias-button-floating-hover": "#383838",
+			"--dsw-alias-button-ghost-hover": "#ffffff12",
+			"--dsw-alias-button-primary-fill": "#366ace",
+			"--dsw-alias-button-primary-hover": "#4277db",
+			"--dsw-alias-button-secondary-fill": "#363636",
+			"--dsw-alias-button-secondary-hover": "#404040",
+			"--dsw-alias-button-tertiary-hover": "#404040",
+			"--dsw-alias-input-bg-hover": "#ffffff0d",
+			"--dsw-alias-interactive-bg-hover": "#ffffff12",
+			"--dsw-alias-interactive-bg-active": "#ffffff1f",
+			"--dsw-alias-interactive-bg-hover-solid": "#363636",
+			"--dsw-alias-label-caption": "#7a7a7a",
+			"--dsw-alias-label-dimmed": "#525252",
+			"--dsw-alias-label-link": "#58a6ff",
+			"--dsw-alias-label-primary": "#e3e3e3",
+			"--dsw-alias-label-primary-bluish": "#e3e3e3",
+			"--dsw-alias-label-primary-dimmed": "#cfcfcf",
+			"--dsw-alias-label-primary-disable": "#6e6e6e",
+			"--dsw-alias-label-primary-foreground": "#f0f0f0",
+			"--dsw-alias-label-primary-inverted": "#242424",
+			"--dsw-alias-label-secondary": "#b8b8b8",
+			"--dsw-alias-label-tertiary": "#949494",
+			"--dsw-alias-label-white": "#f0f0f0",
+			"--dsw-alias-menu-icon": "#cfcfcf",
+			"--dsw-alias-markdown-citation": "#363636",
+			"--dsw-alias-markdown-citation-hover": "#366ace",
+			"--dsw-alias-markdown-code-block": "#1e1e1e",
+			"--dsw-alias-markdown-code-block-banner": "#2a2a2a",
+			"--dsw-alias-markdown-code-segment-selected": "#363636",
+			"--dsw-alias-markdown-code-segment-unselected": "#242424",
+			"--dsw-alias-markdown-inline-code": "#343434",
+			"--dsw-alias-markdown-placeholder": "#2f2f2f",
+			"--dsw-alias-markdown-tag": "#343434",
+			"--dsw-alias-markdown-table": "#2a2a2a",
+			"--dsw-alias-progress-bg": "#ffffff17",
+			"--dsw-alias-scrollbar": "#ffffff24",
+			"--dsw-alias-scrollbar-hover": "#ffffff38",
+			"--dsw-alias-scrollbar-bg-l1": "#484848",
+			"--dsw-alias-scrollbar-bg-l2": "#525252",
+			"--dsw-alias-scrollbar-hover-l1": "#5c5c5c",
+			"--dsw-alias-scrollbar-hover-l2": "#666666",
+			"--dsw-alias-state-error-primary": "#e06c6c",
+			"--dsw-alias-state-error-secondary": "#3b2323",
+			"--dsw-alias-state-error-tertiary": "#e06c6c1a",
+			"--dsw-alias-state-success-primary": "#57ab5a",
+			"--dsw-alias-state-success-secondary": "#253627",
+			"--dsw-alias-state-warn-primary": "#daaa3f",
+			"--dsw-alias-state-warning-primary": "#daaa3f",
+			"--dsw-alias-state-warning-secondary": "#332b20",
+			"--dsw-alias-switch-thumb": "#9e9e9e",
+			"--dsw-alias-toast-bg": "#383838",
+			"--dsw-alias-toast-fill": "#383838",
+			"--dsw-alias-tooltip-bg": "#383838",
+			"--dsw-specific-bubble": "#333333",
+			"--dsw-specific-bubble-highlight": "#3d3d3d",
+			"--dsw-specific-input-major": "#2e2e2e",
+			"--dsw-specific-input-minor": "#292929",
+			"--dsw-specific-login-input": "#2b2b2b",
+			"--dsw-specific-menu": "#303030f2",
+			"--dsw-specific-selector": "#363636",
+			"--dsw-specific-sidebar-fill": "#2b2b2b",
+			"--dsw-specific-sidebar-nav-item-active": "#3a3a3a",
+			"--dsw-specific-sidebar-nav-item-active-accent": "#3a3a3a",
+			"--dsw-specific-sidebar-nav-item-hover": "#333333",
+			"--dsw-specific-tip": "#303030",
+			"--dsw-menu-surface-fill": "#303030eb",
+			"--dsw-alias-menu-group-header-fill": "#2c2c2cf2",
+			"--dsw-linear-gradient-think": "linear-gradient(180deg, #242424 20.19%, #24242400 100%)",
+			"--dsw-linear-think-select": "linear-gradient(180deg, #2e2e2e 20.19%, #2e2e2e00 100%)",
+			"--shiki-token-constant": "#4ec9b0",
+			"--shiki-token-string": "#7ec687",
+			"--shiki-token-comment": "#8a8a8a",
+			"--shiki-token-keyword": "#df9572",
+			"--shiki-token-parameter": "#ddb67d",
+			"--shiki-token-function": "#6cb6ff",
+			"--shiki-token-string-expression": "#7ec687",
+			"--shiki-token-punctuation": "#d4d4d4",
+			"--shiki-token-link": "#6cb6ff"
+		});
+		const IDEA_DARK_THEME_DEFINITION = Object.freeze({
+			id: IDEA_DARK_THEME_ID,
+			colorScheme: "dark",
+			tokens: IDEA_DARK_THEME_TOKENS
+		});
+
+		function readSavedDesktopThemePreference() {
+			try {
+				if (typeof window !== "undefined" && window.localStorage) {
+					const raw = window.localStorage.getItem(DESKTOP_THEME_STORAGE_KEY);
+					return typeof raw === "string" ? raw.trim() : "";
+				}
+			} catch (_) { /* storage unavailable */ }
+			return "";
+		}
+
+		function writeSavedDesktopThemePreference(preference) {
+			try {
+				if (typeof window !== "undefined" && window.localStorage) {
+					if (preference) {
+						window.localStorage.setItem(DESKTOP_THEME_STORAGE_KEY, String(preference));
+					} else {
+						window.localStorage.removeItem(DESKTOP_THEME_STORAGE_KEY);
+					}
+				}
+			} catch (_) { /* storage unavailable */ }
+		}
+
+		function syncBodyDesktopThemeAttribute(activeId) {
+			if (typeof document === "undefined" || !document.body) return;
+			if (activeId === IDEA_DARK_THEME_ID) {
+				if (typeof document.body.setAttribute === "function") {
+					document.body.setAttribute(DESKTOP_THEME_ATTRIBUTE, IDEA_DARK_THEME_ID);
+				}
+				if (document.body.dataset) {
+					document.body.dataset.dshDesktopTheme = IDEA_DARK_THEME_ID;
+				}
+			} else {
+				if (typeof document.body.removeAttribute === "function") {
+					document.body.removeAttribute(DESKTOP_THEME_ATTRIBUTE);
+				}
+				if (document.body.dataset && "dshDesktopTheme" in document.body.dataset) {
+					delete document.body.dataset.dshDesktopTheme;
+				}
+			}
+		}
+
+		function ThemeLightIcon16() {
+			return jsxs("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				xmlns: "http://www.w3.org/2000/svg",
+				"aria-hidden": "true",
+				strokeWidth: 1.2,
+				children: [
+					jsx("path", { d: "M8.00007 11.8117C10.1052 11.8117 11.8117 10.1052 11.8117 8.00007C11.8117 5.89499 10.1052 4.18848 8.00007 4.18848C5.89499 4.18848 4.18848 5.89499 4.18848 8.00007C4.18848 10.1052 5.89499 11.8117 8.00007 11.8117Z", stroke: "currentColor" }),
+					jsx("path", { d: "M13.3899 8H15.1499", stroke: "currentColor" }),
+					jsx("path", { d: "M11.8115 11.8115L13.0556 13.0556", stroke: "currentColor" }),
+					jsx("path", { d: "M8 13.3901V15.1501", stroke: "currentColor" }),
+					jsx("path", { d: "M4.18868 11.8115L2.94458 13.0556", stroke: "currentColor" }),
+					jsx("path", { d: "M2.6101 8H0.850098", stroke: "currentColor" }),
+					jsx("path", { d: "M4.18868 4.18856L2.94458 2.94446", stroke: "currentColor" }),
+					jsx("path", { d: "M8 2.6101V0.850098", stroke: "currentColor" }),
+					jsx("path", { d: "M11.8115 4.18856L13.0556 2.94446", stroke: "currentColor" })
+				]
+			});
+		}
+
+		function ThemeDarkIcon16() {
+			return jsx("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				xmlns: "http://www.w3.org/2000/svg",
+				"aria-hidden": "true",
+				strokeWidth: 1.2,
+				children: jsx("path", {
+					d: "M14.1127 8.70663C14.2576 8.60602 14.4627 8.71355 14.4386 8.88834C14.2901 9.96567 13.8731 10.9912 13.2229 11.8692C12.479 12.8735 11.4613 13.6421 10.2917 14.0829C9.1222 14.5236 7.85038 14.6179 6.62865 14.3543C5.40692 14.0907 4.28709 13.4805 3.40332 12.5967C2.51955 11.7129 1.90931 10.5931 1.64572 9.37135C1.38212 8.14962 1.47635 6.87779 1.91711 5.70825C2.35787 4.5387 3.12647 3.52103 4.13083 2.77714C5.00878 2.12689 6.03433 1.70994 7.11166 1.5614C7.28645 1.5373 7.39397 1.74238 7.29337 1.88734C6.68703 2.76099 6.37885 3.81241 6.42313 4.88345C6.47392 6.11194 6.98471 7.27645 7.85413 8.14587C8.72355 9.01529 9.88805 9.52608 11.1166 9.57687C12.1876 9.62114 13.239 9.31296 14.1127 8.70663Z",
+					stroke: "currentColor"
+				})
+			});
+		}
+
+		function ThemeIdeaDarkIcon16() {
+			return jsxs("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				xmlns: "http://www.w3.org/2000/svg",
+				"aria-hidden": "true",
+				strokeWidth: 1.2,
+				children: [
+					jsx("path", {
+						d: "M12.9 9.45C11.95 9.95 10.8 10.1 9.7 9.8C7.7 9.25 6.35 7.3 6.55 5.2C6.65 4.2 7.1 3.3 7.8 2.6C5.1 2.7 2.85 4.85 2.7 7.6C2.55 10.5 4.8 13 7.7 13.15C10.15 13.3 12.3 11.7 12.9 9.45Z",
+						stroke: "currentColor",
+						strokeLinecap: "round",
+						strokeLinejoin: "round"
+					}),
+					jsx("path", {
+						d: "M11.75 2.5V5.0M10.5 3.75H13.0",
+						stroke: "currentColor",
+						strokeLinecap: "round"
+					})
+				]
+			});
+		}
+
+		function ThemeSystemIcon16() {
+			return jsxs("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				xmlns: "http://www.w3.org/2000/svg",
+				"aria-hidden": "true",
+				strokeWidth: 1.2,
+				children: [
+					jsx("path", { d: "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V11.5C1.5 12.0523 1.94772 12.5 2.5 12.5H13.5C14.0523 12.5 14.5 12.0523 14.5 11.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z", stroke: "currentColor" }),
+					jsx("path", { d: "M5 14.5H11", stroke: "currentColor" })
+				]
+			});
+		}
+
+		const DESKTOP_APPEARANCE_CUBES = Object.freeze([
+			{ id: "light", labelKey: "light", fallbackKey: "bridge.theme_light", Icon: ThemeLightIcon16 },
+			{ id: "dark", labelKey: "dark", fallbackKey: "bridge.theme_dark", Icon: ThemeDarkIcon16 },
+			{ id: IDEA_DARK_THEME_ID, labelKey: "ideaDark", fallbackKey: "bridge.theme_idea_dark", Icon: ThemeIdeaDarkIcon16 },
+			{ id: "system", labelKey: "system", fallbackKey: "bridge.theme_system", Icon: ThemeSystemIcon16 },
+		]);
+
+		function readThemeSnapshot(theme) {
+			if (!theme || typeof theme !== "object") return null;
+			try {
+				if (typeof theme.getTheme === "function") return theme.getTheme();
+				if (typeof theme.getSnapshot === "function") return theme.getSnapshot();
+				if (theme.snapshot && typeof theme.snapshot === "object") return theme.snapshot;
+			} catch (_) { /* ignore */ }
+			return null;
+		}
+
+		function hasRegisteredTheme(theme, id) {
+			if (!theme || !id) return false;
+			const snap = readThemeSnapshot(theme);
+			if (Array.isArray(snap?.themes) && snap.themes.some((item) => item && item.id === id)) {
+				return true;
+			}
+			if (Array.isArray(theme.themes) && theme.themes.some((item) => item && item.id === id)) {
+				return true;
+			}
+			return false;
+		}
+
+		function readActiveDshLocale(ctx) {
+			try {
+				const loc = typeof ctx?.get === "function" ? (ctx.get("locale") || ctx.locale) : ctx?.locale;
+				if (!loc) return "";
+				const snap = typeof loc.getLocale === "function"
+					? loc.getLocale()
+					: typeof loc.getSnapshot === "function"
+						? loc.getSnapshot()
+						: loc.snapshot;
+				return typeof snap?.active === "string" ? snap.active : "";
+			} catch (_) {
+				return "";
+			}
+		}
+
+		function resolveSlotTranslation(slotT, keys) {
+			if (typeof slotT !== "function") return "";
+			for (const key of keys) {
+				if (!key) continue;
+				try {
+					const val = slotT(key);
+					if (typeof val === "string" && val && val !== key && !val.endsWith("." + key)) {
+						return val;
+					}
+				} catch (_) { /* try next key */ }
+			}
+			return "";
+		}
+
+		function resolveAppearanceLabel(slotT, cube, activeDshLocale) {
+			if (cube.id !== IDEA_DARK_THEME_ID) {
+				const fromSlot = resolveSlotTranslation(slotT, ["appearance." + cube.labelKey, cube.labelKey]);
+				if (fromSlot) return fromSlot;
+			}
+			if (cube.id === IDEA_DARK_THEME_ID) {
+				const catalogVal = localeCatalog["bridge.theme_idea_dark"];
+				if (typeof catalogVal === "string" && catalogVal) {
+					if (typeof activeDshLocale === "string" && activeDshLocale) {
+						const norm = activeDshLocale.toLowerCase();
+						if (norm.startsWith("zh") && (!localeCode || localeCode.toLowerCase().startsWith("en"))) {
+							return "护眼暗色";
+						}
+						if (norm.startsWith("en") && (!localeCode || localeCode.toLowerCase().startsWith("zh"))) {
+							return "Eye-Care Dark";
+						}
+					}
+					return catalogVal;
+				}
+				if (typeof activeDshLocale === "string" && activeDshLocale.toLowerCase().startsWith("zh")) {
+					return "护眼暗色";
+				}
+				const darkSample = resolveSlotTranslation(slotT, ["appearance.dark", "dark"]);
+				if (darkSample === "深色") return "护眼暗色";
+			}
+			return t(cube.fallbackKey);
+		}
+
+		function installDesktopThemes(ctx) {
+			const listeners = new Set();
+			let activeThemeService = null;
+			let currentPreference = readSavedDesktopThemePreference() || "system";
+
+			const getPreference = () => {
+				const snapPref = readThemeSnapshot(activeThemeService)?.preference;
+				if (typeof snapPref === "string" && snapPref) return snapPref;
+				return currentPreference || "system";
+			};
+
+			const notify = (nextPref) => {
+				if (typeof nextPref === "string" && nextPref) {
+					currentPreference = nextPref;
+				}
+				for (const fn of [...listeners]) {
+					try { fn(currentPreference); } catch (_) { /* listener isolation */ }
+				}
+			};
+
+			const selectTheme = (id) => {
+				if (!id || typeof id !== "string") return;
+				writeSavedDesktopThemePreference(id);
+				if (activeThemeService && typeof activeThemeService.setTheme === "function") {
+					try {
+						activeThemeService.setTheme(id);
+					} catch (_) {
+						syncBodyDesktopThemeAttribute(id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+					}
+				} else {
+					syncBodyDesktopThemeAttribute(id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : "");
+				}
+				notify(id);
+			};
+
+			const attachThemeService = (theme) => {
+				if (!theme || activeThemeService === theme) return () => {};
+				activeThemeService = theme;
+				let disposeRegisteredTheme = null;
+				try {
+					if (!hasRegisteredTheme(theme, IDEA_DARK_THEME_ID) && typeof theme.register === "function") {
+						disposeRegisteredTheme = theme.register(IDEA_DARK_THEME_DEFINITION);
+					}
+				} catch (_) { /* registration guarded */ }
+
+				const origSetTheme = typeof theme.setTheme === "function" ? theme.setTheme.bind(theme) : null;
+				const origAdopt = typeof theme.adopt === "function" ? theme.adopt.bind(theme) : null;
+				const origPublish = typeof theme.publish === "function" ? theme.publish.bind(theme) : null;
+				let internalWrite = false;
+				let inAdopt = false;
+
+				if (origPublish) {
+					try {
+						theme.publish = () => {
+							if (inAdopt && readSavedDesktopThemePreference() === IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, IDEA_DARK_THEME_ID)) {
+								theme.preference = IDEA_DARK_THEME_ID;
+							}
+							return origPublish();
+						};
+					} catch (_) { /* ignore non-writable */ }
+				}
+
+				if (origSetTheme) {
+					try {
+						theme.setTheme = (id) => {
+							if (!internalWrite) {
+								writeSavedDesktopThemePreference(id);
+							}
+							if (id === IDEA_DARK_THEME_ID) {
+								internalWrite = true;
+								try {
+									const durablePref = theme.host?.getSnapshot?.()?.value?.preference;
+									if (durablePref !== "dark") {
+										if (typeof theme.write === "function" && typeof theme.host?.set === "function") {
+											try { theme.write(() => theme.host.set("preference", "dark")); } catch (_) { /* optional */ }
+										} else {
+											try { origSetTheme("dark"); } catch (_) { /* host write optional */ }
+										}
+									}
+									origSetTheme(IDEA_DARK_THEME_ID);
+								} finally {
+									internalWrite = false;
+								}
+							} else {
+								origSetTheme(id);
+							}
+							const snap = readThemeSnapshot(theme);
+							syncBodyDesktopThemeAttribute(snap?.active?.id || (id === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : ""));
+							notify(snap?.preference || id);
+						};
+					} catch (_) { /* ignore non-writable */ }
+				}
+
+				if (origAdopt) {
+					try {
+						theme.adopt = () => {
+							inAdopt = true;
+							try {
+								origAdopt();
+							} finally {
+								inAdopt = false;
+							}
+							const saved = readSavedDesktopThemePreference();
+							if (saved === IDEA_DARK_THEME_ID && hasRegisteredTheme(theme, IDEA_DARK_THEME_ID) && theme.preference !== IDEA_DARK_THEME_ID) {
+								theme.preference = IDEA_DARK_THEME_ID;
+								if (typeof theme.publish === "function") {
+									theme.publish();
+								} else if (origSetTheme) {
+									origSetTheme(IDEA_DARK_THEME_ID);
+								}
+							}
+						};
+					} catch (_) { /* ignore non-writable */ }
+				}
+
+				const saved = readSavedDesktopThemePreference();
+				if (saved === IDEA_DARK_THEME_ID && typeof theme.setTheme === "function") {
+					try { theme.setTheme(IDEA_DARK_THEME_ID); } catch (_) { /* ignore */ }
+				} else {
+					const snap = readThemeSnapshot(theme);
+					if (snap?.preference) {
+						currentPreference = snap.preference;
+					}
+					syncBodyDesktopThemeAttribute(snap?.active?.id || "");
+				}
+
+				return () => {
+					try { if (origSetTheme) theme.setTheme = origSetTheme; } catch (_) {}
+					try { if (origAdopt) theme.adopt = origAdopt; } catch (_) {}
+					try { if (origPublish) theme.publish = origPublish; } catch (_) {}
+					if (typeof disposeRegisteredTheme === "function") {
+						try { disposeRegisteredTheme(); } catch (_) { /* ignore */ }
+					}
+					syncBodyDesktopThemeAttribute("");
+					if (activeThemeService === theme) activeThemeService = null;
+				};
+			};
+
+			const cleanups = [];
+			// Cordis Context Proxy throws "cannot get property 'theme' without inject" when
+			// reading scope.theme on a fiber whose inject list does not include "theme".
+			// Always prefer scope.get("theme") and guard property access with try/catch.
+			const resolveThemeFrom = (scope) => {
+				if (!scope) return null;
+				if (typeof scope.get === "function") {
+					try {
+						const byGet = scope.get("theme");
+						if (byGet) return byGet;
+					} catch (_) { /* ignore */ }
+				}
+				try {
+					if (scope.theme) return scope.theme;
+				} catch (_) { /* Cordis proxy throws when "theme" is not in fiber inject */ }
+				return null;
+			};
+			const directTheme = resolveThemeFrom(ctx);
+			if (directTheme) {
+				cleanups.push(attachThemeService(directTheme));
+			} else if (typeof ctx?.inject === "function") {
+				try {
+					const stopInject = ctx.inject(["theme"], (scope) => {
+						const injectedTheme = resolveThemeFrom(scope);
+						if (!injectedTheme) return;
+						const detach = attachThemeService(injectedTheme);
+						if (typeof scope?.effect === "function") {
+							scope.effect(() => detach, "desktop-bridge: idea-dark theme");
+						} else {
+							cleanups.push(detach);
+						}
+					});
+					if (typeof stopInject === "function") cleanups.push(stopInject);
+				} catch (_) { /* inject optional in minimal test harnesses */ }
+			}
+
+			if (typeof ctx?.on === "function") {
+				try {
+					const offThemeChange = ctx.on("theme/change", (snapshot) => {
+						const saved = readSavedDesktopThemePreference();
+						if (saved === IDEA_DARK_THEME_ID && snapshot?.preference && snapshot.preference !== IDEA_DARK_THEME_ID && activeThemeService) {
+							const hasIdea = snapshot.themes?.some?.((item) => item && item.id === IDEA_DARK_THEME_ID) || hasRegisteredTheme(activeThemeService, IDEA_DARK_THEME_ID);
+							if (hasIdea && typeof activeThemeService.setTheme === "function") {
+								try {
+									activeThemeService.setTheme(IDEA_DARK_THEME_ID);
+									return;
+								} catch (_) { /* fall through */ }
+							}
+						}
+						syncBodyDesktopThemeAttribute(snapshot?.active?.id || (snapshot?.preference === IDEA_DARK_THEME_ID ? IDEA_DARK_THEME_ID : ""));
+						if (typeof snapshot?.preference === "string") {
+							notify(snapshot.preference);
+						}
+					});
+					if (typeof offThemeChange === "function") cleanups.push(offThemeChange);
+				} catch (_) { /* ignore */ }
+			}
+
+			function DesktopAppearanceRow(slotProps) {
+				const slotT = slotProps && typeof slotProps.t === "function" ? slotProps.t : null;
+				const [preference, setPreference] = react.useState(() => getPreference());
+				const [, setLocaleTick] = react.useState(0);
+				if (typeof react.useEffect === "function") {
+					react.useEffect(() => {
+						setPreference(getPreference());
+						const onPref = (next) => setPreference(next);
+						listeners.add(onPref);
+						const offLoc = onLocaleChange(() => setLocaleTick((n) => n + 1));
+						return () => {
+							listeners.delete(onPref);
+							if (typeof offLoc === "function") offLoc();
+						};
+					}, []);
+				}
+				const activeDshLocale = readActiveDshLocale(ctx);
+				const titleText = resolveSlotTranslation(slotT, ["appearance.title", "title"]) || t("bridge.theme_appearance_title");
+
+				return jsxs("div", {
+					className: "dshDesktopBridgeAppearanceGroup",
+					"data-dsh-desktop-appearance": "",
+					children: [
+						jsx("div", {
+							className: "dshDesktopBridgeAppearanceTitle",
+							children: titleText
+						}),
+						jsx("div", {
+							className: "dshDesktopBridgeAppearanceCubeRow",
+							role: "radiogroup",
+							"aria-label": titleText,
+							children: DESKTOP_APPEARANCE_CUBES.map((cube) => {
+								const selected = preference === cube.id;
+								const Icon = cube.Icon;
+								const label = resolveAppearanceLabel(slotT, cube, activeDshLocale);
+								return jsxs("button", {
+									type: "button",
+									role: "radio",
+									"aria-checked": selected,
+									"data-theme-id": cube.id,
+									className: "dshDesktopBridgeThemeCube" + (selected ? " is-selected" : ""),
+									onClick: () => selectTheme(cube.id),
+									children: [
+										jsx(Icon, {}),
+										jsx("span", { children: label })
+									]
+								}, cube.id);
+							})
+						})
+					]
+				});
+			}
+
+			try {
+				if (typeof ctx?.slots?.inject === "function" && typeof ctx?.slots?.register === "function") {
+					const disposeSlot = ctx.slots.inject("settings.general.item", () => ctx.slots.register({
+						name: "settings.general.item",
+						id: "appearance",
+						order: 10,
+						priority: -10,
+						locale: "settings.theme"
+					}, DesktopAppearanceRow));
+					if (typeof disposeSlot === "function") cleanups.push(disposeSlot);
+				}
+			} catch (_) { /* ignore */ }
+
+			return () => {
+				for (const fn of cleanups.splice(0, cleanups.length)) {
+					try { if (typeof fn === "function") fn(); } catch (_) { /* ignore */ }
+				}
+			};
+		}
+
 		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout", "locale"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
@@ -5781,6 +6477,7 @@ window.__ModuleLoader__.load({
 			const stopArchivedSessionBatch = installArchivedSessionBatch(ctx);
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
 			const stopChatContentVisibility = installChatContentVisibility();
+			const stopDesktopThemes = installDesktopThemes(ctx);
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					stopNavIcon();
@@ -5789,6 +6486,7 @@ window.__ModuleLoader__.load({
 					stopArchivedSessionBatch();
 					stopHoverMessageActions();
 					stopChatContentVisibility();
+					stopDesktopThemes();
 				});
 			}
 			// First-class settings nav entry (same slot as Models / Plugins / Market).
@@ -5814,7 +6512,7 @@ window.__ModuleLoader__.load({
 			};
 
 			registerDesktopNav();
-			onLocaleChange(() => registerDesktopNav());
+			const offDesktopNavLocale = onLocaleChange(() => registerDesktopNav());
 
 			// First-class 「已归档会话」— replaces dropped dsh-client-ui-settings-unarchive-sessions
 			// on 0.1.7 while keeping id archived-sessions so data-dsh-archived-batch* hooks stay valid.
@@ -5877,7 +6575,19 @@ window.__ModuleLoader__.load({
 				}, (slotProps) => jsx(ArchivedSessionsSection, { ...slotProps })));
 			};
 			registerArchivedSessionsNav();
-			onLocaleChange(() => registerArchivedSessionsNav());
+			const offArchivedNavLocale = onLocaleChange(() => registerArchivedSessionsNav());
+			if (typeof ctx.effect === "function") {
+				ctx.effect(() => () => {
+					if (typeof offDesktopNavLocale === "function") offDesktopNavLocale();
+					if (typeof offArchivedNavLocale === "function") offArchivedNavLocale();
+					if (typeof disposeDesktopNav === "function") {
+						try { disposeDesktopNav(); } catch (_) {}
+					}
+					if (typeof disposeArchivedSessionsNav === "function") {
+						try { disposeArchivedSessionsNav(); } catch (_) {}
+					}
+				});
+			}
 
 
 			// Official busy signal: SessionSummary.running from api-session-controller

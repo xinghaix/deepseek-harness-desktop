@@ -448,5 +448,10 @@
   "bridge.overlay_max_lines": "Max prompt lines",
   "bridge.overlay_max_lines_hint": "How many lines of prompt text the floating card shows before it scrolls. The card still shrinks to fit the space above the Chat input, so it never covers the composer.",
   "bridge.overlay_load_older": "Load older",
-  "bridge.overlay_loading": "Loading…"
+  "bridge.overlay_loading": "Loading…",
+  "bridge.theme_appearance_title": "Appearance",
+  "bridge.theme_light": "Light",
+  "bridge.theme_dark": "Dark",
+  "bridge.theme_idea_dark": "Eye-Care Dark",
+  "bridge.theme_system": "System"
 }
