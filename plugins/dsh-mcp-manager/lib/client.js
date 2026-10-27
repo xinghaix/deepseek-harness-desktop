@@ -2467,8 +2467,10 @@ module.exports = {
 						setText: setImportText,
 						parsed,
 						importable,
+						project: state?.project || [],
 						busy,
 						onPickFile: () => fileRef.current && fileRef.current.click(),
+						onApproveProject: (workspaceId, list) => act({ op: "approveProject", workspaceId, names: list }),
 						onCancel: () => { setImporting(false); setImportText(""); },
 						onImport: async () => { if (await act({ op: "import", servers: importable.map(wireServer) })) { setImporting(false); setImportText(""); } },
 					}) : null,
@@ -2516,6 +2518,7 @@ module.exports = {
 						children: visibleServers.map((server) => jsx(ServerRow, {
 							tr,
 							server,
+							workspaces: state?.project || [],
 							busy,
 							expanded: open === server.patchId,
 							editing: open === server.patchId && draft && draft.patchId === server.patchId ? draft : null,
@@ -2530,10 +2533,17 @@ module.exports = {
 							onDelete: () => setConfirm({ kind: "delete", server }),
 						}, server.patchId)),
 					}),
-					state ? jsx(ProjectPanel, { tr, project: state.project || [], busy, onApprove: (workspaceId, list) => act({ op: "approveProject", workspaceId, names: list }) }) : null,
+					state && !importing ? jsx(ProjectPanel, {
+						tr,
+						project: state.project || [],
+						onlyWithFiles: true,
+						busy,
+						onApprove: (workspaceId, list) => act({ op: "approveProject", workspaceId, names: list }),
+					}) : null,
 					confirm ? jsx(Confirm, {
 						tr,
 						confirm,
+						workspaces: state?.project || [],
 						onCancel: () => setConfirm(null),
 						onOk: async () => {
 							const current = confirm;
@@ -2578,6 +2588,26 @@ module.exports = {
 			});
 		}
 
+		function resolveServerWorkspace(server, workspaces) {
+			if (!server) return null;
+			const list = Array.isArray(workspaces) ? workspaces : [];
+			const originPath = server.origin?.workspace || "";
+			if (originPath) {
+				const found = list.find((ws) => ws.path === originPath);
+				return {
+					title: found?.title || originPath.split(/[\\/]/).filter(Boolean).pop() || originPath,
+					path: originPath,
+					file: server.origin?.file || "",
+				};
+			}
+			const cwd = String(server.cwd || "").trim();
+			if (cwd) {
+				const found = list.find((ws) => ws.path && (cwd === ws.path || cwd.startsWith(ws.path + "/")));
+				if (found) return { title: found.title, path: found.path, file: "" };
+			}
+			return null;
+		}
+
 		function ServerRow(props) {
 			const { tr, server } = props;
 			const tools = Array.isArray(server.tools) ? server.tools : [];
@@ -2586,6 +2616,7 @@ module.exports = {
 			const rest = tools.length - shown.length;
 			const status = server.status || "unknown";
 			const secrets = server.transport === "stdio" ? (server.env || []) : (server.headers || []);
+			const wsInfo = resolveServerWorkspace(server, props.workspaces);
 			return jsxs("div", {
 				"data-server": server.serverName,
 				"data-enabled": server.enabled ? "true" : "false",
@@ -2608,7 +2639,12 @@ module.exports = {
 											jsx("strong", { className: "dsh-mcp-row-name", children: server.serverName || server.patchId }),
 											jsx("span", { className: "dsh-mcp-badge", children: server.transport }),
 											server.external ? jsx("span", { className: "dsh-mcp-badge", "data-tone": "info", children: tr("tag.external") }) : null,
-											server.origin ? jsx("span", { className: "dsh-mcp-badge", "data-tone": "info", children: tr("tag.project") }) : null,
+											wsInfo ? jsx("span", {
+												className: "dsh-mcp-badge",
+												"data-tone": "info",
+												title: wsInfo.path,
+												children: tr("tag.project") + (wsInfo.title ? " · " + wsInfo.title : ""),
+											}) : null,
 										],
 									}),
 									jsxs("span", {
@@ -2777,6 +2813,13 @@ module.exports = {
 							children: rowText(tr, { ...row, transport: row.server?.transport || "" }),
 						}, row.name + row.code)),
 					}),
+					jsx(ProjectPanel, {
+						tr,
+						project: props.project || [],
+						onlyWithFiles: false,
+						busy: props.busy,
+						onApprove: props.onApproveProject,
+					}),
 					jsxs("div", {
 						style: { display: "flex", justifyContent: "flex-end", gap: 8 },
 						children: [
@@ -2797,73 +2840,118 @@ module.exports = {
 
 		function ProjectPanel(props) {
 			const { tr, project } = props;
+			const withFiles = (project || []).filter((ws) => (ws.files || []).some((f) => f.present || f.error));
+			const pendingCount = withFiles.reduce(
+				(sum, ws) => sum + (ws.files || []).reduce((s, f) => s + (f.rows || []).filter((r) => !r.skip).length, 0),
+				0
+			);
+			const [open, setOpen] = React.useState(pendingCount > 0);
+			React.useEffect(() => {
+				if (pendingCount > 0) setOpen(true);
+			}, [pendingCount]);
+
+			// 一级主页面仅在工作区确实存在 .dsh/mcp*.json 文件时才展示二级入口；无项目 MCP 文件时不渲染任何空工作区卡片
+			if (props.onlyWithFiles && withFiles.length === 0) return null;
+
 			return jsxs("div", {
 				"data-project": "",
-				style: { display: "flex", flexDirection: "column", gap: 10, borderTop: "0.5px solid var(--dsw-alias-border-l2)", paddingTop: 16 },
+				style: {
+					display: "flex",
+					flexDirection: "column",
+					gap: 8,
+					borderTop: "0.5px solid var(--dsw-alias-border-l2)",
+					paddingTop: 10,
+				},
 				children: [
-					jsxs("div", {
-						style: { display: "flex", flexDirection: "column", gap: 2 },
+					jsxs("button", {
+						type: "button",
+						className: "dsh-mcp-row-summary",
+						"aria-expanded": open ? "true" : "false",
+						onClick: () => setOpen((value) => !value),
+						style: { justifyContent: "space-between", padding: "2px 0" },
 						children: [
-							jsx("h4", { className: "dsh-mcp-section-title", children: tr("project.title") }),
-							jsx("p", { className: "dsh-mcp-desc", children: tr("project.description") }),
+							jsxs("span", {
+								style: { display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+								children: [
+									jsx(IconFolder, { size: 13 }),
+									jsx("strong", { style: { fontSize: 13 }, children: tr("project.title") }),
+									withFiles.length === 0
+										? jsx("span", { style: muted, children: tr("project.noFiles") })
+										: jsx("span", { className: "dsh-mcp-badge", "data-tone": pendingCount > 0 ? "info" : undefined, children: String(pendingCount || withFiles.length) }),
+								],
+							}),
+							jsx("span", { className: "dsh-mcp-chevron", "data-open": open ? "true" : "false", children: jsx(IconChevronDown, {}) }),
 						],
 					}),
-					project.length === 0 ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.noWorkspace") }) : null,
-					...project.map((ws) => {
-						const files = ws.files || [];
-						const pending = files.flatMap((f) => f.rows.filter((row) => !row.skip).map((row) => row.name));
-						const anyPresent = files.some((f) => f.present || f.error);
-						return jsxs("div", {
-							"data-workspace": ws.workspaceId,
-							className: "dsh-mcp-card",
-							style: { padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 },
-							children: [
-								jsxs("div", {
-									style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
+					open ? jsxs("div", {
+						style: { display: "flex", flexDirection: "column", gap: 8 },
+						children: [
+							jsx("p", { className: "dsh-mcp-desc", children: tr("project.description") }),
+							project.length === 0 ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.noWorkspace") }) : null,
+							project.length > 0 && withFiles.length === 0 ? jsx("div", {
+								style: { display: "flex", flexWrap: "wrap", gap: 6 },
+								children: project.map((ws) => jsx("span", {
+									"data-workspace": ws.workspaceId,
+									className: "dsh-mcp-badge",
+									title: ws.path + " — " + tr("project.noFiles"),
+									children: ws.title,
+								}, ws.workspaceId)),
+							}) : null,
+							...withFiles.map((ws) => {
+								const files = ws.files || [];
+								const pending = files.flatMap((f) => f.rows.filter((row) => !row.skip).map((row) => row.name));
+								return jsxs("div", {
+									"data-workspace": ws.workspaceId,
+									className: "dsh-mcp-card",
+									style: { padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 },
 									children: [
-										jsx(IconFolder, { size: 13 }),
-										jsx("strong", { style: { fontSize: 13 }, children: ws.title }),
-										jsx("code", { style: { ...muted, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)" }, children: ws.path }),
-										pending.length > 1 ? jsx("button", {
-											type: "button",
-											className: "dsh-mcp-btn",
-											"data-size": "sm",
-											style: { marginLeft: "auto" },
-											disabled: props.busy,
-											onClick: () => props.onApprove(ws.workspaceId, pending),
-											children: tr("project.allowAll", { count: pending.length }),
-										}) : null,
-									],
-								}),
-								!anyPresent ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.noFiles") }) : null,
-								...files.filter((f) => f.present || f.error).map((f) => jsxs("div", {
-									style: { paddingLeft: 12, borderLeft: "2px solid var(--dsw-alias-border-l2)", display: "flex", flexDirection: "column", gap: 4 },
-									children: [
-										f.error
-											? jsx("p", { style: { margin: 0, color: "var(--dsw-alias-state-error-primary)", fontSize: 12 }, children: tr("project.fileError", { file: f.file, error: tr("project.error." + f.error) }) })
-											: jsx("code", { style: { ...muted, fontWeight: 500 }, children: f.file }),
-										...f.rows.map((row) => jsxs("div", {
-											style: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "2px 0", flexWrap: "wrap" },
+										jsxs("div", {
+											style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
 											children: [
-												jsx("span", {
-													style: { flex: 1, minWidth: 160, color: row.skip ? "var(--dsw-alias-label-tertiary)" : "var(--dsw-alias-label-primary)" },
-													children: rowText(tr, row) + (row.masked ? " — " + (row.transport === "stdio" ? [row.masked.command, ...row.masked.args].join(" ⟩ ") : row.masked.url) : ""),
-												}),
-												!row.skip ? jsx("button", {
+												jsx(IconFolder, { size: 13 }),
+												jsx("strong", { style: { fontSize: 13 }, children: ws.title }),
+												jsx("code", { style: { ...muted, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)" }, children: ws.path }),
+												pending.length > 1 ? jsx("button", {
 													type: "button",
 													className: "dsh-mcp-btn",
 													"data-size": "sm",
+													style: { marginLeft: "auto" },
 													disabled: props.busy,
-													onClick: () => props.onApprove(ws.workspaceId, [row.name]),
-													children: tr("project.allow"),
+													onClick: () => props.onApprove(ws.workspaceId, pending),
+													children: tr("project.allowAll", { count: pending.length }),
 												}) : null,
 											],
-										}, row.name + row.code)),
+										}),
+										...files.filter((f) => f.present || f.error).map((f) => jsxs("div", {
+											style: { paddingLeft: 12, borderLeft: "2px solid var(--dsw-alias-border-l2)", display: "flex", flexDirection: "column", gap: 4 },
+											children: [
+												f.error
+													? jsx("p", { style: { margin: 0, color: "var(--dsw-alias-state-error-primary)", fontSize: 12 }, children: tr("project.fileError", { file: f.file, error: tr("project.error." + f.error) }) })
+													: jsx("code", { style: { ...muted, fontWeight: 500 }, children: f.file }),
+												...f.rows.map((row) => jsxs("div", {
+													style: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "2px 0", flexWrap: "wrap" },
+													children: [
+														jsx("span", {
+															style: { flex: 1, minWidth: 160, color: row.skip ? "var(--dsw-alias-label-tertiary)" : "var(--dsw-alias-label-primary)" },
+															children: rowText(tr, row) + (row.masked ? " — " + (row.transport === "stdio" ? [row.masked.command, ...row.masked.args].join(" ⟩ ") : row.masked.url) : ""),
+														}),
+														!row.skip ? jsx("button", {
+															type: "button",
+															className: "dsh-mcp-btn",
+															"data-size": "sm",
+															disabled: props.busy,
+															onClick: () => props.onApprove(ws.workspaceId, [row.name]),
+															children: tr("project.allow"),
+														}) : null,
+													],
+												}, row.name + row.code)),
+											],
+										}, f.file)),
 									],
-								}, f.file)),
-							],
-						}, ws.workspaceId);
-					}),
+								}, ws.workspaceId);
+							}),
+						],
+					}) : null,
 				],
 			});
 		}
@@ -3214,6 +3302,7 @@ module.exports = {
 			const { tr, confirm } = props;
 			const stdio = confirm.kind === "stdio";
 			const server = confirm.server;
+			const wsInfo = resolveServerWorkspace(server, props.workspaces);
 			const [ack, setAck] = React.useState(false);
 			React.useEffect(() => {
 				const onKey = (event) => { if (event.key === "Escape") props.onCancel(); };
@@ -3277,6 +3366,15 @@ module.exports = {
 								jsx("p", { style: { margin: 0, fontSize: 12.5, lineHeight: "18px" }, children: stdio ? tr("confirm.stdioBody") : tr("confirm.deleteBody", { name: server?.serverName || "" }) }),
 							],
 						}),
+						wsInfo ? jsxs("div", {
+							"data-confirm-project": wsInfo.title,
+							style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 12 },
+							children: [
+								jsx(IconFolder, { size: 13 }),
+								jsx("span", { className: "dsh-mcp-badge", "data-tone": "info", children: tr("tag.project") + " · " + wsInfo.title }),
+								jsx("code", { style: { ...muted, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)" }, children: wsInfo.file ? `${wsInfo.path} (${wsInfo.file})` : wsInfo.path }),
+							],
+						}) : null,
 						stdio ? jsx("ol", {
 							start: 0,
 							"data-argv": "",

@@ -375,3 +375,169 @@ test("Host exposes authenticated fetch routes, scans schemas once per snapshot, 
   const alphaRecovered = okBody.state.servers.find((s) => s.serverName === "alpha");
   assert.equal(alphaRecovered.lastError, "");
 });
+
+test("Client UI hides empty project workspaces on main view and shows workspace context in import, row badge, and stdio confirm", async () => {
+  let registeredPage = null;
+  let statePayload = {
+    servers: [
+      {
+        patchId: "dsh-mcp-alpha-1",
+        bundleName: "@local/dsh-mcp-alpha",
+        pluginEntryId: "entry-alpha",
+        serverName: "alpha",
+        enabled: false,
+        status: "disabled",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "pkg"],
+        cwd: "/ws/app",
+        env: [],
+        headers: [],
+        tools: [],
+        toolDetails: [],
+      },
+    ],
+    project: [
+      {
+        workspaceId: "ws-empty-1",
+        title: "dsh-sol-pi",
+        path: "/ws/dsh-sol-pi",
+        files: [
+          { file: ".dsh/mcp.json", present: false, error: null, rows: [] },
+          { file: ".dsh/mcp.local.json", present: false, error: null, rows: [] },
+        ],
+      },
+      {
+        workspaceId: "ws-app",
+        title: "my-app",
+        path: "/ws/app",
+        files: [
+          { file: ".dsh/mcp.json", present: false, error: null, rows: [] },
+          { file: ".dsh/mcp.local.json", present: false, error: null, rows: [] },
+        ],
+      },
+    ],
+  };
+
+  // Minimal hook-capable React stub for synchronous tree inspection
+  const states = [];
+  let cursor = 0;
+  const FakeReact = {
+    Fragment: Symbol.for("react.fragment"),
+    useState(init) {
+      const idx = cursor++;
+      if (!(idx in states)) states[idx] = typeof init === "function" ? init() : init;
+      const set = (next) => {
+        states[idx] = typeof next === "function" ? next(states[idx]) : next;
+      };
+      return [states[idx], set];
+    },
+    useEffect() {},
+    useCallback(fn) {
+      return fn;
+    },
+    useMemo(fn) {
+      return fn();
+    },
+    useRef(init) {
+      return { current: init };
+    },
+  };
+  const jsxRuntime = {
+    jsx: (type, props, key) => ({ type, props: props || {}, key }),
+    jsxs: (type, props, key) => ({ type, props: props || {}, key }),
+  };
+
+  function expand(node) {
+    if (node == null || typeof node === "boolean") return null;
+    if (Array.isArray(node)) return node.map(expand).filter(Boolean);
+    if (typeof node !== "object") return node;
+    if (typeof node.type === "function") {
+      return expand(node.type(node.props || {}));
+    }
+    const nextProps = { ...node.props };
+    if ("children" in nextProps) {
+      nextProps.children = expand(nextProps.children);
+    }
+    return { ...node, props: nextProps };
+  }
+
+  function findAll(node, pred, acc = []) {
+    if (!node || typeof node !== "object") return acc;
+    if (Array.isArray(node)) {
+      for (const item of node) findAll(item, pred, acc);
+      return acc;
+    }
+    if (pred(node)) acc.push(node);
+    if (node.props?.children) findAll(node.props.children, pred, acc);
+    return acc;
+  }
+
+  const prevWindow = globalThis.window;
+  let loadedDef = null;
+  globalThis.window = {
+    addEventListener() {},
+    removeEventListener() {},
+    __ModuleLoader__: {
+      load(def) {
+        loadedDef = def;
+      },
+    },
+  };
+  try {
+    const clientCode = readFileSync(join(root, "lib/client.js"), "utf8");
+    new Function(clientCode)();
+    assert.ok(loadedDef);
+    const clientMod = loadedDef.factory((id) => {
+      if (id === "react") return FakeReact;
+      if (id === "react/jsx-runtime") return jsxRuntime;
+      return {};
+    });
+    clientMod.apply({
+      effect: (fn) => fn(),
+      locale: { register() {} },
+      slots: {
+        inject: (_slot, fn) => fn(),
+        register: (_meta, Comp) => {
+          registeredPage = Comp;
+        },
+      },
+    });
+    assert.equal(typeof registeredPage, "function");
+
+    // Pre-populate state slot (index 0 in Manager: [state, setState])
+    states[0] = statePayload;
+    cursor = 0;
+    const tree1 = expand(registeredPage({ t: (k) => k }));
+
+    // 1) Main view does NOT render [data-project] when no workspace has .dsh/mcp*.json
+    assert.equal(findAll(tree1, (n) => n.props && "data-project" in n.props).length, 0);
+
+    // 2) ServerRow shows matched workspace badge ("Project · my-app") via cwd match
+    const badges = findAll(tree1, (n) => n.props?.className === "dsh-mcp-badge");
+    assert.ok(badges.some((b) => String(b.props.children).includes("my-app")));
+
+    // 3) Opening Import panel renders collapsible [data-project] inside Import
+    const importBtn = findAll(tree1, (n) => n.type === "button" && Array.isArray(n.props?.children) && n.props.children.includes("Import"))[0];
+    assert.ok(importBtn);
+    importBtn.props.onClick();
+    cursor = 0;
+    const treeImport = expand(registeredPage({ t: (k) => k }));
+    assert.equal(findAll(treeImport, (n) => n.props && "data-project" in n.props).length, 1);
+
+    // Close Import and trigger stdio enable confirmation -> shows [data-confirm-project="my-app"]
+    const cancelBtn = findAll(treeImport, (n) => n.type === "button" && n.props?.children === "Cancel")[0];
+    assert.ok(cancelBtn);
+    cancelBtn.props.onClick();
+    const switchBtn = findAll(tree1, (n) => n.props?.role === "switch")[0];
+    assert.ok(switchBtn);
+    switchBtn.props.onClick();
+    cursor = 0;
+    const treeConfirm = expand(registeredPage({ t: (k) => k }));
+    const confirmProj = findAll(treeConfirm, (n) => n.props?.["data-confirm-project"] === "my-app");
+    assert.equal(confirmProj.length, 1);
+  } finally {
+    globalThis.window = prevWindow;
+  }
+});
+
