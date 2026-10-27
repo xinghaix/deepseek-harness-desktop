@@ -1,6 +1,6 @@
 {
   "title": "MCP-Server",
-  "description": "Jeder Server ist ein offizielles Konfigurationspaket, das dsh-mcp-client einfügt.",
+  "description": "MCP-Verbindungen zentral verwalten, ohne für jeden Server ein Plugin zu installieren.",
   "count": "{total} gesamt · {enabled} aktiv",
   "add": "Hinzufügen",
   "import": "Importieren",
@@ -55,7 +55,7 @@
   "confirm.stdioAck": "Ich habe den Befehl geprüft",
   "confirm.ok": "Bestätigen",
   "confirm.deleteTitle": "Diesen Server löschen?",
-  "confirm.deleteBody": "Entfernt das Konfigurationspaket für {name}. Das MCP-Client-Paket bleibt installiert.",
+  "confirm.deleteBody": "Entfernt die Verbindungseinstellungen für {name}. Das MCP-Client-Paket bleibt installiert.",
   "import.placeholder": "{ \"mcpServers\": { } }",
   "import.confirm": "{count} importieren (deaktiviert)",
   "import.json": "Das ist kein gültiges JSON.",
@@ -114,5 +114,6 @@
   "error.renameOwned": "Der Name eines Servers kann nach dem Anlegen nicht geändert werden. Löschen und unter neuem Namen erneut hinzufügen.",
   "error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
   "sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
-  "sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an."
+  "sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an.",
+  "migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}"
 }

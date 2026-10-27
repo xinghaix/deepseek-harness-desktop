@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "MCP-Server",
-    "description": "Jeder Server ist ein offizielles Konfigurationspaket, das dsh-mcp-client einfügt."
+    "description": "MCP-Verbindungen zentral verwalten, ohne für jeden Server ein Plugin zu installieren."
   }
 }

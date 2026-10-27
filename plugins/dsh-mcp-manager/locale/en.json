@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "MCP servers",
-    "description": "Each server is an official config bundle that inserts dsh-mcp-client."
+    "description": "Manage MCP connections here without adding a plugin for every server."
   }
 }

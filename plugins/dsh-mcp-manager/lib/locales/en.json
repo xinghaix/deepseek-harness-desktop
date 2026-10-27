@@ -1,6 +1,6 @@
 {
   "title": "MCP servers",
-  "description": "Each server is an official config bundle that inserts dsh-mcp-client.",
+  "description": "Manage MCP connections here without adding a plugin for every server.",
   "count": "{total} total · {enabled} enabled",
   "add": "Add",
   "import": "Import",
@@ -55,7 +55,7 @@
   "confirm.stdioAck": "I have reviewed the command",
   "confirm.ok": "Confirm",
   "confirm.deleteTitle": "Delete this server?",
-  "confirm.deleteBody": "Removes the config bundle for {name}. The MCP client package stays installed.",
+  "confirm.deleteBody": "Removes the connection settings for {name}. The MCP client package stays installed.",
   "import.placeholder": "{ \"mcpServers\": { } }",
   "import.confirm": "Import {count} (disabled)",
   "import.json": "This is not valid JSON.",
@@ -114,5 +114,6 @@
   "error.renameOwned": "A server's name cannot be changed after it is created. Delete it and add it again under the new name.",
   "error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
   "sidebar.toggleLabel": "Show entry in sidebar",
-  "sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly."
+  "sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly.",
+  "migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}"
 }

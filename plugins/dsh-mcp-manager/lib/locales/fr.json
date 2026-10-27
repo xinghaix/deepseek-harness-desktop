@@ -1,6 +1,6 @@
 {
   "title": "Serveurs MCP",
-  "description": "Chaque serveur est un paquet de configuration officiel qui insère dsh-mcp-client.",
+  "description": "Gérez les connexions MCP ici, sans installer un plugin pour chaque serveur.",
   "count": "{total} au total · {enabled} activés",
   "add": "Ajouter",
   "import": "Importer",
@@ -55,7 +55,7 @@
   "confirm.stdioAck": "J’ai vérifié la commande",
   "confirm.ok": "Confirmer",
   "confirm.deleteTitle": "Supprimer ce serveur ?",
-  "confirm.deleteBody": "Supprime le paquet de configuration de {name}. Le paquet client MCP reste installé.",
+  "confirm.deleteBody": "Supprime la configuration de connexion de {name}. Le paquet client MCP reste installé.",
   "import.placeholder": "{ \"mcpServers\": { } }",
   "import.confirm": "Importer {count} (désactivés)",
   "import.json": "Ce n’est pas du JSON valide.",
@@ -114,5 +114,6 @@
   "error.renameOwned": "Le nom d'un serveur ne peut pas être modifié après sa création. Supprimez-le puis ajoutez-le sous le nouveau nom.",
   "error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé.",
   "sidebar.toggleLabel": "Afficher l’entrée dans la barre latérale",
-  "sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion."
+  "sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion.",
+  "migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}"
 }

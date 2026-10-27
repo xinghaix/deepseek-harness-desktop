@@ -480,7 +480,7 @@ module.exports = {
 		const LOCALES = {
 	"en": {
 		"title": "MCP servers",
-		"description": "Each server is an official config bundle that inserts dsh-mcp-client.",
+		"description": "Manage MCP connections here without adding a plugin for every server.",
 		"count": "{total} total · {enabled} enabled",
 		"add": "Add",
 		"import": "Import",
@@ -535,7 +535,7 @@ module.exports = {
 		"confirm.stdioAck": "I have reviewed the command",
 		"confirm.ok": "Confirm",
 		"confirm.deleteTitle": "Delete this server?",
-		"confirm.deleteBody": "Removes the config bundle for {name}. The MCP client package stays installed.",
+		"confirm.deleteBody": "Removes the connection settings for {name}. The MCP client package stays installed.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "Import {count} (disabled)",
 		"import.json": "This is not valid JSON.",
@@ -594,11 +594,12 @@ module.exports = {
 		"error.renameOwned": "A server's name cannot be changed after it is created. Delete it and add it again under the new name.",
 		"error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
 		"sidebar.toggleLabel": "Show entry in sidebar",
-		"sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly."
+		"sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly.",
+		"migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}"
 	},
 	"zh": {
 		"title": "MCP 服务器",
-		"description": "每台服务器是一个官方配置包，插入 dsh-mcp-client。",
+		"description": "在这里统一管理 MCP 连接，不再为每台服务器单独安装插件。",
 		"count": "总共 {total} · {enabled} 启用",
 		"add": "添加",
 		"import": "导入",
@@ -653,7 +654,7 @@ module.exports = {
 		"confirm.stdioAck": "已核对命令",
 		"confirm.ok": "确认",
 		"confirm.deleteTitle": "删除这台服务器？",
-		"confirm.deleteBody": "会移除 {name} 的配置包，MCP 客户端本体保留。",
+		"confirm.deleteBody": "会移除 {name} 的连接配置，MCP 客户端本体保留。",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "确认导入 {count} 台（仍停用）",
 		"import.json": "这不是有效的 JSON。",
@@ -712,11 +713,12 @@ module.exports = {
 		"error.renameOwned": "服务器创建后不能改名。请删除后用新名字重新添加。",
 		"error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
 		"sidebar.toggleLabel": "在侧边栏显示入口",
-		"sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。"
+		"sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。",
+		"migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}"
 	},
 	"de": {
 		"title": "MCP-Server",
-		"description": "Jeder Server ist ein offizielles Konfigurationspaket, das dsh-mcp-client einfügt.",
+		"description": "MCP-Verbindungen zentral verwalten, ohne für jeden Server ein Plugin zu installieren.",
 		"count": "{total} gesamt · {enabled} aktiv",
 		"add": "Hinzufügen",
 		"import": "Importieren",
@@ -771,7 +773,7 @@ module.exports = {
 		"confirm.stdioAck": "Ich habe den Befehl geprüft",
 		"confirm.ok": "Bestätigen",
 		"confirm.deleteTitle": "Diesen Server löschen?",
-		"confirm.deleteBody": "Entfernt das Konfigurationspaket für {name}. Das MCP-Client-Paket bleibt installiert.",
+		"confirm.deleteBody": "Entfernt die Verbindungseinstellungen für {name}. Das MCP-Client-Paket bleibt installiert.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "{count} importieren (deaktiviert)",
 		"import.json": "Das ist kein gültiges JSON.",
@@ -830,11 +832,12 @@ module.exports = {
 		"error.renameOwned": "Der Name eines Servers kann nach dem Anlegen nicht geändert werden. Löschen und unter neuem Namen erneut hinzufügen.",
 		"error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
 		"sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
-		"sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an."
+		"sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an.",
+		"migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}"
 	},
 	"fr": {
 		"title": "Serveurs MCP",
-		"description": "Chaque serveur est un paquet de configuration officiel qui insère dsh-mcp-client.",
+		"description": "Gérez les connexions MCP ici, sans installer un plugin pour chaque serveur.",
 		"count": "{total} au total · {enabled} activés",
 		"add": "Ajouter",
 		"import": "Importer",
@@ -889,7 +892,7 @@ module.exports = {
 		"confirm.stdioAck": "J’ai vérifié la commande",
 		"confirm.ok": "Confirmer",
 		"confirm.deleteTitle": "Supprimer ce serveur ?",
-		"confirm.deleteBody": "Supprime le paquet de configuration de {name}. Le paquet client MCP reste installé.",
+		"confirm.deleteBody": "Supprime la configuration de connexion de {name}. Le paquet client MCP reste installé.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "Importer {count} (désactivés)",
 		"import.json": "Ce n’est pas du JSON valide.",
@@ -948,11 +951,12 @@ module.exports = {
 		"error.renameOwned": "Le nom d'un serveur ne peut pas être modifié après sa création. Supprimez-le puis ajoutez-le sous le nouveau nom.",
 		"error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé.",
 		"sidebar.toggleLabel": "Afficher l’entrée dans la barre latérale",
-		"sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion."
+		"sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion.",
+		"migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}"
 	},
 	"es": {
 		"title": "Servidores MCP",
-		"description": "Cada servidor es un paquete de configuración oficial que inserta dsh-mcp-client.",
+		"description": "Gestiona aquí las conexiones MCP sin instalar un plugin por servidor.",
 		"count": "{total} en total · {enabled} activados",
 		"add": "Añadir",
 		"import": "Importar",
@@ -1007,7 +1011,7 @@ module.exports = {
 		"confirm.stdioAck": "He revisado el comando",
 		"confirm.ok": "Confirmar",
 		"confirm.deleteTitle": "¿Eliminar este servidor?",
-		"confirm.deleteBody": "Elimina el paquete de configuración de {name}. El paquete del cliente MCP permanece instalado.",
+		"confirm.deleteBody": "Elimina la configuración de conexión de {name}. El paquete del cliente MCP permanece instalado.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "Importar {count} (desactivados)",
 		"import.json": "No es JSON válido.",
@@ -1066,11 +1070,12 @@ module.exports = {
 		"error.renameOwned": "El nombre de un servidor no se puede cambiar después de crearlo. Elimínalo y vuelve a añadirlo con el nuevo nombre.",
 		"error.editDisabled": "Este servidor proviene de una configuración externa; solo se puede editar mientras está activado.",
 		"sidebar.toggleLabel": "Mostrar acceso en la barra lateral",
-		"sidebar.toggleHint": "Muestra un acceso directo a «Servidores MCP» en la navegación izquierda para abrir el panel directamente."
+		"sidebar.toggleHint": "Muestra un acceso directo a «Servidores MCP» en la navegación izquierda para abrir el panel directamente.",
+		"migration.warning": "No se pudieron migrar algunas conexiones MCP antiguas. Se conservaron sus paquetes de configuración: {message}"
 	},
 	"ja": {
 		"title": "MCP サーバー",
-		"description": "各サーバーは dsh-mcp-client を挿入する公式の設定バンドルです。",
+		"description": "サーバーごとにプラグインを追加せず、ここで MCP 接続をまとめて管理します。",
 		"count": "合計 {total} · 有効 {enabled}",
 		"add": "追加",
 		"import": "インポート",
@@ -1125,7 +1130,7 @@ module.exports = {
 		"confirm.stdioAck": "コマンドを確認しました",
 		"confirm.ok": "確認",
 		"confirm.deleteTitle": "このサーバーを削除しますか？",
-		"confirm.deleteBody": "{name} の設定バンドルを削除します。MCP クライアント本体は残ります。",
+		"confirm.deleteBody": "{name} の接続設定を削除します。MCP クライアント本体は残ります。",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "{count} 件インポート（無効のまま）",
 		"import.json": "有効な JSON ではありません。",
@@ -1184,11 +1189,12 @@ module.exports = {
 		"error.renameOwned": "サーバー名は作成後に変更できません。削除して新しい名前で追加し直してください。",
 		"error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。",
 		"sidebar.toggleLabel": "サイドバーにショートカットを表示",
-		"sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。"
+		"sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。",
+		"migration.warning": "一部の既存 MCP 接続を移行できませんでした。元の設定バンドルは保持されています：{message}"
 	},
 	"ko": {
 		"title": "MCP 서버",
-		"description": "각 서버는 dsh-mcp-client를 삽입하는 공식 구성 번들입니다.",
+		"description": "서버마다 플러그인을 설치하지 않고 여기서 MCP 연결을 관리합니다.",
 		"count": "총 {total} · 사용 {enabled}",
 		"add": "추가",
 		"import": "가져오기",
@@ -1243,7 +1249,7 @@ module.exports = {
 		"confirm.stdioAck": "명령을 확인했습니다",
 		"confirm.ok": "확인",
 		"confirm.deleteTitle": "이 서버를 삭제할까요?",
-		"confirm.deleteBody": "{name}의 구성 번들을 제거합니다. MCP 클라이언트 패키지는 그대로 둡니다.",
+		"confirm.deleteBody": "{name}의 연결 설정을 제거합니다. MCP 클라이언트 패키지는 그대로 둡니다.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "{count}개 가져오기(사용 안 함)",
 		"import.json": "올바른 JSON이 아닙니다.",
@@ -1302,11 +1308,12 @@ module.exports = {
 		"error.renameOwned": "서버 이름은 만든 뒤에 바꿀 수 없습니다. 삭제한 뒤 새 이름으로 다시 추가하세요.",
 		"error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
 		"sidebar.toggleLabel": "사이드바에 바로가기 표시",
-		"sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다."
+		"sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다.",
+		"migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}"
 	},
 	"pt": {
 		"title": "Servidores MCP",
-		"description": "Cada servidor é um pacote de configuração oficial que insere dsh-mcp-client.",
+		"description": "Gerencie conexões MCP aqui, sem instalar um plugin para cada servidor.",
 		"count": "{total} no total · {enabled} ativados",
 		"add": "Adicionar",
 		"import": "Importar",
@@ -1361,7 +1368,7 @@ module.exports = {
 		"confirm.stdioAck": "Revisei o comando",
 		"confirm.ok": "Confirmar",
 		"confirm.deleteTitle": "Excluir este servidor?",
-		"confirm.deleteBody": "Remove o pacote de configuração de {name}. O pacote do cliente MCP continua instalado.",
+		"confirm.deleteBody": "Remove a configuração de conexão de {name}. O pacote do cliente MCP continua instalado.",
 		"import.placeholder": "{ \"mcpServers\": { } }",
 		"import.confirm": "Importar {count} (desativados)",
 		"import.json": "Isto não é JSON válido.",
@@ -1420,7 +1427,8 @@ module.exports = {
 		"error.renameOwned": "O nome de um servidor não pode ser alterado depois de criado. Exclua-o e adicione-o novamente com o novo nome.",
 		"error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado.",
 		"sidebar.toggleLabel": "Mostrar atalho na barra lateral",
-		"sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente."
+		"sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente.",
+		"migration.warning": "Não foi possível migrar algumas conexões MCP antigas. Os pacotes de configuração foram mantidos: {message}"
 	}
 };
 		// END EMBEDDED LOCALES
@@ -2527,7 +2535,16 @@ module.exports = {
 				"data-dsh-mcp-manager": "",
 				className: "dsh-mcp-root",
 				children: [
-					!props.isMainPanel ? jsxs("div", {
+					state?.migrationErrors?.length ? jsxs("p", {
+							role: "alert",
+							className: "dsh-mcp-banner",
+							"data-tone": "warn",
+							children: [
+								jsx(IconAlert, {}),
+								jsx("span", { children: tr("migration.warning", { message: state.migrationErrors.map((item) => item.name + ": " + item.message).join("; ") }) }),
+							],
+						}) : null,
+						!props.isMainPanel ? jsxs("div", {
 						"data-sidebar-pref": "",
 						className: "dsh-mcp-pref-row",
 						children: [
@@ -2723,7 +2740,7 @@ module.exports = {
 						onOk: async () => {
 							const current = confirm;
 							setConfirm(null);
-							if (current.kind === "delete") await act({ op: "remove", bundleName: current.server.bundleName, serverName: current.server.serverName });
+							if (current.kind === "delete") await act({ op: "remove", patchId: current.server.patchId, bundleName: current.server.bundleName, serverName: current.server.serverName });
 							else if (current.then === "enable") await act({ op: "enable", patchId: current.server.patchId, serverName: current.server.serverName, pluginEntryId: current.server.pluginEntryId, enabled: true });
 							else await saveDraft(true);
 						},

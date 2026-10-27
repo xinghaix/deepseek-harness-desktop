@@ -1,6 +1,6 @@
 {
   "title": "MCP 服务器",
-  "description": "每台服务器是一个官方配置包，插入 dsh-mcp-client。",
+  "description": "在这里统一管理 MCP 连接，不再为每台服务器单独安装插件。",
   "count": "总共 {total} · {enabled} 启用",
   "add": "添加",
   "import": "导入",
@@ -55,7 +55,7 @@
   "confirm.stdioAck": "已核对命令",
   "confirm.ok": "确认",
   "confirm.deleteTitle": "删除这台服务器？",
-  "confirm.deleteBody": "会移除 {name} 的配置包，MCP 客户端本体保留。",
+  "confirm.deleteBody": "会移除 {name} 的连接配置，MCP 客户端本体保留。",
   "import.placeholder": "{ \"mcpServers\": { } }",
   "import.confirm": "确认导入 {count} 台（仍停用）",
   "import.json": "这不是有效的 JSON。",
@@ -114,5 +114,6 @@
   "error.renameOwned": "服务器创建后不能改名。请删除后用新名字重新添加。",
   "error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
   "sidebar.toggleLabel": "在侧边栏显示入口",
-  "sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。"
+  "sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。",
+  "migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}"
 }

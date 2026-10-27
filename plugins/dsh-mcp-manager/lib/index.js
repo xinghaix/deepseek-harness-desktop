@@ -1,19 +1,16 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { Connections, ConnectionRuntime, connectionDomain } from "./connections.js";
 import z from "@deepseek-ai/schemastery";
 
 const require = createRequire(import.meta.url);
 const model = require("./model.cjs");
 
-/** Cordis plugin name. The server list is never stored here. */
+// 连接记录由 storageDomain 持久化；Loader 私有子树负责运行时，不为每台服务器安装配置包。
 export const name = "dsh-mcp-manager";
-/**
- * Profile edits and bundle install live on these host services; `connection`
- * provides the authenticated `/api` Fetch routes the page talks to (cookie
- * session + Host/Origin checks are enforced by dsh-client-connection).
- */
-export const inject = ["configEditor", "pluginManager", "tools", "connection"];
+// connection 路由继续复用 DSH 的 cookie 会话与 Host/Origin 校验。
+export const inject = ["configEditor", "pluginManager", "tools", "connection", "loader", "storageDomain"];
 
 /** No persisted fields: earlier builds used volatile request/view fields, which the settings form persisted into the profile patch. */
 export const Config = z.object({});
@@ -88,14 +85,14 @@ function collectToolsByServer(ctx, activeServerNames) {
 }
 
 function mcpEntries(ctx) {
-  return ctx.configEditor.entries().filter((entry) => entry.options?.name === model.MCP_CLIENT);
+  return [...ctx.loader.entries()].filter((entry) => entry.options?.name === model.MCP_CLIENT);
 }
 
-function serverNames(ctx, exceptId) {
-  return mcpEntries(ctx)
-    .filter((entry) => entry.options.id !== exceptId)
-    .map((entry) => String(entry.options.config?.serverName || "").trim())
-    .filter(Boolean);
+function serverNames(ctx, exceptId, connections) {
+  return [...new Set([
+    ...mcpEntries(ctx).filter((entry) => entry.options.id !== exceptId).map((entry) => String(entry.options.config?.serverName || "").trim()),
+    ...(connections?.records() || []).filter((record) => record.id !== exceptId).map((record) => record.config.serverName),
+  ].filter(Boolean))];
 }
 
 async function readOrigin(dir) {
@@ -107,44 +104,55 @@ async function readOrigin(dir) {
   }
 }
 
-async function servers(ctx, lastErrors) {
-  const entries = mcpEntries(ctx);
-  const [plugins, bundles] = await Promise.all([
-    ctx.pluginManager.listPlugins(),
-    ctx.pluginManager.listBundles(),
-  ]);
-  const activeNames = new Set();
+async function servers(ctx, lastErrors, connections) {
+  const [plugins, bundles] = await Promise.all([ctx.pluginManager.listPlugins(), ctx.pluginManager.listBundles()]);
+  const records = connections.records().filter((record) => !record.legacy?.pending);
+  const ids = new Set(records.map((record) => record.id));
+  const entries = mcpEntries(ctx).filter((entry) => !ids.has(entry.options.id));
+  const rows = [];
   for (const entry of entries) {
-    const serverName = String(entry.options?.config?.serverName || "").trim();
-    if (!serverName) continue;
-    const plugin = plugins.find((item) => item.patchId === entry.options.id && item.moduleName === model.MCP_CLIENT);
-    const enabled = plugin ? plugin.enabled === true : entry.disabled !== true;
-    if (enabled) activeNames.add(serverName);
-  }
-  const toolsByServer = collectToolsByServer(ctx, activeNames);
-  const out = [];
-  for (const entry of entries) {
-    const config = entry.options?.config || {};
-    const serverName = String(config.serverName || "").trim();
-    const plugin = plugins.find((item) => item.patchId === entry.options.id && item.moduleName === model.MCP_CLIENT);
-    const bundleName = model.NAME_RE.test(serverName) ? model.bundlePackageName(serverName) : "";
-    const owned = bundleName !== "" && bundles.some((item) => item.name === bundleName);
-    const toolDetails = toolsByServer.get(serverName) || [];
-    const tools = toolDetails.map((item) => item.name);
-    const enabled = plugin ? plugin.enabled === true : entry.disabled !== true;
-    const origin = owned ? await readOrigin(join(profileDir(ctx), "mcp-bundles", serverName)) : null;
-    const fiberPhase = plugin?.fiberPhase || null;
-    const status = model.statusOf({ enabled, fiberPhase, toolCount: tools.length });
-    if (status === "connected" || status === "empty" || status === "disabled") {
-      lastErrors?.delete(serverName);
-    }
-    const lastError = status === "failed" ? (lastErrors?.get(serverName) || "") : "";
-    const timeoutMs = typeof config.toolCallTimeoutMs === "number" && Number.isInteger(config.toolCallTimeoutMs) && config.toolCallTimeoutMs > 0
-      ? config.toolCallTimeoutMs
-      : model.DEFAULT_TOOL_CALL_TIMEOUT_MS;
-    out.push({
+    const config = entry.options.config || {};
+    const plugin = plugins.find((item) => item.entryId === entry.id || item.patchId === entry.options.id && item.moduleName === model.MCP_CLIENT);
+    const bundleName = model.NAME_RE.test(config.serverName || "") ? model.bundlePackageName(config.serverName) : "";
+    const owned = connections.legacyNames.has(bundleName) && bundles.some((bundle) => bundle.name === bundleName);
+    rows.push({
+      config,
       patchId: entry.options.id,
       pluginEntryId: plugin?.entryId || "",
+      enabled: plugin ? plugin.enabled === true : !entry.disabled,
+      fiberPhase: plugin?.fiberPhase || null,
+      external: !owned,
+      bundleName: owned ? bundleName : "",
+      origin: owned ? await readOrigin(join(profileDir(ctx), "mcp-bundles", config.serverName)) : null,
+      lastError: lastErrors.get(config.serverName) || "",
+    });
+  }
+  for (const record of records) {
+    const entry = connections.runtime.entry(record.id);
+    const phase = entry?.fiber?.state;
+    const rawFiberErr = entry?.fiber?._error;
+    const fiberErrText = rawFiberErr ? model.redactText(String(rawFiberErr?.cause?.message || rawFiberErr?.message || rawFiberErr)) : "";
+    rows.push({
+      config: record.config,
+      patchId: record.id,
+      pluginEntryId: record.id,
+      enabled: record.enabled,
+      fiberPhase: connections.errors.has(record.id) ? "failed" : phase === 2 ? "active" : phase === 3 ? "failed" : "loading",
+      external: false,
+      bundleName: "",
+      origin: record.origin || null,
+      lastError: connections.errors.get(record.id) || fiberErrText,
+    });
+  }
+  const activeNames = new Set(rows.filter((row) => row.enabled).map((row) => row.config.serverName));
+  const toolsByServer = collectToolsByServer(ctx, activeNames);
+  return rows.map(({ config, ...row }) => {
+    const serverName = String(config.serverName || "").trim();
+    const toolDetails = toolsByServer.get(serverName) || [];
+    const status = model.statusOf({ enabled: row.enabled, fiberPhase: row.fiberPhase, toolCount: toolDetails.length });
+    if (["connected", "empty", "disabled"].includes(status)) lastErrors.delete(serverName);
+    return {
+      ...row,
       serverName,
       transport: config.transport === "streamable-http" ? "streamable-http" : "stdio",
       command: typeof config.command === "string" ? config.command : "",
@@ -153,19 +161,13 @@ async function servers(ctx, lastErrors) {
       url: typeof config.url === "string" ? model.maskUrl(config.url) : "",
       env: model.secretView(config.env),
       headers: model.secretView(config.headers),
-      toolCallTimeoutMs: timeoutMs,
-      enabled,
-      external: !owned,
-      bundleName: owned ? bundleName : "",
-      origin,
-      fiberPhase,
+      toolCallTimeoutMs: config.toolCallTimeoutMs || model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
       status,
-      lastError,
-      tools,
+      lastError: status === "failed" ? row.lastError : "",
+      tools: toolDetails.map((tool) => tool.name),
       toolDetails,
-    });
-  }
-  return out;
+    };
+  });
 }
 
 // ---- project scope (research §5.6): read-only until the user approves ----
@@ -307,31 +309,25 @@ function resultError(result, fallback) {
   return new Error(text);
 }
 
-async function saveServer(ctx, server, origin, lastErrors) {
+async function saveServer(ctx, server, origin, lastErrors, connections) {
   const patchId = server.patchId || "";
   const trimmedName = String(server.serverName ?? "").trim();
-  const issue = model.nameIssue(server.serverName, serverNames(ctx, patchId), "");
+  const issue = model.nameIssue(server.serverName, serverNames(ctx, patchId, connections), "");
   if (issue) throw new CodedError("name." + issue, { name: trimmedName }, model.nameMessage(issue, server.serverName));
   if (model.hasPlaceholder(server)) throw new CodedError("placeholder", {}, "请先替换模板里的 <占位符>。");
   const timeoutMs = model.normalizeTimeoutMs(server.toolCallTimeoutMs);
-  const existing = patchId ? findEntry(ctx, patchId) : null;
+  const managed = patchId ? connections.get(patchId) : null;
+  if (!patchId || managed && !managed.legacy?.pending) {
+    if (managed && managed.config.serverName !== trimmedName) throw new CodedError("renameOwned");
+    return connections.save(server, origin);
+  }
+  const existing = findEntry(ctx, patchId);
+  if (!existing) throw new CodedError("noEntry");
   try {
-    if (!existing) {
-      const { dir, rowId } = await writeBundle(ctx, { ...server, toolCallTimeoutMs: timeoutMs, enabled: server.enabled === true }, origin);
-      const result = await ctx.pluginManager.installBundle(dir);
-      const error = resultError(result, "install failed");
-      if (error) throw error;
-      // The profile keeps per-entry enable overrides even after a bundle is removed. If an old
-      // "disabled: false" override for this id survived, the new server would start without the
-      // stdio confirm. Row ids carry a fresh nonce, and we also force the requested state.
-      await forceEnabled(ctx, rowId, server.enabled === true);
-      lastErrors?.delete(trimmedName);
-      return result?.application || "applied";
-    }
     const current = existing.options.config || {};
     const currentName = String(current.serverName || "").trim();
     const bundles = await ctx.pluginManager.listBundles();
-    const owned = model.NAME_RE.test(currentName) && bundles.some((item) => item.name === model.bundlePackageName(currentName));
+    const owned = connections.legacyNames.has(model.bundlePackageName(currentName)) && bundles.some((item) => item.name === model.bundlePackageName(currentName));
     if (owned && trimmedName !== currentName) throw new CodedError("renameOwned");
     const next = {
       ...current,
@@ -406,27 +402,49 @@ async function saveServer(ctx, server, origin, lastErrors) {
   }
 }
 
-async function runJob(ctx, job, listWorkspaces, lastErrors) {
+async function runJob(ctx, job, listWorkspaces, lastErrors, connections) {
   if (!job || typeof job !== "object") throw new CodedError("badRequest");
-  if (job.op === "save") return { notice: "", application: await saveServer(ctx, job.server || {}, undefined, lastErrors) };
+  if (job.op === "save") return { notice: "", application: await saveServer(ctx, job.server || {}, undefined, lastErrors, connections) };
+  const managed = job.patchId ? connections.get(job.patchId) : null;
+  if (managed && !managed.legacy?.pending && ["remove", "enable", "reconnect"].includes(job.op)) {
+    if (job.op === "remove") {
+      await connections.remove(managed);
+      return { notice: "removed", noticeParams: { name: managed.config.serverName }, application: "applied" };
+    }
+    if (job.op === "reconnect" && !managed.enabled) throw new CodedError("noEntry");
+    const application = await connections.setEnabled(managed, job.op === "reconnect" || job.enabled === true);
+    return { notice: job.op === "reconnect" ? "reconnected" : "", noticeParams: { name: managed.config.serverName }, application };
+  }
   if (job.op === "remove") {
     const name = String(job.serverName || "").trim();
-    if (!model.NAME_RE.test(name) || job.bundleName !== model.bundlePackageName(name)) throw new CodedError("externalDelete");
+    if (!model.NAME_RE.test(name) || job.bundleName !== model.bundlePackageName(name) || !connections.legacyNames.has(job.bundleName)) throw new CodedError("externalDelete");
     const bundles = await ctx.pluginManager.listBundles();
     if (!bundles.some((item) => item.name === job.bundleName)) throw new CodedError("externalDelete");
-    // Stop it first so the enable override left behind in the profile is always "disabled".
-    for (const entry of mcpEntries(ctx)) {
-      if (String(entry.options?.config?.serverName || "").trim() === name) await forceEnabled(ctx, entry.options.id, false);
+    const pending = connections.records().filter((record) => record.legacy?.bundleName === job.bundleName);
+    try {
+      // 迁移失败后删除旧连接时，同时移除 pending 记录，防止下次启动把已删除连接恢复回来。
+      for (const record of pending) {
+        await connections.runtime.remove(record.id);
+        await connections.table.delete(record.id);
+      }
+      // 留下的 profile 覆盖保持 disabled，防止同名旧行被意外重新启用。
+      for (const entry of mcpEntries(ctx)) {
+        if (String(entry.options?.config?.serverName || "").trim() === name) await forceEnabled(ctx, entry.options.id, false);
+      }
+      const result = await ctx.pluginManager.removeBundle(job.bundleName);
+      const error = resultError(result, "remove failed");
+      if (error) throw error;
+      await rm(join(profileDir(ctx), "mcp-bundles", name), { recursive: true, force: true });
+      lastErrors?.delete(name);
+      return { notice: "removed", noticeParams: { name: job.serverName || job.bundleName }, application: result?.application || "applied" };
+    } catch (error) {
+      for (const record of pending) await connections.table.put(record.id, record);
+      throw error;
     }
-    const result = await ctx.pluginManager.removeBundle(job.bundleName);
-    const error = resultError(result, "remove failed");
-    if (error) throw error;
-    await rm(join(profileDir(ctx), "mcp-bundles", name), { recursive: true, force: true });
-    lastErrors?.delete(name);
-    return { notice: "removed", noticeParams: { name: job.serverName || job.bundleName }, application: result?.application || "applied" };
   }
   if (job.op === "enable") {
-    if (!job.pluginEntryId) throw new CodedError("noEntry");
+    const row = job.patchId ? await pluginRow(ctx, job.patchId) : null;
+    if (!row || row.entryId !== job.pluginEntryId) throw new CodedError("noEntry");
     const targetEntry = mcpEntries(ctx).find((e) => e.options?.id === job.patchId);
     const targetName = String(job.serverName || targetEntry?.options?.config?.serverName || "").trim();
     try {
@@ -443,7 +461,8 @@ async function runJob(ctx, job, listWorkspaces, lastErrors) {
     }
   }
   if (job.op === "reconnect") {
-    if (!job.pluginEntryId) throw new CodedError("noEntry");
+    const target = job.patchId ? await pluginRow(ctx, job.patchId) : null;
+    if (!target || target.entryId !== job.pluginEntryId || !target.enabled) throw new CodedError("noEntry");
     const targetName = String(job.serverName || "").trim();
     try {
       await ctx.pluginManager.setPluginEnabled(job.pluginEntryId, false);
@@ -462,11 +481,11 @@ async function runJob(ctx, job, listWorkspaces, lastErrors) {
     }
   }
   if (job.op === "import") {
-    const names = serverNames(ctx, "");
+    const names = serverNames(ctx, "", connections);
     let added = 0;
     for (const server of job.servers || []) {
       if (names.includes(String(server.serverName || "").trim())) continue;
-      await saveServer(ctx, { ...server, enabled: false, patchId: "" }, undefined, lastErrors);
+      await saveServer(ctx, { ...server, enabled: false, patchId: "" }, undefined, lastErrors, connections);
       names.push(String(server.serverName).trim());
       added += 1;
     }
@@ -477,13 +496,13 @@ async function runJob(ctx, job, listWorkspaces, lastErrors) {
     const workspaces = await listWorkspaces();
     const ws = workspaces.find((item) => item.workspaceId === job.workspaceId);
     if (!ws) throw new CodedError("noWorkspace");
-    const scan = await projectScan([ws], serverNames(ctx, ""));
+    const scan = await projectScan([ws], serverNames(ctx, "", connections));
     const wanted = new Set(Array.isArray(job.names) ? job.names : []);
     let added = 0;
     for (const file of scan[0].files) {
       for (const row of file.rows) {
         if (row.skip || !wanted.has(row.name)) continue;
-        await saveServer(ctx, { ...row.server, enabled: false, patchId: "" }, { scope: "project", workspace: ws.path, file: file.file }, lastErrors);
+        await saveServer(ctx, { ...row.server, enabled: false, patchId: "" }, { scope: "project", workspace: ws.path, file: file.file }, lastErrors, connections);
         added += 1;
       }
     }
@@ -500,14 +519,34 @@ function json(value, status = 200) {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
 }
 
-export function apply(ctx) {
+export async function apply(ctx) {
   const listWorkspaces = workspaceSource(ctx);
   const lastErrors = new Map();
+  const runtime = new ConnectionRuntime(ctx);
+  let connections;
+  let closing = false;
   let busy = Promise.resolve();
+  let stop;
+  const stopped = new Promise((resolve) => { stop = resolve; });
+  ctx.effect(() => async () => {
+    closing = true;
+    stop(false);
+    await runtime.close();
+    // HMR 包操作可能反过来等待本 fiber；不在销毁回调中等待 busy，数据域会拒绝后续写入。
+    if (connections) await connections.domain.close();
+  }, "dsh-mcp-manager: owned connections");
+  const domain = await ctx.storageDomain.open(connectionDomain(profileDir(ctx)));
+  connections = new Connections(ctx, domain, runtime, profileDir(ctx));
+  if (closing) { await connections.close(); return; }
+  // pluginManager 的 HMR 会等待所有 fiber。必须等自己的 apply 结束后才卸载旧包，避免自等待。
+  busy = Promise.race([ctx.fiber.await().then(() => true), stopped]).then(async (ready) => {
+    if (ready && !closing) await connections.initialize();
+  });
+  busy = busy.catch((error) => connections.migrationErrors.set(name, model.redactText(String(error.message || error))));
 
   async function state() {
     const [list, workspaces, prefs] = await Promise.all([
-      servers(ctx, lastErrors),
+      servers(ctx, lastErrors, connections),
       listWorkspaces(),
       readManagerPrefs(ctx),
     ]);
@@ -517,6 +556,7 @@ export function apply(ctx) {
       project: publicProject(project),
       templates: model.TEMPLATES.map((t) => ({ id: t.id, transport: t.transport })),
       prefs,
+      migrationErrors: [...connections.migrationErrors.entries()].map(([name, message]) => ({ name, message })),
     };
   }
 
@@ -526,6 +566,7 @@ export function apply(ctx) {
     requestBody: "buffered",
     fetch: async () => {
       try {
+        await busy.catch(() => {});
         return json(await state());
       } catch (error) {
         return json({ error: model.redactText(error instanceof Error ? error.message : String(error)) }, 500);
@@ -544,8 +585,11 @@ export function apply(ctx) {
       } catch {
         return json({ ok: false, code: "badRequest" }, 400);
       }
-      // Serialize writes: two pnpm runs or two patch edits must not interleave.
-      const run = busy.then(() => runJob(ctx, job, listWorkspaces, lastErrors));
+      // 迁移、持久化和实例切换共享同一条串行队列。
+      const run = busy.then(() => {
+        if (closing) throw new CodedError("badRequest");
+        return runJob(ctx, job, listWorkspaces, lastErrors, connections);
+      });
       busy = run.catch(() => {});
       try {
         const result = await run;

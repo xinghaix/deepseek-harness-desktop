@@ -1,6 +1,6 @@
 {
   "title": "MCP 서버",
-  "description": "각 서버는 dsh-mcp-client를 삽입하는 공식 구성 번들입니다.",
+  "description": "서버마다 플러그인을 설치하지 않고 여기서 MCP 연결을 관리합니다.",
   "count": "총 {total} · 사용 {enabled}",
   "add": "추가",
   "import": "가져오기",
@@ -55,7 +55,7 @@
   "confirm.stdioAck": "명령을 확인했습니다",
   "confirm.ok": "확인",
   "confirm.deleteTitle": "이 서버를 삭제할까요?",
-  "confirm.deleteBody": "{name}의 구성 번들을 제거합니다. MCP 클라이언트 패키지는 그대로 둡니다.",
+  "confirm.deleteBody": "{name}의 연결 설정을 제거합니다. MCP 클라이언트 패키지는 그대로 둡니다.",
   "import.placeholder": "{ \"mcpServers\": { } }",
   "import.confirm": "{count}개 가져오기(사용 안 함)",
   "import.json": "올바른 JSON이 아닙니다.",
@@ -114,5 +114,6 @@
   "error.renameOwned": "서버 이름은 만든 뒤에 바꿀 수 없습니다. 삭제한 뒤 새 이름으로 다시 추가하세요.",
   "error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
   "sidebar.toggleLabel": "사이드바에 바로가기 표시",
-  "sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다."
+  "sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다.",
+  "migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}"
 }

@@ -1,6 +1,6 @@
 # dsh-mcp-manager
 
-管理当前 DSH profile 里的 MCP 服务器。每台服务器是一个官方配置包，插入 `@deepseek-ai/dsh-mcp-client`。本插件自己的配置不保存服务器清单。
+管理当前 DSH profile 里的 MCP 连接。连接记录存入官方 `storageDomain`，运行时通过私有 Loader 子树创建 `@deepseek-ai/dsh-mcp-client` 实例；**添加服务器不再生成独立配置包，也不会让「已安装插件」列表每台服务器多出一行**。
 
 页面在插件详情（`plugins.bundle.config`）里。页面和 Host 之间只走两条带登录态的 Host 路由（`ctx.connection.fetch.register`，cookie 会话 + Host/Origin 校验）：
 
@@ -11,12 +11,23 @@
 
 本插件 `Config` 为空，不在 `cordis.patch.yml` 里留任何请求或密钥。
 
-- 新建：写 `<profile>/mcp-bundles/<name>/`，再 `pluginManager.installBundle`。行 id 带一次性后缀（`dsh-mcp-<name>-<nonce>`），并在安装后显式设置启停：profile 会在删包后保留旧的启停覆盖，否则同名重建可能继承 `disabled: false`，跳过 stdio 确认直接启动。
-- 编辑自有服务器：重写包内文件，再用 `setPluginEnabled(当前状态)` 让插件管理器从磁盘重读并 reconcile（已启用的会带新配置重启；若此前处于 `failed` 状态则先置 `false` 再置 `true` 确保重新激活 fiber）。保留的密钥按包内原文保留，`!!js process.env.X` 不会被解析成明文。自有服务器创建后不能改名。
-- 编辑外部手写行：`configEditor.edit`，仅限启用状态（停用行没有 fiber，上游会拒绝）。
-- 重连：对已启用服务器先置 `false` 再置 `true`，触发 `dsh-mcp-client` 重建连接与工具重同步。
-- 删除：只删 `@local/dsh-mcp-*` 自有包；先停用再 `removeBundle`，留下的覆盖永远是 `disabled: true`。外部行不能在这里删。
-- 开关：`setPluginEnabled`。
+- 新建 / 编辑：先持久化连接记录，再创建或替换官方 MCP 客户端实例。自有服务器可在停用时编辑，创建后不能改名。连接失败时保留最新保存的记录与脱敏诊断供修正。
+- 持久化：数据域 `mcp_manager_<profile 绝对路径的 SHA-256 前 16 位>`，`connections` 表按记录保存；不同 profile 互不串数据。默认官方 JSON 后端使用 0700 目录、0600 文件和原子写入。记录中的环境变量引用保持为引用，每次连接时再解析；不写回 profile patch 或 `desktop-state.json`。
+- 开关 / 重连：持久化启用状态，通过私有 Loader 子树切换实例；重连前等待旧实例的异步销毁完成，避免两个同名进程或工具注册重叠。首次连接和工具发现最多等待 15 秒；超时取消并等待所属 fiber 清理，不遗弃后台连接任务。
+- 生命周期：管理器停用、卸载或重载时回收自己创建的实例及工具注册，外部 MCP 不受影响；重载后根据记录恢复。
+- 删除：移除自有连接实例和连接记录，不卸载官方 MCP 客户端包。外部手写行只能在启用时通过 `configEditor.edit` 编辑、通过官方插件管理器启停，不能在这里删除。
+
+## 旧版本连接迁移
+
+首次加载新版会识别旧管理器生成的 `@local/dsh-mcp-*` 配置包。校验本地包结构后，读取原始配置并保留环境变量引用、凭据、命令 / argv / cwd、URL、超时、项目来源和启停状态；先持久化迁移记录，再停用旧实例、验证新实例，最后通过官方插件管理器移除旧包依赖。
+
+- 迁移需要 DSH 支持实时 profile 重组；没有 HMR 或连接验证失败时保留旧包，页面展示迁移警告，不强行移除。
+- 运行时使用新 ID，避免与旧包贡献的行混淆；对未完成的迁移保留状态，重启可继续恢复。
+- `<profile>/mcp-bundles/<name>/` 的原始文件保留为回退副本，但迁移成功后已不在 profile 包清单中，不再加载。
+- 只接受旧管理器的包结构及 `process.env.NAME` 凭据引用，不执行任意 `!!js`，不接管用户手写的外部 MCP。
+- 管理器自身完成激活之后才开始迁移，避免插件管理器的 HMR 等待启动 fiber 时与迁移互等。
+
+本次设计参考了 [dsh-mcp-connector](https://github.com/duhu2000/dsh-mcp-connector) 的「连接记录 + 动态官方 MCP 客户端」分层，但不引入其市场、OAuth 或工具治理模块。
 
 ## 安装
 
@@ -51,7 +62,7 @@ dsh plugin --profile web remove dsh-mcp-manager
 - **stdio 启动确认**：启用（及已启用时改 command/argv/cwd）弹确认框，逐项列出 argv 与 cwd，勾选「已核对命令」后才能确认；streamable-http 不弹
 - **密钥保护**：密码框输入（支持显隐切换），可写 `env:` 引用；离开后只显示已设置/未设置与引用名；URL 的 query、userinfo 以及错误诊断中的凭据自动打码
 - **导入**：支持粘贴或选择 Claude/Cursor `mcpServers` JSON 文件；跳过 sse/ws/oauth/未知 type/裸 url 并逐条说明；`http`→`streamable-http`；`${VAR}` / `${env:VAR}` / `$VAR` 转成 env 引用；导入默认停用
-- **项目作用域**：读取每个工作区的 `.dsh/mcp.json` 与 `.dsh/mcp.local.json`（各 ≤256 KB），显示为待确认行，**点「允许」/「全部允许」之前不连接**。允许时 Host 重新读文件、把条目复制成自有配置包（停用），包的 `package.json` 记下来源 `dshMcpManager.origin = { scope: "project", workspace, file }`，页面显示「来自 … 已允许」
+- **项目作用域**：读取每个工作区的 `.dsh/mcp.json` 与 `.dsh/mcp.local.json`（各 ≤256 KB），显示为待确认行，**点「允许」/「全部允许」之前不连接**。允许时 Host 重新读文件、把条目保存成当前 profile 的连接记录（停用），同时保留来源 `{ scope: "project", workspace, file }`，页面显示「来自 … 已允许」
 - **模板**（只填添加表单，不自动执行，stdio 仍需确认）：filesystem、memory、everything、sequential-thinking（npx）、fetch、git（uvx）、github（官方远程 streamable-http，`Authorization` 走 `GITHUB_MCP_AUTHORIZATION` 引用）。带 `<占位符>` 的模板替换前不能保存
 - **8 种语言**：zh-CN、en、de、fr、es、ja、ko、pt；缺 key 回退 en
 

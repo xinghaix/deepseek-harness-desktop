@@ -5,6 +5,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Context } from "@deepseek-ai/cordis";
+import Loader from "@deepseek-ai/cordis-plugin-loader";
 
 const require = createRequire(import.meta.url);
 const model = require("../lib/model.cjs");
@@ -257,7 +259,7 @@ test("Host exposes authenticated fetch routes, scans schemas once per snapshot, 
   const host = readFileSync(join(root, "lib/index.js"), "utf8");
   assert.match(host, /connection\.fetch\.register/);
   assert.match(host, /export const Config = z\.object\(\{\}\)/);
-  assert.match(host, /forceEnabled\(ctx, rowId/);
+  assert.doesNotMatch(host, /pluginManager\.installBundle/);
   const mod = await import("../lib/index.js");
   assert.equal(mod.STATE_PATH, "/api/dsh-mcp-manager/state");
   assert.equal(mod.ACTION_PATH, "/api/dsh-mcp-manager/action");
@@ -331,7 +333,19 @@ test("Host exposes authenticated fetch routes, scans schemas once per snapshot, 
     effect: (fn) => fn(),
   };
 
-  mod.apply(ctx);
+  const lifecycle = new Context();
+  await lifecycle.plugin(Loader);
+  ctx.extend = (props) => lifecycle.extend(props);
+  ctx.fiber = { await: async () => {} };
+  ctx.loader = { entries: ctx.configEditor.entries };
+  const records = new Map();
+  ctx.storageDomain = { open: async () => ({
+    tables: new Map([["connections", {
+      entries: () => records.entries(), get: (id) => records.get(id),
+      put: async (id, value) => records.set(id, value), delete: async (id) => records.delete(id),
+    }]]), close: async () => {},
+  }) };
+  await mod.apply(ctx);
   assert.equal(routes.size, 2);
 
   // 1) Initial state scan: 2 enabled servers -> schemas() called only ONCE
@@ -374,6 +388,7 @@ test("Host exposes authenticated fetch routes, scans schemas once per snapshot, 
   assert.deepEqual(toggleCalls, [["entry-alpha", false], ["entry-alpha", true]]);
   const alphaRecovered = okBody.state.servers.find((s) => s.serverName === "alpha");
   assert.equal(alphaRecovered.lastError, "");
+  await lifecycle.fiber.dispose();
 });
 
 test("Client UI hides empty project workspaces on main view and shows workspace context in import, row badge, and stdio confirm", async () => {
