@@ -1,6 +1,6 @@
 {
   "name": "dsh-mcp-manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Manage DSH MCP servers as official config bundles that insert @deepseek-ai/dsh-mcp-client.",
   "type": "module",
   "private": true,
@@ -9,18 +9,28 @@
     ".": "./lib/index.js",
     "./model": "./lib/model.cjs",
     "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "icon.svg",
+    "locale/",
     "lib/",
     "cordis.patch.yml"
   ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "mcp"
+  ],
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.1"
   },
   "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/dsh-mcp-client": "^0.2.0-rc.1",
     "@deepseek-ai/schemastery": "^3.18.4"
   },

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servidores MCP",
+    "description": "Cada servidor es un paquete de configuración oficial que inserta dsh-mcp-client."
+  }
+}

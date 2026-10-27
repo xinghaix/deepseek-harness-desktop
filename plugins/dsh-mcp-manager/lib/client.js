@@ -20,6 +20,7 @@ const MCP_CLIENT = "@deepseek-ai/dsh-mcp-client";
 const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const ENV_REF_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PROJECT_FILES = [".dsh/mcp.json", ".dsh/mcp.local.json"];
+const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60000;
 
 function bundlePackageName(serverName) {
   return "@local/dsh-mcp-" + serverName;
@@ -76,6 +77,14 @@ function secretLines(indent, rows) {
   return lines;
 }
 
+// 解析可选的工具调用超时配置（毫秒），留空或默认值返回 DEFAULT_TOOL_CALL_TIMEOUT_MS
+function normalizeTimeoutMs(value) {
+  if (value == null || value === "") return DEFAULT_TOOL_CALL_TIMEOUT_MS;
+  const num = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isInteger(num) || num <= 0) throw new Error("toolCallTimeoutMs 必须是正整数。");
+  return num;
+}
+
 /**
  * Official config-bundle files for one server. `origin` (optional) records
  * where an approved project entry came from; it is metadata in package.json,
@@ -87,6 +96,7 @@ function bundleFiles(server, origin, nonce, rowId) {
   if (issue) throw new Error(nameMessage(issue, serverName));
   const enabled = server.enabled === true;
   const transport = server.transport === "streamable-http" ? "streamable-http" : "stdio";
+  const timeoutMs = normalizeTimeoutMs(server.toolCallTimeoutMs);
   const lines = [
     "- insert:",
     "    - id: " + (rowId || bundleRowId(serverName, nonce)),
@@ -113,11 +123,15 @@ function bundleFiles(server, origin, nonce, rowId) {
     const headers = secretLines("          ", server.headers);
     if (headers.length) lines.push("        headers:", ...headers);
   }
+  if (timeoutMs !== DEFAULT_TOOL_CALL_TIMEOUT_MS) {
+    lines.push("        toolCallTimeoutMs: " + String(timeoutMs));
+  }
   lines.push("        failOnStartupError: true");
   const packageName = bundlePackageName(serverName);
   const pkg = {
     name: packageName,
     version: "1.0.0",
+    description: "MCP server (" + serverName + " · " + transport + ")",
     private: true,
     type: "module",
     dsh: { bundle: { patch: "./cordis.patch.yml" } },
@@ -274,6 +288,14 @@ function maskUrl(url) {
   return base.replace(/^(\w+:\/\/)[^/@]*@/, "$1…@");
 }
 
+// 对错误诊断文本中的 URL 查询参数、认证头和敏感键值进行脱敏
+function redactText(text) {
+  return String(text || "")
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>)]+/gi, (match) => maskUrl(match))
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 ?[credentials-redacted]")
+    .replace(/\b([A-Za-z0-9_]*(?:KEY|PASSWORD|SECRET|TOKEN|AUTH)[A-Za-z0-9_]*)=([^\s"'&]+)/gi, "$1=?[credentials-redacted]");
+}
+
 /**
  * Parse Claude / Cursor / Claude Desktop `mcpServers` JSON (or a bare table).
  * Rows carry a stable `code` (skip reason) and `notes` codes for translation,
@@ -396,6 +418,7 @@ function templateDraft(id) {
     url: t.url || "",
     env: (t.env || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     headers: (t.headers || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
+    toolCallTimeoutMs: DEFAULT_TOOL_CALL_TIMEOUT_MS,
     enabled: false,
   };
 }
@@ -426,11 +449,13 @@ module.exports = {
   MCP_CLIENT,
   NAME_RE,
   PROJECT_FILES,
+  DEFAULT_TOOL_CALL_TIMEOUT_MS,
   TEMPLATES,
   bundlePackageName,
   bundleRowId,
   nameIssue,
   nameMessage,
+  normalizeTimeoutMs,
   bundleFiles,
   secretView,
   mergeSecrets,
@@ -442,6 +467,7 @@ module.exports = {
   projectPending,
   maskServer,
   maskUrl,
+  redactText,
   templateDraft,
   hasPlaceholder,
   statusOf,
@@ -460,6 +486,10 @@ module.exports = {
 		"import": "Import",
 		"chooseFile": "Choose JSON file",
 		"template": "From template…",
+		"refresh": "Refresh",
+		"reconnect": "Reconnect",
+		"search": "Filter servers or tools…",
+		"noMatches": "No matching MCP servers.",
 		"save": "Save",
 		"cancel": "Cancel",
 		"close": "Close",
@@ -476,6 +506,8 @@ module.exports = {
 		"loadFailed": "Could not load the server list: {message}",
 		"external": "External config (not created here) cannot be deleted here.",
 		"fromProject": "Approved from {file} in {workspace}",
+		"tag.external": "External",
+		"tag.project": "Project",
 		"status.connected": "Connected",
 		"status.failed": "Connection failed",
 		"status.disabled": "Disabled",
@@ -495,6 +527,7 @@ module.exports = {
 		"error.badRequest": "Invalid request.",
 		"error.network": "Request failed: {message}",
 		"notice.removed": "Removed {name}.",
+		"notice.reconnected": "Reconnected {name}.",
 		"notice.imported": "Added {count}, all disabled. Skipped rows were not written.",
 		"notice.approved": "Approved {count} from the project, all disabled.",
 		"confirm.stdioTitle": "Confirm starting this local command",
@@ -543,6 +576,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "Tool call timeout (ms)",
 		"field.addSecret": "Add",
 		"field.remove": "Remove",
 		"field.secretName": "Name",
@@ -551,7 +585,12 @@ module.exports = {
 		"field.secretSet": "set",
 		"field.secretUnset": "not set",
 		"field.secretReplace": "Replace",
+		"field.secretReveal": "Show value",
+		"field.secretHide": "Hide value",
+		"field.launchChangedHint": "Command, arguments, or cwd changed. Saving will ask for confirmation before restarting.",
 		"tools.readonly": "Tool names are read-only. DSH has no supported way to hide single MCP tools from every agent.",
+		"tools.copyHint": "Click to copy {name}",
+		"tools.copied": "Copied",
 		"error.renameOwned": "A server's name cannot be changed after it is created. Delete it and add it again under the new name.",
 		"error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled."
 	},
@@ -563,6 +602,10 @@ module.exports = {
 		"import": "导入",
 		"chooseFile": "选择 JSON 文件",
 		"template": "从模板…",
+		"refresh": "刷新",
+		"reconnect": "重连",
+		"search": "搜索服务器或工具…",
+		"noMatches": "没有匹配的 MCP 服务器。",
 		"save": "保存",
 		"cancel": "取消",
 		"close": "关闭",
@@ -579,6 +622,8 @@ module.exports = {
 		"loadFailed": "读取服务器列表失败：{message}",
 		"external": "外部配置（不是在这里创建的）不能在这里删除。",
 		"fromProject": "来自 {workspace} 的 {file}，已允许",
+		"tag.external": "外部",
+		"tag.project": "项目",
 		"status.connected": "连接成功",
 		"status.failed": "连接失败",
 		"status.disabled": "已停用",
@@ -598,6 +643,7 @@ module.exports = {
 		"error.badRequest": "无效请求。",
 		"error.network": "请求失败：{message}",
 		"notice.removed": "已移除 {name}。",
+		"notice.reconnected": "已重连 {name}。",
 		"notice.imported": "已放入 {count} 台，默认停用。跳过的没有写入。",
 		"notice.approved": "已从项目允许 {count} 台，默认停用。",
 		"confirm.stdioTitle": "确认要启动这条本地命令",
@@ -646,6 +692,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "工具调用超时（ms）",
 		"field.addSecret": "添加",
 		"field.remove": "移除",
 		"field.secretName": "名称",
@@ -654,7 +701,12 @@ module.exports = {
 		"field.secretSet": "已设置",
 		"field.secretUnset": "未设置",
 		"field.secretReplace": "更换",
+		"field.secretReveal": "显示值",
+		"field.secretHide": "隐藏值",
+		"field.launchChangedHint": "command、args 或 cwd 已更改，保存并重启前会先弹出确认。",
 		"tools.readonly": "工具名只读。DSH 目前没有受支持的方式对所有 agent 隐藏单个 MCP 工具。",
+		"tools.copyHint": "点击复制 {name}",
+		"tools.copied": "已复制",
 		"error.renameOwned": "服务器创建后不能改名。请删除后用新名字重新添加。",
 		"error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。"
 	},
@@ -666,6 +718,10 @@ module.exports = {
 		"import": "Importieren",
 		"chooseFile": "JSON-Datei wählen",
 		"template": "Aus Vorlage…",
+		"refresh": "Aktualisieren",
+		"reconnect": "Neu verbinden",
+		"search": "Server oder Werkzeuge filtern…",
+		"noMatches": "Keine passenden MCP-Server.",
 		"save": "Speichern",
 		"cancel": "Abbrechen",
 		"close": "Schließen",
@@ -682,6 +738,8 @@ module.exports = {
 		"loadFailed": "Serverliste konnte nicht geladen werden: {message}",
 		"external": "Externe Konfiguration (nicht hier erstellt) kann hier nicht gelöscht werden.",
 		"fromProject": "Aus {file} in {workspace} zugelassen",
+		"tag.external": "Extern",
+		"tag.project": "Projekt",
 		"status.connected": "Verbunden",
 		"status.failed": "Verbindung fehlgeschlagen",
 		"status.disabled": "Deaktiviert",
@@ -701,6 +759,7 @@ module.exports = {
 		"error.badRequest": "Ungültige Anfrage.",
 		"error.network": "Anfrage fehlgeschlagen: {message}",
 		"notice.removed": "{name} entfernt.",
+		"notice.reconnected": "{name} neu verbunden.",
 		"notice.imported": "{count} hinzugefügt, alle deaktiviert. Übersprungene Zeilen wurden nicht geschrieben.",
 		"notice.approved": "{count} aus dem Projekt zugelassen, alle deaktiviert.",
 		"confirm.stdioTitle": "Start dieses lokalen Befehls bestätigen",
@@ -749,6 +808,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "Werkzeug-Timeout (ms)",
 		"field.addSecret": "Hinzufügen",
 		"field.remove": "Entfernen",
 		"field.secretName": "Name",
@@ -757,7 +817,12 @@ module.exports = {
 		"field.secretSet": "gesetzt",
 		"field.secretUnset": "nicht gesetzt",
 		"field.secretReplace": "Ersetzen",
+		"field.secretReveal": "Wert anzeigen",
+		"field.secretHide": "Wert verbergen",
+		"field.launchChangedHint": "Befehl, Argumente oder cwd wurden geändert. Vor dem Speichern und Neustarten wird eine Bestätigung angefordert.",
 		"tools.readonly": "Werkzeugnamen sind schreibgeschützt. DSH bietet keinen unterstützten Weg, einzelne MCP-Werkzeuge vor allen Agenten zu verbergen.",
+		"tools.copyHint": "Klicken zum Kopieren von {name}",
+		"tools.copied": "Kopiert",
 		"error.renameOwned": "Der Name eines Servers kann nach dem Anlegen nicht geändert werden. Löschen und unter neuem Namen erneut hinzufügen.",
 		"error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden."
 	},
@@ -769,6 +834,10 @@ module.exports = {
 		"import": "Importer",
 		"chooseFile": "Choisir un fichier JSON",
 		"template": "Depuis un modèle…",
+		"refresh": "Actualiser",
+		"reconnect": "Reconnecter",
+		"search": "Filtrer les serveurs ou outils…",
+		"noMatches": "Aucun serveur MCP correspondant.",
 		"save": "Enregistrer",
 		"cancel": "Annuler",
 		"close": "Fermer",
@@ -785,6 +854,8 @@ module.exports = {
 		"loadFailed": "Impossible de charger la liste : {message}",
 		"external": "Une configuration externe (non créée ici) ne peut pas être supprimée ici.",
 		"fromProject": "Autorisé depuis {file} dans {workspace}",
+		"tag.external": "Externe",
+		"tag.project": "Projet",
 		"status.connected": "Connecté",
 		"status.failed": "Échec de connexion",
 		"status.disabled": "Désactivé",
@@ -804,6 +875,7 @@ module.exports = {
 		"error.badRequest": "Requête invalide.",
 		"error.network": "Échec de la requête : {message}",
 		"notice.removed": "{name} supprimé.",
+		"notice.reconnected": "{name} reconnecté.",
 		"notice.imported": "{count} ajoutés, tous désactivés. Les lignes ignorées n’ont pas été écrites.",
 		"notice.approved": "{count} autorisés depuis le projet, tous désactivés.",
 		"confirm.stdioTitle": "Confirmer le lancement de cette commande locale",
@@ -852,6 +924,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "Délai d’expiration d’outil (ms)",
 		"field.addSecret": "Ajouter",
 		"field.remove": "Retirer",
 		"field.secretName": "Nom",
@@ -860,7 +933,12 @@ module.exports = {
 		"field.secretSet": "défini",
 		"field.secretUnset": "non défini",
 		"field.secretReplace": "Remplacer",
+		"field.secretReveal": "Afficher la valeur",
+		"field.secretHide": "Masquer la valeur",
+		"field.launchChangedHint": "La commande, les arguments ou cwd ont changé. L’enregistrement demandera confirmation avant de redémarrer.",
 		"tools.readonly": "Les noms d’outils sont en lecture seule. DSH n’offre aucun moyen pris en charge de masquer un outil MCP à tous les agents.",
+		"tools.copyHint": "Cliquer pour copier {name}",
+		"tools.copied": "Copié",
 		"error.renameOwned": "Le nom d'un serveur ne peut pas être modifié après sa création. Supprimez-le puis ajoutez-le sous le nouveau nom.",
 		"error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé."
 	},
@@ -872,6 +950,10 @@ module.exports = {
 		"import": "Importar",
 		"chooseFile": "Elegir archivo JSON",
 		"template": "Desde plantilla…",
+		"refresh": "Actualizar",
+		"reconnect": "Reconectar",
+		"search": "Filtrar servidores o herramientas…",
+		"noMatches": "No hay servidores MCP coincidentes.",
 		"save": "Guardar",
 		"cancel": "Cancelar",
 		"close": "Cerrar",
@@ -888,6 +970,8 @@ module.exports = {
 		"loadFailed": "No se pudo cargar la lista: {message}",
 		"external": "La configuración externa (no creada aquí) no se puede eliminar aquí.",
 		"fromProject": "Permitido desde {file} en {workspace}",
+		"tag.external": "Externo",
+		"tag.project": "Proyecto",
 		"status.connected": "Conectado",
 		"status.failed": "Error de conexión",
 		"status.disabled": "Desactivado",
@@ -907,6 +991,7 @@ module.exports = {
 		"error.badRequest": "Solicitud no válida.",
 		"error.network": "La solicitud falló: {message}",
 		"notice.removed": "{name} eliminado.",
+		"notice.reconnected": "{name} reconectado.",
 		"notice.imported": "Se añadieron {count}, todos desactivados. Las filas omitidas no se escribieron.",
 		"notice.approved": "Se permitieron {count} del proyecto, todos desactivados.",
 		"confirm.stdioTitle": "Confirmar el inicio de este comando local",
@@ -955,6 +1040,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "Tiempo de espera de herramienta (ms)",
 		"field.addSecret": "Añadir",
 		"field.remove": "Quitar",
 		"field.secretName": "Nombre",
@@ -963,7 +1049,12 @@ module.exports = {
 		"field.secretSet": "definido",
 		"field.secretUnset": "sin definir",
 		"field.secretReplace": "Sustituir",
+		"field.secretReveal": "Mostrar valor",
+		"field.secretHide": "Ocultar valor",
+		"field.launchChangedHint": "El comando, los argumentos o cwd cambiaron. Al guardar se pedirá confirmación antes de reiniciar.",
 		"tools.readonly": "Los nombres de herramientas son de solo lectura. DSH no tiene una forma admitida de ocultar una herramienta MCP a todos los agentes.",
+		"tools.copyHint": "Haz clic para copiar {name}",
+		"tools.copied": "Copiado",
 		"error.renameOwned": "El nombre de un servidor no se puede cambiar después de crearlo. Elimínalo y vuelve a añadirlo con el nuevo nombre.",
 		"error.editDisabled": "Este servidor proviene de una configuración externa; solo se puede editar mientras está activado."
 	},
@@ -975,6 +1066,10 @@ module.exports = {
 		"import": "インポート",
 		"chooseFile": "JSON ファイルを選択",
 		"template": "テンプレートから…",
+		"refresh": "更新",
+		"reconnect": "再接続",
+		"search": "サーバーまたはツールを絞り込む…",
+		"noMatches": "一致する MCP サーバーがありません。",
 		"save": "保存",
 		"cancel": "キャンセル",
 		"close": "閉じる",
@@ -991,6 +1086,8 @@ module.exports = {
 		"loadFailed": "サーバー一覧を読み込めません：{message}",
 		"external": "外部の設定（ここで作成していないもの）はここでは削除できません。",
 		"fromProject": "{workspace} の {file} から許可",
+		"tag.external": "外部",
+		"tag.project": "プロジェクト",
 		"status.connected": "接続済み",
 		"status.failed": "接続失敗",
 		"status.disabled": "無効",
@@ -1010,6 +1107,7 @@ module.exports = {
 		"error.badRequest": "無効なリクエストです。",
 		"error.network": "リクエストに失敗しました：{message}",
 		"notice.removed": "{name} を削除しました。",
+		"notice.reconnected": "{name} を再接続しました。",
 		"notice.imported": "{count} 件追加しました（すべて無効）。スキップした行は書き込んでいません。",
 		"notice.approved": "プロジェクトから {count} 件許可しました（すべて無効）。",
 		"confirm.stdioTitle": "このローカルコマンドの起動を確認",
@@ -1058,6 +1156,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "ツール呼び出しタイムアウト (ms)",
 		"field.addSecret": "追加",
 		"field.remove": "削除",
 		"field.secretName": "名前",
@@ -1066,7 +1165,12 @@ module.exports = {
 		"field.secretSet": "設定済み",
 		"field.secretUnset": "未設定",
 		"field.secretReplace": "置き換え",
+		"field.secretReveal": "値を表示",
+		"field.secretHide": "値を隠す",
+		"field.launchChangedHint": "command、args、または cwd が変更されました。保存して再起動する前に確認が表示されます。",
 		"tools.readonly": "ツール名は読み取り専用です。DSH には、すべてのエージェントから個別の MCP ツールを隠す公式な方法がありません。",
+		"tools.copyHint": "クリックして {name} をコピー",
+		"tools.copied": "コピー済み",
 		"error.renameOwned": "サーバー名は作成後に変更できません。削除して新しい名前で追加し直してください。",
 		"error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。"
 	},
@@ -1078,6 +1182,10 @@ module.exports = {
 		"import": "가져오기",
 		"chooseFile": "JSON 파일 선택",
 		"template": "템플릿에서…",
+		"refresh": "새로고침",
+		"reconnect": "다시 연결",
+		"search": "서버 또는 도구 검색…",
+		"noMatches": "일치하는 MCP 서버가 없습니다.",
 		"save": "저장",
 		"cancel": "취소",
 		"close": "닫기",
@@ -1094,6 +1202,8 @@ module.exports = {
 		"loadFailed": "서버 목록을 불러오지 못했습니다: {message}",
 		"external": "외부 구성(여기서 만들지 않은 것)은 여기서 삭제할 수 없습니다.",
 		"fromProject": "{workspace}의 {file}에서 허용됨",
+		"tag.external": "외부",
+		"tag.project": "프로젝트",
 		"status.connected": "연결됨",
 		"status.failed": "연결 실패",
 		"status.disabled": "사용 안 함",
@@ -1113,6 +1223,7 @@ module.exports = {
 		"error.badRequest": "잘못된 요청입니다.",
 		"error.network": "요청 실패: {message}",
 		"notice.removed": "{name}을(를) 제거했습니다.",
+		"notice.reconnected": "{name}에 다시 연결했습니다.",
 		"notice.imported": "{count}개를 추가했습니다(모두 사용 안 함). 건너뛴 행은 기록하지 않았습니다.",
 		"notice.approved": "프로젝트에서 {count}개를 허용했습니다(모두 사용 안 함).",
 		"confirm.stdioTitle": "이 로컬 명령 실행 확인",
@@ -1161,6 +1272,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "도구 호출 제한 시간(ms)",
 		"field.addSecret": "추가",
 		"field.remove": "제거",
 		"field.secretName": "이름",
@@ -1169,7 +1281,12 @@ module.exports = {
 		"field.secretSet": "설정됨",
 		"field.secretUnset": "설정 안 됨",
 		"field.secretReplace": "바꾸기",
+		"field.secretReveal": "값 표시",
+		"field.secretHide": "값 숨기기",
+		"field.launchChangedHint": "command, args 또는 cwd가 변경되었습니다. 저장 후 다시 시작하기 전에 확인을 요청합니다.",
 		"tools.readonly": "도구 이름은 읽기 전용입니다. DSH에는 모든 에이전트에서 개별 MCP 도구를 숨기는 지원 방법이 없습니다.",
+		"tools.copyHint": "클릭하여 {name} 복사",
+		"tools.copied": "복사됨",
 		"error.renameOwned": "서버 이름은 만든 뒤에 바꿀 수 없습니다. 삭제한 뒤 새 이름으로 다시 추가하세요.",
 		"error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다."
 	},
@@ -1181,6 +1298,10 @@ module.exports = {
 		"import": "Importar",
 		"chooseFile": "Escolher arquivo JSON",
 		"template": "De um modelo…",
+		"refresh": "Atualizar",
+		"reconnect": "Reconectar",
+		"search": "Filtrar servidores ou ferramentas…",
+		"noMatches": "Nenhum servidor MCP correspondente.",
 		"save": "Salvar",
 		"cancel": "Cancelar",
 		"close": "Fechar",
@@ -1197,11 +1318,13 @@ module.exports = {
 		"loadFailed": "Não foi possível carregar a lista: {message}",
 		"external": "Configuração externa (não criada aqui) não pode ser excluída aqui.",
 		"fromProject": "Permitido a partir de {file} em {workspace}",
+		"tag.external": "Externo",
+		"tag.project": "Projeto",
 		"status.connected": "Conectado",
 		"status.failed": "Falha na conexão",
 		"status.disabled": "Desativado",
 		"status.empty": "Carregado sem ferramentas",
-		"status.unknown": "Desconhecido",
+		"status.unknown": "Desconocido",
 		"application.applied": "Aplicado",
 		"application.restart-required": "Reinicie o DSH para aplicar",
 		"application.overridden": "Substituído por uma configuração de maior prioridade",
@@ -1216,6 +1339,7 @@ module.exports = {
 		"error.badRequest": "Solicitação inválida.",
 		"error.network": "A solicitação falhou: {message}",
 		"notice.removed": "{name} removido.",
+		"notice.reconnected": "{name} reconectado.",
 		"notice.imported": "{count} adicionados, todos desativados. Linhas ignoradas não foram gravadas.",
 		"notice.approved": "{count} permitidos do projeto, todos desativados.",
 		"confirm.stdioTitle": "Confirmar a execução deste comando local",
@@ -1264,6 +1388,7 @@ module.exports = {
 		"field.url": "url",
 		"field.env": "env",
 		"field.headers": "headers",
+		"field.timeout": "Tempo limite de chamada (ms)",
 		"field.addSecret": "Adicionar",
 		"field.remove": "Remover",
 		"field.secretName": "Nome",
@@ -1272,17 +1397,627 @@ module.exports = {
 		"field.secretSet": "definido",
 		"field.secretUnset": "não definido",
 		"field.secretReplace": "Substituir",
+		"field.secretReveal": "Mostrar valor",
+		"field.secretHide": "Ocultar valor",
+		"field.launchChangedHint": "O comando, os argumentos ou cwd mudaram. Ao salvar, será solicitada confirmação antes de reiniciar.",
 		"tools.readonly": "Os nomes das ferramentas são somente leitura. O DSH não tem uma forma suportada de ocultar uma ferramenta MCP de todos os agentes.",
+		"tools.copyHint": "Clique para copiar {name}",
+		"tools.copied": "Copiado",
 		"error.renameOwned": "O nome de um servidor não pode ser alterado depois de criado. Exclua-o e adicione-o novamente com o novo nome.",
 		"error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado."
 	}
 };
 		// END EMBEDDED LOCALES
 
+		let primitives = null;
+		try { primitives = require("@deepseek-ai/dsh-client-ui-primitives"); } catch { primitives = null; }
+
 		const NS = "dsh-mcp-manager";
 		/** Page ↔ Host goes through the authenticated `/api` Fetch routes the Host half registers. */
 		const inject = ["slots", "locale"];
 		const API = "api/dsh-mcp-manager/";
+		const STYLE_TAG_ID = "dsh-mcp-manager/client.css";
+
+		// 注入对齐 DSH 原生设计系统（ModelsSection / PluginManagerPage / ui-primitives）的样式表
+		const CSS_TEXT = `
+.dsh-mcp-root {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	color: var(--dsw-alias-label-primary, #0f1115);
+	font-size: 13px;
+	line-height: 20px;
+}
+.dsh-mcp-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-head-titles {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.dsh-mcp-title-row {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-section-title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 20px;
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-count {
+	margin: 0;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	font-variant-numeric: tabular-nums;
+}
+.dsh-mcp-desc {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+}
+.dsh-mcp-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-btn {
+	box-sizing: border-box;
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 18px;
+	height: 30px;
+	padding: 0 11px;
+	border-radius: var(--dsw-radius-md, 8px);
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.28));
+	background: transparent;
+	color: var(--dsw-alias-label-primary, inherit);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	white-space: nowrap;
+	transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.dsh-mcp-btn:hover:not(:disabled) {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1));
+}
+.dsh-mcp-btn[data-variant="primary"] {
+	border: none;
+	background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-label-primary, #0f1115));
+	color: var(--dsw-alias-label-primary-foreground, var(--dsw-alias-bg-layer-1, #fff));
+	font-weight: 500;
+}
+.dsh-mcp-btn[data-variant="primary"]:hover:not(:disabled) {
+	background: var(--dsw-alias-button-primary-hover, var(--dsw-alias-button-primary-fill, #2c2f36));
+	opacity: 0.92;
+}
+.dsh-mcp-btn[data-variant="danger"] {
+	border: none;
+	background: var(--dsw-alias-state-error-primary, #b42318);
+	color: #fff;
+	font-weight: 500;
+}
+.dsh-mcp-btn[data-variant="danger"]:hover:not(:disabled) {
+	opacity: 0.9;
+}
+.dsh-mcp-btn[data-variant="danger-ghost"] {
+	border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #b42318) 28%, transparent);
+	color: var(--dsw-alias-state-error-primary, #b42318);
+}
+.dsh-mcp-btn[data-variant="danger-ghost"]:hover:not(:disabled) {
+	background: var(--dsw-alias-interactive-bg-hover-danger, color-mix(in srgb, var(--dsw-alias-state-error-primary, #b42318) 10%, transparent));
+}
+.dsh-mcp-btn[data-variant="ghost"] {
+	border: none;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	padding: 0 8px;
+}
+.dsh-mcp-btn[data-variant="ghost"]:hover:not(:disabled) {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1));
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-btn[data-size="sm"] {
+	height: 26px;
+	padding: 0 9px;
+	border-radius: var(--dsw-radius-sm, 6px);
+	font-size: 12px;
+}
+.dsh-mcp-btn[data-icon-only="true"] {
+	width: 30px;
+	padding: 0;
+}
+.dsh-mcp-btn[data-icon-only="true"][data-size="sm"] {
+	width: 26px;
+}
+.dsh-mcp-btn:disabled {
+	opacity: 0.42;
+	cursor: default;
+}
+.dsh-mcp-btn:focus-visible,
+.dsh-mcp-select:focus-visible,
+.dsh-mcp-input:focus-visible,
+.dsh-mcp-textarea:focus-visible,
+.dsh-mcp-row-summary:focus-visible,
+.dsh-mcp-tool-chip:focus-visible,
+.dsh-mcp-switch:focus-visible {
+	outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
+	outline-offset: 1px;
+}
+.dsh-mcp-select {
+	box-sizing: border-box;
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 18px;
+	height: 30px;
+	padding: 0 28px 0 10px;
+	border-radius: var(--dsw-radius-md, 8px);
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.28));
+	background-color: transparent;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-position: right 9px center;
+	background-repeat: no-repeat;
+	background-size: 12px 12px;
+	color: var(--dsw-alias-label-primary, inherit);
+	appearance: none;
+	cursor: pointer;
+}
+.dsh-mcp-select:hover:not(:disabled) {
+	background-color: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1));
+}
+.dsh-mcp-search-wrap {
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 100%;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+}
+.dsh-mcp-search-icon {
+	position: absolute;
+	left: 11px;
+	pointer-events: none;
+	display: inline-flex;
+}
+.dsh-mcp-search-clear {
+	position: absolute;
+	right: 6px;
+}
+.dsh-mcp-input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 32px;
+	padding: 0 10px;
+	font: inherit;
+	font-size: 13px;
+	line-height: 20px;
+	border-radius: var(--dsw-radius-md, 8px);
+	border: 0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-border-l2, rgba(128,128,128,0.24)));
+	background: var(--dsw-alias-bg-layer-1, transparent);
+	color: var(--dsw-alias-label-primary, inherit);
+	outline: none;
+}
+.dsh-mcp-input[data-mono="true"] {
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace));
+	font-size: 12.5px;
+}
+.dsh-mcp-input[data-warn="true"] {
+	border-color: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+.dsh-mcp-input:focus {
+	border-color: var(--dsw-alias-state-business-primary, #4d6bfe);
+}
+.dsh-mcp-input:read-only,
+.dsh-mcp-input:disabled {
+	opacity: 0.65;
+	background: var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.06));
+}
+.dsh-mcp-textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 132px;
+	padding: 10px 12px;
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace));
+	font-size: 12px;
+	line-height: 18px;
+	border-radius: var(--dsw-radius-lg, 10px);
+	border: 0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-border-l2, rgba(128,128,128,0.24)));
+	background: var(--dsw-alias-bg-layer-1, transparent);
+	color: var(--dsw-alias-label-primary, inherit);
+	resize: vertical;
+	outline: none;
+}
+.dsh-mcp-textarea:focus {
+	border-color: var(--dsw-alias-state-business-primary, #4d6bfe);
+}
+.dsh-mcp-banner {
+	margin: 0;
+	padding: 8px 12px;
+	border-radius: var(--dsw-radius-md, 8px);
+	font-size: 12.5px;
+	line-height: 18px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.08)));
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-banner[data-tone="error"] {
+	background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #b42318) 10%, transparent);
+	color: var(--dsw-alias-state-error-primary, #b42318);
+}
+.dsh-mcp-banner[data-tone="warn"] {
+	background: var(--dsw-alias-state-warn-tertiary, rgba(245,158,11,0.12));
+	color: var(--dsw-alias-state-warn-label, var(--dsw-alias-label-primary, inherit));
+}
+.dsh-mcp-banner[data-tone="success"] {
+	background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #10b981) 10%, transparent);
+}
+.dsh-mcp-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.dsh-mcp-card {
+	border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2, rgba(128,128,128,0.22)));
+	background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1, transparent));
+	border-radius: var(--dsw-radius-xl, 12px);
+	overflow: hidden;
+	transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dsh-mcp-card[data-expanded="true"] {
+	border-color: var(--dsw-alias-border-l3, rgba(128,128,128,0.32));
+}
+.dsh-mcp-card[data-status-kind="failed"] {
+	border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #b42318) 42%, transparent);
+}
+.dsh-mcp-row-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	min-height: 48px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-row-head:hover {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.05));
+}
+.dsh-mcp-row-summary {
+	flex: 1;
+	min-width: 180px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	background: transparent;
+	border: none;
+	padding: 2px 0;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--dsw-radius-sm, 6px);
+}
+.dsh-mcp-row-identity {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.dsh-mcp-row-name {
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 20px;
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-card[data-enabled="false"] .dsh-mcp-row-name {
+	color: var(--dsw-alias-label-secondary, #61666b);
+}
+.dsh-mcp-badge {
+	display: inline-flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: var(--dsw-radius-xs, 4px);
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.25));
+	font-size: 11px;
+	line-height: 16px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+	flex: none;
+}
+.dsh-mcp-badge[data-tone="info"] {
+	background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 12%, transparent);
+	border-color: transparent;
+	color: var(--dsw-alias-state-business-primary, #4d6bfe);
+	font-family: inherit;
+}
+.dsh-mcp-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	flex: none;
+}
+.dsh-mcp-status[data-status="connected"] {
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-status[data-status="failed"] {
+	color: var(--dsw-alias-state-error-primary, #b42318);
+}
+.dsh-mcp-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	display: inline-block;
+	flex: none;
+	background: var(--dsw-alias-label-tertiary, #81858c);
+}
+.dsh-mcp-dot[data-state="done"] {
+	background: var(--dsw-alias-state-success-primary, #10b981);
+}
+.dsh-mcp-dot[data-state="error"] {
+	background: var(--dsw-alias-state-error-primary, #ef4444);
+}
+.dsh-mcp-dot[data-state="ongoing"] {
+	background: var(--dsw-alias-state-business-primary, #4d6bfe);
+}
+.dsh-mcp-inline-tools {
+	flex: 1;
+	min-width: 100px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	overflow: hidden;
+	white-space: nowrap;
+}
+.dsh-mcp-inline-chip {
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+	font-size: 11.5px;
+	line-height: 16px;
+	padding: 1px 6px;
+	border-radius: var(--dsw-radius-xs, 4px);
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.1)));
+	color: var(--dsw-alias-label-secondary, #61666b);
+}
+.dsh-mcp-row-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	flex: none;
+}
+.dsh-mcp-chevron {
+	display: inline-flex;
+	transition: transform 0.15s ease;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+}
+.dsh-mcp-chevron[data-open="true"] {
+	transform: rotate(180deg);
+}
+.dsh-mcp-row-body {
+	border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.18));
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.05)));
+	padding: 12px 14px 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.dsh-mcp-conn-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 8px 10px;
+	border-radius: var(--dsw-radius-md, 8px);
+	background: var(--dsw-alias-bg-layer-1, rgba(128,128,128,0.05));
+	border: 0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15));
+}
+.dsh-mcp-conn-target {
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-primary, inherit);
+	overflow-wrap: anywhere;
+	margin: 0;
+	flex: 1;
+	min-width: 160px;
+}
+.dsh-mcp-tools-box {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.dsh-mcp-tools-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.dsh-mcp-tool-chip {
+	font: inherit;
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+	font-size: 12px;
+	line-height: 18px;
+	padding: 2px 8px;
+	border-radius: var(--dsw-radius-sm, 6px);
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.22));
+	background: var(--dsw-alias-bg-layer-1, transparent);
+	color: var(--dsw-alias-label-primary, inherit);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.dsh-mcp-tool-chip:hover {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1));
+	border-color: var(--dsw-alias-state-business-primary, #4d6bfe);
+}
+.dsh-mcp-editor {
+	border-radius: var(--dsw-radius-lg, 10px);
+	background: var(--dsw-alias-bg-layer-1, rgba(128,128,128,0.04));
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.22));
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.dsh-mcp-grid-2 {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 10px 12px;
+}
+.dsh-mcp-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+}
+.dsh-mcp-label {
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 18px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+}
+.dsh-mcp-radiogroup {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px;
+	border-radius: var(--dsw-radius-md, 8px);
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.1)));
+	border: 0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.18));
+	width: fit-content;
+}
+.dsh-mcp-radio-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: var(--dsw-radius-sm, 6px);
+	font-size: 12.5px;
+	line-height: 18px;
+	cursor: pointer;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	user-select: none;
+}
+.dsh-mcp-radio-pill[data-checked="true"] {
+	background: var(--dsw-alias-bg-layer-1, #fff);
+	color: var(--dsw-alias-label-primary, #0f1115);
+	font-weight: 500;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.dsh-mcp-secret-row,
+.dsh-mcp-arg-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 6px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-arg-idx {
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+	font-size: 11px;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+	min-width: 22px;
+	text-align: right;
+	flex: none;
+}
+.dsh-mcp-pwd-wrap {
+	position: relative;
+	flex: 1;
+	min-width: 140px;
+	display: flex;
+	align-items: center;
+}
+.dsh-mcp-pwd-toggle {
+	position: absolute;
+	right: 4px;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: var(--dsw-radius-xs, 4px);
+	background: transparent;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+.dsh-mcp-pwd-toggle:hover {
+	color: var(--dsw-alias-label-primary, inherit);
+}
+.dsh-mcp-switch {
+	box-sizing: border-box;
+	width: 36px;
+	height: 20px;
+	border-radius: 999px;
+	border: none;
+	padding: 2px;
+	cursor: pointer;
+	background: var(--dsw-alias-border-l3, #c4c7ce);
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	transition: background 0.14s ease;
+}
+.dsh-mcp-switch[aria-checked="true"] {
+	background: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #4d6bfe));
+}
+.dsh-mcp-switch:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.dsh-mcp-switch-thumb {
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #fff;
+	display: block;
+	transition: transform 0.14s ease;
+	transform: translateX(0);
+}
+.dsh-mcp-switch[aria-checked="true"] .dsh-mcp-switch-thumb {
+	transform: translateX(16px);
+}
+.dsh-mcp-spin {
+	animation: 0.9s linear infinite dsh-mcp-rotate;
+}
+@keyframes dsh-mcp-rotate {
+	to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.dsh-mcp-chevron, .dsh-mcp-switch, .dsh-mcp-switch-thumb, .dsh-mcp-spin {
+		transition: none;
+		animation: none;
+	}
+}
+`;
+
+		function ensureStyles() {
+			if (typeof document === "undefined" || !document.head) return;
+			if (document.querySelector(`style[data-plugin-css="${STYLE_TAG_ID}"]`)) return;
+			const tag = document.createElement("style");
+			tag.dataset.plugin = NS;
+			tag.dataset.pluginCss = STYLE_TAG_ID;
+			tag.textContent = CSS_TEXT;
+			document.head.appendChild(tag);
+		}
 
 		function fill(template, params) {
 			return String(template ?? "").replace(/\{(\w+)\}/g, (_, key) => (params && params[key] != null ? String(params[key]) : ""));
@@ -1331,59 +2066,121 @@ module.exports = {
 			return [row.name, row.transport, ...notes, tr("import.disabledAfter")].join(" · ");
 		}
 
-		// ---------- styles (aligned to official primitives tokens) ----------
-		function buttonStyle(kind) {
-			const primary = kind === "primary";
-			const danger = kind === "danger";
-			return {
-				font: "inherit",
-				fontSize: 13,
-				height: 28,
-				padding: "0 10px",
-				borderRadius: 8,
-				border: primary || danger ? "none" : "0.5px solid var(--dsw-alias-border-l2)",
-				background: danger ? "var(--dsw-alias-state-error, #b42318)" : primary ? "var(--dsw-alias-label-primary, #0f1115)" : "transparent",
-				color: primary ? "var(--dsw-alias-bg-layer-1, #fff)" : danger ? "#fff" : "inherit",
-				cursor: "pointer",
-				whiteSpace: "nowrap",
-			};
+		// ---------- 矢量图标（优先复用 @deepseek-ai/dsh-client-ui-primitives，内置等比 SVG 兜底） ----------
+		function SvgIcon(props) {
+			const size = props.size || 13;
+			return jsx("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: 1.5,
+				strokeLinecap: "round",
+				strokeLinejoin: "round",
+				"aria-hidden": "true",
+				className: props.className,
+				children: jsx("path", { d: props.d }),
+			});
 		}
-		const inputStyle = {
-			boxSizing: "border-box",
-			width: "100%",
-			height: 32,
-			padding: "0 10px",
-			font: "inherit",
-			fontSize: 13,
-			borderRadius: 10,
-			border: "0.5px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-bg-layer-2)",
-			color: "inherit",
-		};
+
+		function IconPlus(props) {
+			if (primitives?.IconPlusOutlineRegular) return jsx(primitives.IconPlusOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M8 3.2V12.8M3.2 8H12.8" });
+		}
+		function IconRefresh(props) {
+			if (primitives?.IconRefreshOutlineRegular) return jsx(primitives.IconRefreshOutlineRegular, { size: props.size || 13, className: props.className, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, className: props.className, d: "M13.2 8A5.2 5.2 0 1 1 11.6 4.2M13.2 2.8V5.6H10.4" });
+		}
+		function IconTrash(props) {
+			if (primitives?.IconTrashOutlineRegular) return jsx(primitives.IconTrashOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M3.5 4.8H12.5M6.2 4.8V3.4C6.2 3 6.5 2.7 6.9 2.7H9.1C9.5 2.7 9.8 3 9.8 3.4V4.8M4.6 4.8L5.1 12.6C5.1 13.1 5.5 13.5 6 13.5H10C10.5 13.5 10.9 13.1 10.9 12.6L11.4 4.8" });
+		}
+		function IconChevronDown(props) {
+			if (primitives?.IconChevronDownOutlineRegular) return jsx(primitives.IconChevronDownOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M4 6L8 10L12 6" });
+		}
+		function IconEdit(props) {
+			if (primitives?.IconEditOutlineRegular) return jsx(primitives.IconEditOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M11.2 2.8L13.2 4.8L5.6 12.4H3.6V10.4L11.2 2.8Z" });
+		}
+		function IconFolder(props) {
+			if (primitives?.IconFolderOpenOutlineRegular) return jsx(primitives.IconFolderOpenOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M2.5 4.5C2.5 3.9 2.9 3.5 3.5 3.5H6.2L7.6 5H12.5C13.1 5 13.5 5.4 13.5 6V11.5C13.5 12.1 13.1 12.5 12.5 12.5H3.5C2.9 12.5 2.5 12.1 2.5 11.5V4.5Z" });
+		}
+		function IconCode(props) {
+			if (primitives?.IconCodeOutlineRegular) return jsx(primitives.IconCodeOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M5.5 5L2.5 8L5.5 11M10.5 5L13.5 8L10.5 11" });
+		}
+		function IconSearch(props) {
+			if (primitives?.IconSearchOutlineRegular) return jsx(primitives.IconSearchOutlineRegular, { size: props.size || 13, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 13, d: "M10.8 10.8L13.5 13.5M7.2 11.9A4.7 4.7 0 1 0 7.2 2.5A4.7 4.7 0 0 0 7.2 11.9Z" });
+		}
+		function IconCopy(props) {
+			if (primitives?.IconCopyOutlineRegular) return jsx(primitives.IconCopyOutlineRegular, { size: props.size || 12, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 12, d: "M5.5 5.5H12.5V12.5H5.5V5.5ZM3.5 10.5H2.8V3.5H9.8V4.2" });
+		}
+		function IconCheck(props) {
+			if (primitives?.IconCheckOutlineRegular) return jsx(primitives.IconCheckOutlineRegular, { size: props.size || 12, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 12, d: "M3.2 8.3L6.4 11.5L12.8 4.8" });
+		}
+		function IconWarning(props) {
+			if (primitives?.IconWarningOutlineRegular) return jsx(primitives.IconWarningOutlineRegular, { size: props.size || 14, "aria-hidden": "true" });
+			return jsx(SvgIcon, { size: props.size || 14, d: "M8 2.5L14 13H2L8 2.5ZM8 6.5V9.5M8 11.3H8.01" });
+		}
+
+		const EYE_CONTOUR = "M1.5 8C2.9 5.25 5.25 3.5 8 3.5C10.75 3.5 13.1 5.25 14.5 8C13.1 10.75 10.75 12.5 8 12.5C5.25 12.5 2.9 10.75 1.5 8Z";
+		const EYE_PATH = `${EYE_CONTOUR}M10 8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8Z`;
+		const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`;
+
 		const muted = { color: "var(--dsw-alias-label-secondary)", fontSize: 12 };
+
+		function StatusDot(props) {
+			const status = props.status || "unknown";
+			const dotState = status === "connected" || status === "empty"
+				? "done"
+				: status === "failed"
+					? "error"
+					: status === "unknown"
+						? "ongoing"
+						: "idle";
+			if (primitives?.StateDot) return jsx(primitives.StateDot, { state: dotState });
+			return jsx("span", { className: "dsh-mcp-dot", "data-state": dotState, "aria-hidden": "true" });
+		}
 
 		function Switch(props) {
 			return jsx("button", {
 				type: "button",
 				role: "switch",
+				className: "dsh-mcp-switch",
 				"aria-checked": props.checked ? "true" : "false",
 				"aria-label": props.label,
+				title: props.title,
 				disabled: props.disabled,
 				onClick: props.onClick,
-				style: {
-					width: 36, height: 20, borderRadius: 10, border: "none", padding: 2, cursor: props.disabled ? "default" : "pointer",
-					background: props.checked ? "var(--dsw-alias-brand, #4d6bfe)" : "var(--dsw-alias-border-l2, #ccc)",
-					display: "flex", justifyContent: props.checked ? "flex-end" : "flex-start", opacity: props.disabled ? 0.5 : 1, flex: "none",
-				},
-				children: jsx("span", { style: { width: 16, height: 16, borderRadius: 8, background: "#fff", display: "block" } }),
+				children: jsx("span", { className: "dsh-mcp-switch-thumb" }),
 			});
 		}
 
 		function Field(props) {
 			return jsxs("label", {
-				style: { display: "flex", flexDirection: "column", gap: 4 },
-				children: [jsx("span", { style: muted, children: props.label }), props.children],
+				className: "dsh-mcp-field",
+				children: [jsx("span", { className: "dsh-mcp-label", children: props.label }), props.children],
 			});
+		}
+
+		async function copyText(text) {
+			try {
+				if (typeof primitives?.writeClipboard === "function") {
+					await primitives.writeClipboard(text);
+					return true;
+				}
+				if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(text);
+					return true;
+				}
+			} catch {}
+			return false;
 		}
 
 		function Page(props) {
@@ -1398,14 +2195,21 @@ module.exports = {
 			const [state, setState] = React.useState(null);
 			const [loadError, setLoadError] = React.useState("");
 			const [busy, setBusy] = React.useState(false);
+			const [refreshing, setRefreshing] = React.useState(false);
 			const [note, setNote] = React.useState("");
+			const [noteTone, setNoteTone] = React.useState("info");
 			const [application, setApplication] = React.useState("");
 			const [open, setOpen] = React.useState("");
 			const [draft, setDraft] = React.useState(null);
 			const [confirm, setConfirm] = React.useState(null);
 			const [importing, setImporting] = React.useState(false);
 			const [importText, setImportText] = React.useState("");
+			const [query, setQuery] = React.useState("");
 			const fileRef = React.useRef(null);
+
+			React.useEffect(() => {
+				ensureStyles();
+			}, []);
 
 			const refresh = React.useCallback(async () => {
 				try {
@@ -1418,14 +2222,51 @@ module.exports = {
 				}
 			}, []);
 
+			const manualRefresh = React.useCallback(async () => {
+				if (refreshing) return;
+				const startedAt = Date.now();
+				setRefreshing(true);
+				try {
+					await refresh();
+				} finally {
+					const remaining = 400 - (Date.now() - startedAt);
+					if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+					setRefreshing(false);
+				}
+			}, [refresh, refreshing]);
+
 			React.useEffect(() => {
 				refresh();
-				const timer = setInterval(refresh, 2000);
-				return () => clearInterval(timer);
+				const timer = setInterval(() => {
+					if (typeof document !== "undefined" && document.hidden) return;
+					refresh();
+				}, 2500);
+				const onVisible = () => {
+					if (typeof document !== "undefined" && !document.hidden) refresh();
+				};
+				if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+					document.addEventListener("visibilitychange", onVisible);
+				}
+				return () => {
+					clearInterval(timer);
+					if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+						document.removeEventListener("visibilitychange", onVisible);
+					}
+				};
 			}, [refresh]);
 
 			const servers = state?.servers || [];
 			const names = servers.map((item) => item.serverName).filter(Boolean);
+			const normalizedQuery = query.trim().toLowerCase();
+			const visibleServers = normalizedQuery === ""
+				? servers
+				: servers.filter((server) => [
+					server.serverName,
+					server.transport,
+					server.command,
+					server.url,
+					...(server.tools || []),
+				].some((text) => String(text || "").toLowerCase().includes(normalizedQuery)));
 
 			async function act(job) {
 				if (busy) return false;
@@ -1435,11 +2276,17 @@ module.exports = {
 				try {
 					const data = await call("action", job);
 					if (data?.state) setState(data.state);
-					if (!data?.ok) { setNote(errorText(tr, data) || tr("error.badRequest")); return false; }
+					if (!data?.ok) {
+						setNoteTone("error");
+						setNote(errorText(tr, data) || tr("error.badRequest"));
+						return false;
+					}
+					setNoteTone("success");
 					setNote(noticeText(tr, data));
 					setApplication(data.application || "");
 					return true;
 				} catch (error) {
+					setNoteTone("error");
 					setNote(tr("error.network", { message: error instanceof Error ? error.message : String(error) }));
 					return false;
 				} finally {
@@ -1460,6 +2307,8 @@ module.exports = {
 					url: source?.url || "",
 					env: (source?.env || []).map((row) => ({ name: row.name, set: !!row.set, ref: row.ref || "", value: "", keep: !!server })),
 					headers: (source?.headers || []).map((row) => ({ name: row.name, set: !!row.set, ref: row.ref || "", value: "", keep: !!server })),
+					toolCallTimeoutMs: source?.toolCallTimeoutMs || model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
+					external: server?.external === true,
 					enabled: server?.enabled === true,
 				});
 				setOpen(server?.patchId || "new");
@@ -1470,8 +2319,16 @@ module.exports = {
 				const previous = servers.find((item) => item.patchId === draft.patchId);
 				const others = names.filter((name) => name !== previous?.serverName);
 				const issue = model.nameIssue(draft.serverName, others);
-				if (issue) { setNote(tr("name." + issue, { name: String(draft.serverName).trim() })); return; }
-				if (model.hasPlaceholder(draft)) { setNote(tr("error.placeholder")); return; }
+				if (issue) {
+					setNoteTone("error");
+					setNote(tr("name." + issue, { name: String(draft.serverName).trim() }));
+					return;
+				}
+				if (model.hasPlaceholder(draft)) {
+					setNoteTone("error");
+					setNote(tr("error.placeholder"));
+					return;
+				}
 				if (!confirmed && draft.enabled && model.launchChanged(previous, draft)) {
 					setConfirm({ kind: "stdio", then: "save", server: draft });
 					return;
@@ -1484,10 +2341,19 @@ module.exports = {
 				const next = !server.enabled;
 				if (next) {
 					const issue = model.nameIssue(server.serverName, names.filter((name) => name !== server.serverName));
-					if (issue) { setNote(tr("name." + issue, { name: server.serverName })); return; }
+					if (issue) {
+						setNoteTone("error");
+						setNote(tr("name." + issue, { name: server.serverName }));
+						return;
+					}
 					if (server.transport === "stdio") { setConfirm({ kind: "stdio", then: "enable", server }); return; }
 				}
-				act({ op: "enable", pluginEntryId: server.pluginEntryId, enabled: next });
+				act({ op: "enable", patchId: server.patchId, serverName: server.serverName, pluginEntryId: server.pluginEntryId, enabled: next });
+			}
+
+			function requestReconnect(server) {
+				if (!server.enabled || !server.pluginEntryId) return;
+				act({ op: "reconnect", patchId: server.patchId, serverName: server.serverName, pluginEntryId: server.pluginEntryId });
 			}
 
 			function onPickFile(event) {
@@ -1506,45 +2372,148 @@ module.exports = {
 			return jsxs("section", {
 				"aria-label": tr("title"),
 				"data-dsh-mcp-manager": "",
-				style: { display: "flex", flexDirection: "column", gap: 12, color: "var(--dsw-alias-label-primary)" },
+				className: "dsh-mcp-root",
 				children: [
 					jsxs("div", {
-						style: { display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "wrap" },
+						className: "dsh-mcp-head",
 						children: [
 							jsxs("div", {
-								style: { display: "flex", flexDirection: "column", gap: 4 },
+								className: "dsh-mcp-head-titles",
 								children: [
-									jsx("p", { style: { margin: 0, ...muted, fontSize: 13 }, children: tr("description") }),
-									state ? jsx("p", { style: { margin: 0, ...muted }, "data-count": "", children: tr("count", { total: servers.length, enabled: enabledCount }) }) : null,
+									jsxs("div", {
+										className: "dsh-mcp-title-row",
+										children: [
+											jsx("h4", { className: "dsh-mcp-section-title", children: tr("title") }),
+											state ? jsx("p", { className: "dsh-mcp-count", "data-count": "", children: tr("count", { total: servers.length, enabled: enabledCount }) }) : null,
+										],
+									}),
+									jsx("p", { className: "dsh-mcp-desc", children: tr("description") }),
 								],
 							}),
 							jsxs("div", {
-								style: { display: "flex", gap: 8, flexWrap: "wrap" },
+								className: "dsh-mcp-toolbar",
 								children: [
 									jsx("input", { ref: fileRef, type: "file", accept: "application/json,.json", style: { display: "none" }, onChange: onPickFile }),
+									jsx("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"data-icon-only": "true",
+										"aria-label": tr("refresh"),
+										title: tr("refresh"),
+										disabled: refreshing || busy,
+										onClick: manualRefresh,
+										children: jsx(IconRefresh, { className: refreshing ? "dsh-mcp-spin" : "" }),
+									}),
 									jsxs("select", {
 										"aria-label": tr("template"),
 										value: "",
-										style: { ...buttonStyle("secondary"), paddingRight: 6 },
+										className: "dsh-mcp-select",
 										onChange: (event) => { if (event.target.value) startDraft(null, event.target.value); },
-										children: [jsx("option", { value: "", children: tr("template") }), ...model.TEMPLATES.map((item) => jsx("option", { value: item.id, children: item.id + " · " + item.transport }, item.id))],
+										children: [
+											jsx("option", { value: "", children: tr("template") }),
+											...model.TEMPLATES.map((item) => jsx("option", { value: item.id, children: item.id + " · " + item.transport }, item.id)),
+										],
 									}),
-									jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: () => fileRef.current && fileRef.current.click(), children: tr("chooseFile") }),
-									jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: () => setImporting((value) => !value), children: tr("import") }),
-									jsx("button", { type: "button", style: buttonStyle("primary"), onClick: () => startDraft(null), children: tr("add") }),
+									jsxs("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										onClick: () => fileRef.current && fileRef.current.click(),
+										children: [jsx(IconFolder, {}), tr("chooseFile")],
+									}),
+									jsxs("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"aria-pressed": importing ? "true" : "false",
+										onClick: () => setImporting((value) => !value),
+										children: [jsx(IconCode, {}), tr("import")],
+									}),
+									jsxs("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"data-variant": "primary",
+										onClick: () => startDraft(null),
+										children: [jsx(IconPlus, {}), tr("add")],
+									}),
 								],
 							}),
 						],
 					}),
-					loadError ? jsx("p", { role: "alert", style: { margin: 0 }, children: tr("loadFailed", { message: loadError }) }) : null,
-					note ? jsx("p", { role: "status", "data-note": "", style: { margin: 0 }, children: note }) : null,
-					application ? jsx("p", { role: "status", style: { margin: 0, ...muted }, children: tr("application." + application) }) : null,
-					importing ? jsx(ImportPanel, { tr, text: importText, setText: setImportText, parsed, importable, busy, onCancel: () => { setImporting(false); setImportText(""); }, onImport: async () => { if (await act({ op: "import", servers: importable.map(wireServer) })) { setImporting(false); setImportText(""); } } }) : null,
-					open === "new" && draft ? jsx("div", { style: { padding: 12, background: "var(--dsw-alias-bg-layer-2)" }, children: jsx(Editor, { tr, draft, setDraft, names, busy, onSave: () => saveDraft(false), onCancel: () => { setOpen(""); setDraft(null); } }) }) : null,
+					loadError ? jsxs("p", {
+						role: "alert",
+						className: "dsh-mcp-banner",
+						"data-tone": "error",
+						children: [jsx(IconWarning, {}), jsx("span", { style: { flex: 1 }, children: tr("loadFailed", { message: loadError }) })],
+					}) : null,
+					note ? jsxs("p", {
+						role: "status",
+						"data-note": "",
+						className: "dsh-mcp-banner",
+						"data-tone": noteTone,
+						children: [
+							noteTone === "error" ? jsx(IconWarning, {}) : jsx(IconCheck, {}),
+							jsx("span", { style: { flex: 1 }, children: note }),
+							jsx("button", { type: "button", className: "dsh-mcp-btn", "data-variant": "ghost", "data-size": "sm", "aria-label": tr("close"), onClick: () => setNote(""), children: "×" }),
+						],
+					}) : null,
+					application ? jsx("p", {
+						role: "status",
+						className: "dsh-mcp-banner",
+						"data-tone": application === "failed" ? "error" : application === "applied" ? "success" : "warn",
+						children: tr("application." + application),
+					}) : null,
+					importing ? jsx(ImportPanel, {
+						tr,
+						text: importText,
+						setText: setImportText,
+						parsed,
+						importable,
+						busy,
+						onPickFile: () => fileRef.current && fileRef.current.click(),
+						onCancel: () => { setImporting(false); setImportText(""); },
+						onImport: async () => { if (await act({ op: "import", servers: importable.map(wireServer) })) { setImporting(false); setImportText(""); } },
+					}) : null,
+					open === "new" && draft ? jsx("div", {
+						children: jsx(Editor, {
+							tr,
+							draft,
+							setDraft,
+							names,
+							busy,
+							onApplyTemplate: (templateId) => startDraft(null, templateId),
+							onSave: () => saveDraft(false),
+							onCancel: () => { setOpen(""); setDraft(null); },
+						}),
+					}) : null,
+					servers.length > 3 || query !== "" ? jsxs("div", {
+						className: "dsh-mcp-search-wrap",
+						children: [
+							jsx("span", { className: "dsh-mcp-search-icon", children: jsx(IconSearch, {}) }),
+							jsx("input", {
+								type: "search",
+								className: "dsh-mcp-input",
+								style: { paddingLeft: 32, paddingRight: query ? 32 : 10 },
+								placeholder: tr("search"),
+								"aria-label": tr("search"),
+								value: query,
+								onChange: (event) => setQuery(event.target.value),
+							}),
+							query ? jsx("button", {
+								type: "button",
+								className: "dsh-mcp-btn dsh-mcp-search-clear",
+								"data-variant": "ghost",
+								"data-size": "sm",
+								"aria-label": tr("close"),
+								onClick: () => setQuery(""),
+								children: "×",
+							}) : null,
+						],
+					}) : null,
 					!state && !loadError ? jsx("p", { style: { margin: 0, ...muted }, children: tr("loading") }) : null,
 					state && servers.length === 0 && open !== "new" ? jsx("p", { style: { margin: 0, ...muted }, children: tr("empty") }) : null,
+					state && servers.length > 0 && visibleServers.length === 0 ? jsx("p", { style: { margin: 0, ...muted }, children: tr("noMatches") }) : null,
 					jsx("div", {
-						children: servers.map((server) => jsx(ServerRow, {
+						className: "dsh-mcp-list",
+						children: visibleServers.map((server) => jsx(ServerRow, {
 							tr,
 							server,
 							busy,
@@ -1557,6 +2526,7 @@ module.exports = {
 							onCancelEdit: () => setDraft(null),
 							onSave: () => saveDraft(false),
 							onEnable: () => requestEnable(server),
+							onReconnect: () => requestReconnect(server),
 							onDelete: () => setConfirm({ kind: "delete", server }),
 						}, server.patchId)),
 					}),
@@ -1569,7 +2539,7 @@ module.exports = {
 							const current = confirm;
 							setConfirm(null);
 							if (current.kind === "delete") await act({ op: "remove", bundleName: current.server.bundleName, serverName: current.server.serverName });
-							else if (current.then === "enable") await act({ op: "enable", pluginEntryId: current.server.pluginEntryId, enabled: true });
+							else if (current.then === "enable") await act({ op: "enable", patchId: current.server.patchId, serverName: current.server.serverName, pluginEntryId: current.server.pluginEntryId, enabled: true });
 							else await saveDraft(true);
 						},
 					}) : null,
@@ -1580,56 +2550,187 @@ module.exports = {
 		function wireServer(server) {
 			return {
 				...server,
+				toolCallTimeoutMs: server.toolCallTimeoutMs,
 				env: (server.env || []).map((row) => ({ name: row.name, value: row.value || "", ref: row.ref || "", keep: !!row.keep })),
 				headers: (server.headers || []).map((row) => ({ name: row.name, value: row.value || "", ref: row.ref || "", keep: !!row.keep })),
 			};
 		}
 
+		function ToolChip(props) {
+			const { tr, serverName, name, detail } = props;
+			const [copied, setCopied] = React.useState(false);
+			const publicName = detail?.publicName || ("mcp__" + serverName + "__" + name);
+			const tooltip = detail?.description ? `${publicName}\n${detail.description}` : tr("tools.copyHint", { name: publicName });
+			return jsxs("button", {
+				type: "button",
+				className: "dsh-mcp-tool-chip",
+				title: tooltip,
+				onClick: async () => {
+					if (await copyText(publicName)) {
+						setCopied(true);
+						setTimeout(() => setCopied(false), 1400);
+					}
+				},
+				children: [
+					jsx("code", { children: name }),
+					copied ? jsx(IconCheck, { size: 11 }) : jsx(IconCopy, { size: 11 }),
+				],
+			});
+		}
+
 		function ServerRow(props) {
 			const { tr, server } = props;
 			const tools = Array.isArray(server.tools) ? server.tools : [];
+			const detailsMap = new Map((server.toolDetails || []).map((item) => [item.name, item]));
 			const shown = props.expanded ? tools : tools.slice(0, 3);
 			const rest = tools.length - shown.length;
+			const status = server.status || "unknown";
+			const secrets = server.transport === "stdio" ? (server.env || []) : (server.headers || []);
 			return jsxs("div", {
 				"data-server": server.serverName,
-				style: { borderTop: "0.5px solid var(--dsw-alias-border-l2)", background: props.expanded ? "var(--dsw-alias-bg-layer-2)" : "transparent" },
+				"data-enabled": server.enabled ? "true" : "false",
+				"data-expanded": props.expanded ? "true" : "false",
+				"data-status-kind": status,
+				className: "dsh-mcp-card",
 				children: [
 					jsxs("div", {
-						style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", flexWrap: "wrap" },
+						className: "dsh-mcp-row-head",
 						children: [
-							jsx("strong", { style: { fontSize: 13 }, children: server.serverName || server.patchId }),
-							jsx("span", { style: muted, children: server.transport }),
-							jsx("span", { "data-status": server.status, style: { fontSize: 12 }, children: tr("status." + (server.status || "unknown")) }),
-							jsx("span", {
-								style: { ...muted, flex: 1, minWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-								title: tools.join(", "),
-								children: tools.length ? shown.join(", ") + (rest > 0 ? " · " + tr("more", { count: rest }) : "") : "",
-							}),
-							jsx(Switch, { checked: server.enabled, label: tr("enable"), disabled: props.busy || !server.pluginEntryId, onClick: props.onEnable }),
-							jsx("button", { type: "button", style: buttonStyle("secondary"), disabled: props.busy || server.external, title: server.external ? tr("external") : undefined, onClick: props.onDelete, children: tr("remove") }),
-							jsx("button", {
+							jsxs("button", {
 								type: "button",
+								className: "dsh-mcp-row-summary",
 								"aria-expanded": props.expanded ? "true" : "false",
-								"aria-label": tr("edit"),
 								onClick: props.onToggleOpen,
-								style: { ...buttonStyle("secondary"), border: "none", padding: "0 6px", transform: props.expanded ? "rotate(180deg)" : "none" },
-								children: "⌄",
+								children: [
+									jsxs("span", {
+										className: "dsh-mcp-row-identity",
+										children: [
+											jsx("strong", { className: "dsh-mcp-row-name", children: server.serverName || server.patchId }),
+											jsx("span", { className: "dsh-mcp-badge", children: server.transport }),
+											server.external ? jsx("span", { className: "dsh-mcp-badge", "data-tone": "info", children: tr("tag.external") }) : null,
+											server.origin ? jsx("span", { className: "dsh-mcp-badge", "data-tone": "info", children: tr("tag.project") }) : null,
+										],
+									}),
+									jsxs("span", {
+										"data-status": status,
+										className: "dsh-mcp-status",
+										children: [
+											jsx(StatusDot, { status }),
+											jsx("span", { children: tr("status." + status) }),
+										],
+									}),
+									jsx("span", {
+										className: "dsh-mcp-inline-tools",
+										title: tools.join(", "),
+										children: tools.length
+											? [
+												...shown.map((tName) => jsx("code", { className: "dsh-mcp-inline-chip", children: tName }, tName)),
+												rest > 0 ? jsx("span", { style: muted, children: tr("more", { count: rest }) }) : null,
+											]
+											: "",
+									}),
+								],
+							}),
+							jsxs("div", {
+								className: "dsh-mcp-row-actions",
+								children: [
+									server.enabled && server.pluginEntryId ? jsxs("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"data-size": "sm",
+										disabled: props.busy,
+										title: tr("reconnect"),
+										onClick: props.onReconnect,
+										children: [jsx(IconRefresh, { size: 12 }), tr("reconnect")],
+									}) : null,
+									jsx(Switch, { checked: server.enabled, label: tr("enable"), disabled: props.busy || !server.pluginEntryId, onClick: props.onEnable }),
+									jsxs("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"data-variant": "danger-ghost",
+										"data-size": "sm",
+										disabled: props.busy || server.external,
+										title: server.external ? tr("external") : undefined,
+										onClick: props.onDelete,
+										children: [jsx(IconTrash, { size: 12 }), tr("remove")],
+									}),
+									jsx("button", {
+										type: "button",
+										className: "dsh-mcp-btn",
+										"data-variant": "ghost",
+										"data-size": "sm",
+										"data-icon-only": "true",
+										"aria-expanded": props.expanded ? "true" : "false",
+										"aria-label": tr("edit"),
+										onClick: props.onToggleOpen,
+										children: jsx("span", { className: "dsh-mcp-chevron", "data-open": props.expanded ? "true" : "false", children: jsx(IconChevronDown, {}) }),
+									}),
+								],
 							}),
 						],
 					}),
 					props.expanded ? jsxs("div", {
-						style: { display: "flex", flexDirection: "column", gap: 8, padding: "0 8px 12px" },
+						className: "dsh-mcp-row-body",
 						children: [
-							jsx("p", { style: { margin: 0, fontSize: 12 }, children: tr("tools") + ": " + (tools.join(", ") || tr("none")) }),
-							jsx("p", { style: { margin: 0, ...muted }, children: tr("tools.readonly") }),
+							server.lastError ? jsxs("p", {
+								role: "alert",
+								className: "dsh-mcp-banner",
+								"data-tone": "error",
+								children: [jsx(IconWarning, {}), jsx("span", { style: { flex: 1, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)", fontSize: 12 }, children: server.lastError })],
+							}) : null,
+							jsxs("div", {
+								className: "dsh-mcp-tools-box",
+								children: [
+									jsx("p", {
+										style: { margin: 0, fontSize: 12, fontWeight: 500 },
+										children: tr("tools") + " (" + tools.length + "): " + (tools.length ? "" : tr("none")),
+									}),
+									tools.length > 0 ? jsx("div", {
+										className: "dsh-mcp-tools-list",
+										children: tools.map((tName) => jsx(ToolChip, { tr, serverName: server.serverName, name: tName, detail: detailsMap.get(tName) }, tName)),
+									}) : null,
+									jsx("p", { style: { margin: 0, ...muted }, children: tr("tools.readonly") }),
+								],
+							}),
 							server.origin ? jsx("p", { style: { margin: 0, ...muted }, children: tr("fromProject", { file: server.origin.file, workspace: server.origin.workspace }) }) : null,
 							server.external ? jsx("p", { style: { margin: 0, ...muted }, children: tr("external") }) : null,
 							props.editing
-								? jsx(Editor, { tr, draft: props.editing, setDraft: props.setDraft, names: props.names, busy: props.busy, onSave: props.onSave, onCancel: props.onCancelEdit })
-								: jsxs(React.Fragment, { children: [
-									jsx("p", { style: { margin: 0, ...muted }, children: server.transport === "stdio" ? [server.command, ...(server.args || [])].join(" ⟩ ") + (server.cwd ? "  (cwd " + server.cwd + ")" : "") : server.url }),
-									jsx("div", { children: jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: props.onEdit, children: tr("edit") }) }),
-								] }),
+								? jsx(Editor, { tr, draft: props.editing, previous: server, setDraft: props.setDraft, names: props.names, busy: props.busy, onSave: props.onSave, onCancel: props.onCancelEdit })
+								: jsxs("div", {
+									className: "dsh-mcp-conn-bar",
+									children: [
+										jsxs("div", {
+											style: { display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 160 },
+											children: [
+												jsx("p", {
+													className: "dsh-mcp-conn-target",
+													children: server.transport === "stdio"
+														? [server.command, ...(server.args || [])].join(" ⟩ ") + (server.cwd ? "  (cwd " + server.cwd + ")" : "")
+														: server.url,
+												}),
+												secrets.length > 0 || (server.toolCallTimeoutMs && server.toolCallTimeoutMs !== model.DEFAULT_TOOL_CALL_TIMEOUT_MS) ? jsx("div", {
+													style: { display: "flex", gap: 6, flexWrap: "wrap" },
+													children: [
+														server.toolCallTimeoutMs && server.toolCallTimeoutMs !== model.DEFAULT_TOOL_CALL_TIMEOUT_MS
+															? jsx("span", { className: "dsh-mcp-badge", children: "timeout: " + server.toolCallTimeoutMs + "ms" }, "__timeout")
+															: null,
+														...secrets.map((sec) => jsx("span", {
+															className: "dsh-mcp-badge",
+															children: sec.name + ": " + (sec.ref ? "env:" + sec.ref : tr(sec.set ? "field.secretSet" : "field.secretUnset")),
+														}, sec.name)),
+													],
+												}) : null,
+											],
+										}),
+										jsxs("button", {
+											type: "button",
+											className: "dsh-mcp-btn",
+											"data-size": "sm",
+											onClick: props.onEdit,
+											children: [jsx(IconEdit, { size: 12 }), tr("edit")],
+										}),
+									],
+								}),
 						],
 					}) : null,
 				],
@@ -1640,25 +2741,54 @@ module.exports = {
 			const { tr, parsed } = props;
 			return jsxs("div", {
 				"data-import": "",
-				style: { display: "flex", flexDirection: "column", gap: 8 },
+				className: "dsh-mcp-editor",
 				children: [
+					jsxs("div", {
+						style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" },
+						children: [
+							jsx("strong", { style: { fontSize: 13 }, children: tr("import") + " · mcpServers JSON" }),
+							jsxs("button", {
+								type: "button",
+								className: "dsh-mcp-btn",
+								"data-size": "sm",
+								onClick: props.onPickFile,
+								children: [jsx(IconFolder, { size: 12 }), tr("chooseFile")],
+							}),
+						],
+					}),
 					jsx("textarea", {
 						value: props.text,
 						placeholder: tr("import.placeholder"),
 						onChange: (event) => props.setText(event.target.value),
-						style: { ...inputStyle, height: 140, padding: 10, fontFamily: "ui-monospace, monospace" },
+						className: "dsh-mcp-textarea",
+						spellCheck: false,
 					}),
-					parsed?.errorCode ? jsx("p", { role: "alert", style: { margin: 0 }, children: tr("import." + parsed.errorCode) }) : null,
+					parsed?.errorCode ? jsxs("p", {
+						role: "alert",
+						className: "dsh-mcp-banner",
+						"data-tone": "error",
+						children: [jsx(IconWarning, {}), tr("import." + parsed.errorCode)],
+					}) : null,
 					jsx("ul", {
 						"data-preview": "",
-						style: { margin: 0, paddingLeft: 18, ...muted },
-						children: (parsed?.rows || []).map((row) => jsx("li", { children: rowText(tr, { ...row, transport: row.server?.transport || "" }) }, row.name + row.code)),
+						style: { margin: 0, paddingLeft: 18, ...muted, display: "flex", flexDirection: "column", gap: 4 },
+						children: (parsed?.rows || []).map((row) => jsx("li", {
+							style: { color: row.skip ? "var(--dsw-alias-label-tertiary)" : "var(--dsw-alias-label-primary)" },
+							children: rowText(tr, { ...row, transport: row.server?.transport || "" }),
+						}, row.name + row.code)),
 					}),
 					jsxs("div", {
 						style: { display: "flex", justifyContent: "flex-end", gap: 8 },
 						children: [
-							jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: props.onCancel, children: tr("cancel") }),
-							jsx("button", { type: "button", style: buttonStyle("primary"), disabled: !props.importable.length || props.busy, onClick: props.onImport, children: tr("import.confirm", { count: props.importable.length }) }),
+							jsx("button", { type: "button", className: "dsh-mcp-btn", onClick: props.onCancel, children: tr("cancel") }),
+							jsx("button", {
+								type: "button",
+								className: "dsh-mcp-btn",
+								"data-variant": "primary",
+								disabled: !props.importable.length || props.busy,
+								onClick: props.onImport,
+								children: tr("import.confirm", { count: props.importable.length }),
+							}),
 						],
 					}),
 				],
@@ -1669,10 +2799,15 @@ module.exports = {
 			const { tr, project } = props;
 			return jsxs("div", {
 				"data-project": "",
-				style: { display: "flex", flexDirection: "column", gap: 8, borderTop: "0.5px solid var(--dsw-alias-border-l2)", paddingTop: 12 },
+				style: { display: "flex", flexDirection: "column", gap: 10, borderTop: "0.5px solid var(--dsw-alias-border-l2)", paddingTop: 16 },
 				children: [
-					jsx("strong", { style: { fontSize: 13 }, children: tr("project.title") }),
-					jsx("p", { style: { margin: 0, ...muted }, children: tr("project.description") }),
+					jsxs("div", {
+						style: { display: "flex", flexDirection: "column", gap: 2 },
+						children: [
+							jsx("h4", { className: "dsh-mcp-section-title", children: tr("project.title") }),
+							jsx("p", { className: "dsh-mcp-desc", children: tr("project.description") }),
+						],
+					}),
 					project.length === 0 ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.noWorkspace") }) : null,
 					...project.map((ws) => {
 						const files = ws.files || [];
@@ -1680,24 +2815,52 @@ module.exports = {
 						const anyPresent = files.some((f) => f.present || f.error);
 						return jsxs("div", {
 							"data-workspace": ws.workspaceId,
-							style: { display: "flex", flexDirection: "column", gap: 4, padding: "6px 0" },
+							className: "dsh-mcp-card",
+							style: { padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 },
 							children: [
-								jsxs("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }, children: [
-									jsx("span", { style: { fontSize: 13 }, children: ws.title }),
-									jsx("span", { style: muted, children: ws.path }),
-									pending.length > 1 ? jsx("button", { type: "button", style: { ...buttonStyle("secondary"), marginLeft: "auto" }, disabled: props.busy, onClick: () => props.onApprove(ws.workspaceId, pending), children: tr("project.allowAll", { count: pending.length }) }) : null,
-								] }),
+								jsxs("div", {
+									style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
+									children: [
+										jsx(IconFolder, { size: 13 }),
+										jsx("strong", { style: { fontSize: 13 }, children: ws.title }),
+										jsx("code", { style: { ...muted, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)" }, children: ws.path }),
+										pending.length > 1 ? jsx("button", {
+											type: "button",
+											className: "dsh-mcp-btn",
+											"data-size": "sm",
+											style: { marginLeft: "auto" },
+											disabled: props.busy,
+											onClick: () => props.onApprove(ws.workspaceId, pending),
+											children: tr("project.allowAll", { count: pending.length }),
+										}) : null,
+									],
+								}),
 								!anyPresent ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.noFiles") }) : null,
-								...files.filter((f) => f.present || f.error).map((f) => jsxs("div", { style: { paddingLeft: 12 }, children: [
-									f.error ? jsx("p", { style: { margin: 0, ...muted }, children: tr("project.fileError", { file: f.file, error: tr("project.error." + f.error) }) }) : jsx("p", { style: { margin: 0, ...muted }, children: f.file }),
-									...f.rows.map((row) => jsxs("div", {
-										style: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "2px 0" },
-										children: [
-											jsx("span", { style: { flex: 1 }, children: rowText(tr, row) + (row.masked ? " — " + (row.transport === "stdio" ? [row.masked.command, ...row.masked.args].join(" ⟩ ") : row.masked.url) : "") }),
-											!row.skip ? jsx("button", { type: "button", style: buttonStyle("secondary"), disabled: props.busy, onClick: () => props.onApprove(ws.workspaceId, [row.name]), children: tr("project.allow") }) : null,
-										],
-									}, row.name + row.code)),
-								] }, f.file)),
+								...files.filter((f) => f.present || f.error).map((f) => jsxs("div", {
+									style: { paddingLeft: 12, borderLeft: "2px solid var(--dsw-alias-border-l2)", display: "flex", flexDirection: "column", gap: 4 },
+									children: [
+										f.error
+											? jsx("p", { style: { margin: 0, color: "var(--dsw-alias-state-error-primary)", fontSize: 12 }, children: tr("project.fileError", { file: f.file, error: tr("project.error." + f.error) }) })
+											: jsx("code", { style: { ...muted, fontWeight: 500 }, children: f.file }),
+										...f.rows.map((row) => jsxs("div", {
+											style: { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "2px 0", flexWrap: "wrap" },
+											children: [
+												jsx("span", {
+													style: { flex: 1, minWidth: 160, color: row.skip ? "var(--dsw-alias-label-tertiary)" : "var(--dsw-alias-label-primary)" },
+													children: rowText(tr, row) + (row.masked ? " — " + (row.transport === "stdio" ? [row.masked.command, ...row.masked.args].join(" ⟩ ") : row.masked.url) : ""),
+												}),
+												!row.skip ? jsx("button", {
+													type: "button",
+													className: "dsh-mcp-btn",
+													"data-size": "sm",
+													disabled: props.busy,
+													onClick: () => props.onApprove(ws.workspaceId, [row.name]),
+													children: tr("project.allow"),
+												}) : null,
+											],
+										}, row.name + row.code)),
+									],
+								}, f.file)),
 							],
 						}, ws.workspaceId);
 					}),
@@ -1709,34 +2872,170 @@ module.exports = {
 			const { tr, draft } = props;
 			const set = (patch) => props.setDraft({ ...draft, ...patch });
 			const issue = model.nameIssue(draft.serverName, props.names);
+			const isExistingOwned = Boolean(draft.patchId) && !draft.external;
+			const launchModified = Boolean(draft.patchId && draft.enabled && model.launchChanged(props.previous, draft));
 			return jsxs("div", {
 				"data-editor": "",
-				style: { display: "flex", flexDirection: "column", gap: 8 },
+				className: "dsh-mcp-editor",
 				children: [
-					jsx(Field, { label: tr("field.name"), children: jsx("input", { "data-field": "name", style: inputStyle, value: draft.serverName, onChange: (event) => set({ serverName: event.target.value }) }) }),
-					issue && draft.serverName ? jsx("p", { style: { margin: 0, fontSize: 12 }, children: tr("name." + issue, { name: String(draft.serverName).trim() }) }) : null,
-					jsx("div", {
-						role: "radiogroup",
-						"aria-label": tr("field.transport"),
-						children: ["stdio", "streamable-http"].map((value) => jsxs("label", {
-							style: { marginRight: 12, fontSize: 13 },
-							children: [jsx("input", { type: "radio", name: "transport-" + (draft.patchId || "new"), checked: draft.transport === value, onChange: () => set({ transport: value }) }), " " + value],
-						}, value)),
-					}),
-					draft.transport === "stdio" ? jsxs(React.Fragment, { children: [
-						jsx(Field, { label: tr("field.command"), children: jsx("input", { "data-field": "command", style: inputStyle, value: draft.command, onChange: (event) => set({ command: event.target.value }) }) }),
-						jsx(Args, { tr, args: draft.args, onChange: (args) => set({ args }) }),
-						jsx(Field, { label: tr("field.cwd"), children: jsx("input", { "data-field": "cwd", style: inputStyle, value: draft.cwd, onChange: (event) => set({ cwd: event.target.value }) }) }),
-						jsx(Secrets, { tr, title: tr("field.env"), rows: draft.env, onChange: (env) => set({ env }) }),
-					] }) : jsxs(React.Fragment, { children: [
-						jsx(Field, { label: tr("field.url"), children: jsx("input", { "data-field": "url", style: inputStyle, value: draft.url, onChange: (event) => set({ url: event.target.value }) }) }),
-						jsx(Secrets, { tr, title: tr("field.headers"), rows: draft.headers, onChange: (headers) => set({ headers }) }),
-					] }),
-					jsxs("div", {
-						style: { display: "flex", justifyContent: "flex-end", gap: 8 },
+					!draft.patchId && props.onApplyTemplate ? jsxs("div", {
+						style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" },
 						children: [
-							jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: props.onCancel, children: tr("cancel") }),
-							jsx("button", { type: "button", "data-action": "save", style: buttonStyle("primary"), disabled: props.busy, onClick: props.onSave, children: tr("save") }),
+							jsx("span", { style: muted, children: tr("template") }),
+							...model.TEMPLATES.map((tpl) => jsx("button", {
+								type: "button",
+								className: "dsh-mcp-btn",
+								"data-size": "sm",
+								onClick: () => props.onApplyTemplate(tpl.id),
+								children: tpl.id,
+							}, tpl.id)),
+						],
+					}) : null,
+					jsxs("div", {
+						className: "dsh-mcp-grid-2",
+						children: [
+							jsx(Field, {
+								label: tr("field.name"),
+								children: jsx("input", {
+									"data-field": "name",
+									className: "dsh-mcp-input",
+									"data-mono": "true",
+									readOnly: isExistingOwned,
+									title: isExistingOwned ? tr("error.renameOwned") : undefined,
+									value: draft.serverName,
+									onChange: (event) => set({ serverName: event.target.value }),
+								}),
+							}),
+							jsxs("div", {
+								className: "dsh-mcp-field",
+								children: [
+									jsx("span", { className: "dsh-mcp-label", children: tr("field.transport") }),
+									jsx("div", {
+										role: "radiogroup",
+										"aria-label": tr("field.transport"),
+										className: "dsh-mcp-radiogroup",
+										children: ["stdio", "streamable-http"].map((value) => jsxs("label", {
+											className: "dsh-mcp-radio-pill",
+											"data-checked": draft.transport === value ? "true" : "false",
+											children: [
+												jsx("input", {
+													type: "radio",
+													name: "transport-" + (draft.patchId || "new"),
+													checked: draft.transport === value,
+													style: { margin: 0 },
+													onChange: () => set({ transport: value }),
+												}),
+												" " + value,
+											],
+										}, value)),
+									}),
+								],
+							}),
+						],
+					}),
+					issue && draft.serverName ? jsx("p", {
+						style: { margin: 0, fontSize: 12, color: "var(--dsw-alias-state-error-primary)" },
+						children: tr("name." + issue, { name: String(draft.serverName).trim() }),
+					}) : null,
+					draft.transport === "stdio" ? jsxs(React.Fragment, {
+						children: [
+							jsxs("div", {
+								className: "dsh-mcp-grid-2",
+								children: [
+									jsx(Field, {
+										label: tr("field.command"),
+										children: jsx("input", {
+											"data-field": "command",
+											className: "dsh-mcp-input",
+											"data-mono": "true",
+											placeholder: "npx / uvx / node",
+											value: draft.command,
+											onChange: (event) => set({ command: event.target.value }),
+										}),
+									}),
+									jsx(Field, {
+										label: tr("field.cwd"),
+										children: jsx("input", {
+											"data-field": "cwd",
+											className: "dsh-mcp-input",
+											"data-mono": "true",
+											value: draft.cwd,
+											onChange: (event) => set({ cwd: event.target.value }),
+										}),
+									}),
+								],
+							}),
+							jsx(Args, { tr, args: draft.args, onChange: (args) => set({ args }) }),
+							jsx(Secrets, { tr, title: tr("field.env"), rows: draft.env, onChange: (env) => set({ env }) }),
+							jsx(Field, {
+								label: tr("field.timeout"),
+								children: jsx("input", {
+									"data-field": "timeout",
+									type: "number",
+									min: 1000,
+									step: 1000,
+									className: "dsh-mcp-input",
+									"data-mono": "true",
+									style: { maxWidth: 220 },
+									placeholder: String(model.DEFAULT_TOOL_CALL_TIMEOUT_MS),
+									value: draft.toolCallTimeoutMs ?? model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
+									onChange: (event) => set({ toolCallTimeoutMs: event.target.value === "" ? "" : Number(event.target.value) }),
+								}),
+							}),
+						],
+					}) : jsxs(React.Fragment, {
+						children: [
+							jsxs("div", {
+								className: "dsh-mcp-grid-2",
+								children: [
+									jsx(Field, {
+										label: tr("field.url"),
+										children: jsx("input", {
+											"data-field": "url",
+											className: "dsh-mcp-input",
+											"data-mono": "true",
+											placeholder: "https://example.com/mcp",
+											value: draft.url,
+											onChange: (event) => set({ url: event.target.value }),
+										}),
+									}),
+									jsx(Field, {
+										label: tr("field.timeout"),
+										children: jsx("input", {
+											"data-field": "timeout",
+											type: "number",
+											min: 1000,
+											step: 1000,
+											className: "dsh-mcp-input",
+											"data-mono": "true",
+											placeholder: String(model.DEFAULT_TOOL_CALL_TIMEOUT_MS),
+											value: draft.toolCallTimeoutMs ?? model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
+											onChange: (event) => set({ toolCallTimeoutMs: event.target.value === "" ? "" : Number(event.target.value) }),
+										}),
+									}),
+								],
+							}),
+							jsx(Secrets, { tr, title: tr("field.headers"), rows: draft.headers, onChange: (headers) => set({ headers }) }),
+						],
+					}),
+					launchModified ? jsxs("p", {
+						className: "dsh-mcp-banner",
+						"data-tone": "warn",
+						children: [jsx(IconWarning, {}), tr("field.launchChangedHint")],
+					}) : null,
+					jsxs("div", {
+						style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 },
+						children: [
+							jsx("button", { type: "button", className: "dsh-mcp-btn", onClick: props.onCancel, children: tr("cancel") }),
+							jsx("button", {
+								type: "button",
+								"data-action": "save",
+								className: "dsh-mcp-btn",
+								"data-variant": "primary",
+								disabled: props.busy,
+								onClick: props.onSave,
+								children: tr("save"),
+							}),
 						],
 					}),
 				],
@@ -1747,15 +3046,85 @@ module.exports = {
 			const { tr } = props;
 			return jsxs("div", {
 				children: [
-					jsx("span", { style: muted, children: tr("field.args") }),
-					...props.args.map((value, index) => jsxs("div", {
-						style: { display: "flex", gap: 8, marginTop: 4 },
-						children: [
-							jsx("input", { "data-field": "arg", style: inputStyle, value, onChange: (event) => { const next = props.args.slice(); next[index] = event.target.value; props.onChange(next); } }),
-							jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: () => props.onChange(props.args.filter((_, item) => item !== index)), children: tr("field.remove") }),
-						],
-					}, index)),
-					jsx("button", { type: "button", style: { ...buttonStyle("secondary"), marginTop: 4 }, onClick: () => props.onChange(props.args.concat("")), children: tr("field.addArg") }),
+					jsx("span", { className: "dsh-mcp-label", children: tr("field.args") }),
+					...props.args.map((value, index) => {
+						const hasPh = typeof value === "string" && /<[a-z-]+>/.test(value);
+						return jsxs("div", {
+							className: "dsh-mcp-arg-row",
+							children: [
+								jsx("span", { className: "dsh-mcp-arg-idx", children: "#" + (index + 1) }),
+								jsx("input", {
+									"data-field": "arg",
+									className: "dsh-mcp-input",
+									"data-mono": "true",
+									"data-warn": hasPh ? "true" : undefined,
+									style: { flex: 1 },
+									value,
+									onChange: (event) => {
+										const next = props.args.slice();
+										next[index] = event.target.value;
+										props.onChange(next);
+									},
+								}),
+								jsx("button", {
+									type: "button",
+									className: "dsh-mcp-btn",
+									"data-size": "sm",
+									onClick: () => props.onChange(props.args.filter((_, item) => item !== index)),
+									children: tr("field.remove"),
+								}),
+							],
+						}, index);
+					}),
+					jsxs("button", {
+						type: "button",
+						className: "dsh-mcp-btn",
+						"data-size": "sm",
+						style: { marginTop: 6 },
+						onClick: () => props.onChange(props.args.concat("")),
+						children: [jsx(IconPlus, { size: 11 }), tr("field.addArg")],
+					}),
+				],
+			});
+		}
+
+		function SecretPasswordInput(props) {
+			const { tr, value, onChange } = props;
+			const [revealedValue, setRevealedValue] = React.useState();
+			const revealed = Boolean(value) && revealedValue === value;
+			return jsxs("div", {
+				className: "dsh-mcp-pwd-wrap",
+				children: [
+					jsx("input", {
+						type: revealed ? "text" : "password",
+						className: "dsh-mcp-input",
+						style: value ? { paddingRight: 30 } : undefined,
+						placeholder: tr("field.secretValue"),
+						autoComplete: "new-password",
+						value: value || "",
+						onChange: (event) => {
+							setRevealedValue(undefined);
+							onChange(event.target.value);
+						},
+					}),
+					value ? jsx("button", {
+						type: "button",
+						className: "dsh-mcp-pwd-toggle",
+						"aria-label": tr(revealed ? "field.secretHide" : "field.secretReveal"),
+						"aria-pressed": revealed ? "true" : "false",
+						onClick: () => setRevealedValue(revealed ? undefined : value),
+						children: jsx("svg", {
+							width: 14,
+							height: 14,
+							viewBox: "0 0 16 16",
+							fill: "none",
+							stroke: "currentColor",
+							strokeWidth: 1.3,
+							strokeLinecap: "round",
+							"aria-hidden": "true",
+							children: jsx("path", { d: revealed ? EYE_OFF_PATH : EYE_PATH }),
+						}),
+					}) : null,
 				],
 			});
 		}
@@ -1770,24 +3139,72 @@ module.exports = {
 			}
 			return jsxs("div", {
 				children: [
-					jsx("span", { style: muted, children: props.title }),
+					jsx("span", { className: "dsh-mcp-label", children: props.title }),
 					...props.rows.map((row, index) => jsxs("div", {
-						style: { display: "flex", gap: 8, marginTop: 4, alignItems: "center" },
+						className: "dsh-mcp-secret-row",
 						children: [
-							jsx("input", { style: inputStyle, placeholder: tr("field.secretName"), value: row.name || "", onChange: (event) => { const next = props.rows.slice(); next[index] = { ...row, name: event.target.value }; props.onChange(next); } }),
+							jsx("input", {
+								className: "dsh-mcp-input",
+								"data-mono": "true",
+								style: { flex: "1 1 140px" },
+								placeholder: tr("field.secretName"),
+								value: row.name || "",
+								onChange: (event) => {
+									const next = props.rows.slice();
+									next[index] = { ...row, name: event.target.value };
+									props.onChange(next);
+								},
+							}),
 							row.keep
-								? jsxs(React.Fragment, { children: [
-									jsx("span", { style: { ...muted, whiteSpace: "nowrap" }, children: row.ref ? "env:" + row.ref : tr(row.set ? "field.secretSet" : "field.secretUnset") }),
-									jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: () => update(index, { value: "", ref: "", set: false }), children: tr("field.secretReplace") }),
-								] })
-								: jsxs(React.Fragment, { children: [
-									jsx("input", { type: "password", style: inputStyle, placeholder: tr("field.secretValue"), autoComplete: "new-password", value: row.value || "", onChange: (event) => update(index, { value: event.target.value, ref: "" }) }),
-									jsx("input", { style: inputStyle, placeholder: tr("field.secretRef"), value: row.ref || "", onChange: (event) => update(index, { ref: event.target.value, value: "" }) }),
-								] }),
-							jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: () => props.onChange(props.rows.filter((_, item) => item !== index)), children: tr("field.remove") }),
+								? jsxs(React.Fragment, {
+									children: [
+										jsx("span", {
+											className: "dsh-mcp-badge",
+											children: row.ref ? "env:" + row.ref : tr(row.set ? "field.secretSet" : "field.secretUnset"),
+										}),
+										jsx("button", {
+											type: "button",
+											className: "dsh-mcp-btn",
+											"data-size": "sm",
+											onClick: () => update(index, { value: "", ref: "", set: false }),
+											children: tr("field.secretReplace"),
+										}),
+									],
+								})
+								: jsxs(React.Fragment, {
+									children: [
+										jsx(SecretPasswordInput, {
+											tr,
+											value: row.value || "",
+											onChange: (val) => update(index, { value: val, ref: "" }),
+										}),
+										jsx("input", {
+											className: "dsh-mcp-input",
+											"data-mono": "true",
+											style: { flex: "1 1 140px" },
+											placeholder: tr("field.secretRef"),
+											value: row.ref || "",
+											onChange: (event) => update(index, { ref: event.target.value, value: "" }),
+										}),
+									],
+								}),
+							jsx("button", {
+								type: "button",
+								className: "dsh-mcp-btn",
+								"data-size": "sm",
+								onClick: () => props.onChange(props.rows.filter((_, item) => item !== index)),
+								children: tr("field.remove"),
+							}),
 						],
 					}, index)),
-					jsx("button", { type: "button", style: { ...buttonStyle("secondary"), marginTop: 4 }, onClick: () => props.onChange(props.rows.concat({ name: "", set: false, value: "", ref: "", keep: false })), children: tr("field.addSecret") }),
+					jsxs("button", {
+						type: "button",
+						className: "dsh-mcp-btn",
+						"data-size": "sm",
+						style: { marginTop: 6 },
+						onClick: () => props.onChange(props.rows.concat({ name: "", set: false, value: "", ref: "", keep: false })),
+						children: [jsx(IconPlus, { size: 11 }), tr("field.addSecret")],
+					}),
 				],
 			});
 		}
@@ -1806,34 +3223,104 @@ module.exports = {
 			const argv = stdio && server ? [server.command, ...(server.args || [])] : [];
 			return jsx("div", {
 				onClick: props.onCancel,
-				style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+				style: {
+					position: "fixed",
+					inset: 0,
+					background: "rgba(0, 0, 0, 0.42)",
+					backdropFilter: "blur(4px)",
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "center",
+					zIndex: 1000,
+					padding: 16,
+				},
 				children: jsxs("div", {
 					role: "dialog",
 					"aria-modal": "true",
 					"data-confirm": confirm.kind,
 					onClick: (event) => event.stopPropagation(),
-					style: { width: 480, maxWidth: "90vw", background: "var(--dsw-alias-bg-layer-1, #fff)", color: "var(--dsw-alias-label-primary)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 8px 30px rgba(0,0,0,.2)" },
+					style: {
+						width: 480,
+						maxWidth: "92vw",
+						background: "var(--dsw-alias-bg-layer-1, #fff)",
+						color: "var(--dsw-alias-label-primary)",
+						borderRadius: "var(--dsw-radius-2xl, 18px)",
+						border: "0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.22))",
+						padding: "18px 20px",
+						display: "flex",
+						flexDirection: "column",
+						gap: 12,
+						boxShadow: "var(--dsw-elevation-prominent, 0 12px 36px rgba(0,0,0,0.24))",
+					},
 					children: [
-						jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
-							jsx("strong", { children: stdio ? tr("confirm.stdioTitle") : tr("confirm.deleteTitle") }),
-							jsx("button", { type: "button", "aria-label": tr("close"), onClick: props.onCancel, style: { ...buttonStyle("secondary"), border: "none" }, children: "×" }),
-						] }),
-						jsx("p", { style: { margin: 0, ...muted, fontSize: 13 }, children: stdio ? tr("confirm.stdioBody") : tr("confirm.deleteBody", { name: server?.serverName || "" }) }),
+						jsxs("div", {
+							style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
+							children: [
+								jsx("strong", { style: { fontSize: 15, fontWeight: 600 }, children: stdio ? tr("confirm.stdioTitle") : tr("confirm.deleteTitle") }),
+								jsx("button", {
+									type: "button",
+									className: "dsh-mcp-btn",
+									"data-variant": "ghost",
+									"data-size": "sm",
+									"data-icon-only": "true",
+									"aria-label": tr("close"),
+									onClick: props.onCancel,
+									children: "×",
+								}),
+							],
+						}),
+						jsxs("div", {
+							className: "dsh-mcp-banner",
+							"data-tone": stdio ? "warn" : "error",
+							children: [
+								jsx(IconWarning, {}),
+								jsx("p", { style: { margin: 0, fontSize: 12.5, lineHeight: "18px" }, children: stdio ? tr("confirm.stdioBody") : tr("confirm.deleteBody", { name: server?.serverName || "" }) }),
+							],
+						}),
 						stdio ? jsx("ol", {
 							start: 0,
 							"data-argv": "",
-							style: { margin: 0, paddingLeft: 28, fontFamily: "ui-monospace, monospace", fontSize: 12, background: "var(--dsw-alias-bg-layer-2)", borderRadius: 8, paddingTop: 8, paddingBottom: 8 },
-							children: argv.map((part, index) => jsx("li", { style: { whiteSpace: "pre-wrap", wordBreak: "break-all" }, children: part }, index)),
+							style: {
+								margin: 0,
+								paddingLeft: 28,
+								fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)",
+								fontSize: 12,
+								background: "var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2))",
+								border: "0.5px solid var(--dsw-alias-border-l2)",
+								borderRadius: "var(--dsw-radius-md, 8px)",
+								paddingTop: 8,
+								paddingBottom: 8,
+								paddingRight: 10,
+							},
+							children: argv.map((part, index) => jsx("li", { style: { whiteSpace: "pre-wrap", wordBreak: "break-all", padding: "2px 0" }, children: part }, index)),
 						}) : null,
-						stdio && server?.cwd ? jsx("p", { "data-cwd": "", style: { margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 12 }, children: "cwd  " + server.cwd }) : null,
-						stdio ? jsxs("label", { style: { display: "flex", gap: 8, alignItems: "center", fontSize: 13 }, children: [
-							jsx("input", { type: "checkbox", "data-ack": "", checked: ack, onChange: (event) => setAck(event.target.checked) }),
-							jsx("span", { children: tr("confirm.stdioAck") }),
-						] }) : null,
-						jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: 8 }, children: [
-							jsx("button", { type: "button", style: buttonStyle("secondary"), onClick: props.onCancel, children: tr("cancel") }),
-							jsx("button", { type: "button", "data-action": "confirm", style: buttonStyle(stdio ? "primary" : "danger"), disabled: stdio && !ack, onClick: props.onOk, children: stdio ? tr("confirm.ok") : tr("remove") }),
-						] }),
+						stdio && server?.cwd ? jsx("p", {
+							"data-cwd": "",
+							style: { margin: 0, fontFamily: "var(--ds-font-family-code, ui-monospace, monospace)", fontSize: 12, color: "var(--dsw-alias-label-secondary)" },
+							children: "cwd  " + server.cwd,
+						}) : null,
+						stdio ? jsxs("label", {
+							style: { display: "flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer", userSelect: "none" },
+							children: [
+								jsx("input", { type: "checkbox", "data-ack": "", checked: ack, onChange: (event) => setAck(event.target.checked) }),
+								jsx("span", { children: tr("confirm.stdioAck") }),
+							],
+						}) : null,
+						jsxs("div", {
+							style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 },
+							children: [
+								jsx("button", { type: "button", className: "dsh-mcp-btn", onClick: props.onCancel, children: tr("cancel") }),
+								jsx("button", {
+									type: "button",
+									"data-action": "confirm",
+									className: "dsh-mcp-btn",
+									"data-variant": stdio ? "primary" : "danger",
+									disabled: stdio && !ack,
+									onClick: props.onOk,
+									children: stdio ? tr("confirm.ok") : tr("remove"),
+								}),
+							],
+						}),
 					],
 				}),
 			});

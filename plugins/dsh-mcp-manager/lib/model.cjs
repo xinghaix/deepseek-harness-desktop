@@ -8,6 +8,7 @@ const MCP_CLIENT = "@deepseek-ai/dsh-mcp-client";
 const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const ENV_REF_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PROJECT_FILES = [".dsh/mcp.json", ".dsh/mcp.local.json"];
+const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60000;
 
 function bundlePackageName(serverName) {
   return "@local/dsh-mcp-" + serverName;
@@ -64,6 +65,14 @@ function secretLines(indent, rows) {
   return lines;
 }
 
+// 解析可选的工具调用超时配置（毫秒），留空或默认值返回 DEFAULT_TOOL_CALL_TIMEOUT_MS
+function normalizeTimeoutMs(value) {
+  if (value == null || value === "") return DEFAULT_TOOL_CALL_TIMEOUT_MS;
+  const num = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isInteger(num) || num <= 0) throw new Error("toolCallTimeoutMs 必须是正整数。");
+  return num;
+}
+
 /**
  * Official config-bundle files for one server. `origin` (optional) records
  * where an approved project entry came from; it is metadata in package.json,
@@ -75,6 +84,7 @@ function bundleFiles(server, origin, nonce, rowId) {
   if (issue) throw new Error(nameMessage(issue, serverName));
   const enabled = server.enabled === true;
   const transport = server.transport === "streamable-http" ? "streamable-http" : "stdio";
+  const timeoutMs = normalizeTimeoutMs(server.toolCallTimeoutMs);
   const lines = [
     "- insert:",
     "    - id: " + (rowId || bundleRowId(serverName, nonce)),
@@ -101,11 +111,15 @@ function bundleFiles(server, origin, nonce, rowId) {
     const headers = secretLines("          ", server.headers);
     if (headers.length) lines.push("        headers:", ...headers);
   }
+  if (timeoutMs !== DEFAULT_TOOL_CALL_TIMEOUT_MS) {
+    lines.push("        toolCallTimeoutMs: " + String(timeoutMs));
+  }
   lines.push("        failOnStartupError: true");
   const packageName = bundlePackageName(serverName);
   const pkg = {
     name: packageName,
     version: "1.0.0",
+    description: "MCP server (" + serverName + " · " + transport + ")",
     private: true,
     type: "module",
     dsh: { bundle: { patch: "./cordis.patch.yml" } },
@@ -262,6 +276,14 @@ function maskUrl(url) {
   return base.replace(/^(\w+:\/\/)[^/@]*@/, "$1…@");
 }
 
+// 对错误诊断文本中的 URL 查询参数、认证头和敏感键值进行脱敏
+function redactText(text) {
+  return String(text || "")
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>)]+/gi, (match) => maskUrl(match))
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 ?[credentials-redacted]")
+    .replace(/\b([A-Za-z0-9_]*(?:KEY|PASSWORD|SECRET|TOKEN|AUTH)[A-Za-z0-9_]*)=([^\s"'&]+)/gi, "$1=?[credentials-redacted]");
+}
+
 /**
  * Parse Claude / Cursor / Claude Desktop `mcpServers` JSON (or a bare table).
  * Rows carry a stable `code` (skip reason) and `notes` codes for translation,
@@ -384,6 +406,7 @@ function templateDraft(id) {
     url: t.url || "",
     env: (t.env || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     headers: (t.headers || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
+    toolCallTimeoutMs: DEFAULT_TOOL_CALL_TIMEOUT_MS,
     enabled: false,
   };
 }
@@ -414,11 +437,13 @@ module.exports = {
   MCP_CLIENT,
   NAME_RE,
   PROJECT_FILES,
+  DEFAULT_TOOL_CALL_TIMEOUT_MS,
   TEMPLATES,
   bundlePackageName,
   bundleRowId,
   nameIssue,
   nameMessage,
+  normalizeTimeoutMs,
   bundleFiles,
   secretView,
   mergeSecrets,
@@ -430,6 +455,7 @@ module.exports = {
   projectPending,
   maskServer,
   maskUrl,
+  redactText,
   templateDraft,
   hasPlaceholder,
   statusOf,

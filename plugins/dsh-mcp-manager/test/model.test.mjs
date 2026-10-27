@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,7 @@ test("keeps stdio args as separate argv elements", () => {
   assert.doesNotMatch(files.patch, /ctx\.plugin/);
   assert.match(files.patch, /\n          - "-y"\n          - "server"\n          - "\/Users\/xing\/My Documents"/);
   assert.match(files.patch, /TOKEN: !!js process\.env\.FILES_TOKEN/);
+  assert.doesNotMatch(files.patch, /toolCallTimeoutMs:/);
   assert.doesNotMatch(files.patch, /shell/);
   assert.equal(files.packageName, "@local/dsh-mcp-files");
   assert.equal(files.rowId, "dsh-mcp-files");
@@ -38,21 +39,25 @@ test("keeps stdio args as separate argv elements", () => {
   assert.equal(model.bundleFiles({ serverName: "files", command: "x" }, null, "n", "dsh-mcp-files-keep").rowId, "dsh-mcp-files-keep");
   const pkg = JSON.parse(files.packageJson);
   assert.equal(pkg.name, "@local/dsh-mcp-files");
+  assert.equal(pkg.description, "MCP server (files · stdio)");
   assert.equal(pkg.dsh.bundle.patch, "./cordis.patch.yml");
 });
 
-test("enabled bundle omits disabled flag and streamable-http writes url/headers", () => {
+test("enabled bundle omits disabled flag, writes custom toolCallTimeoutMs, and streamable-http writes url/headers", () => {
   const files = model.bundleFiles({
     serverName: "remote",
     transport: "streamable-http",
     enabled: true,
     url: "https://example.test/mcp",
     headers: [{ name: "Authorization", ref: "MCP_TOKEN" }],
+    toolCallTimeoutMs: 120000,
   });
   assert.doesNotMatch(files.patch, /disabled:/);
   assert.match(files.patch, /transport: "streamable-http"/);
-  assert.match(files.patch, /url: "https:\/\/example.test\/mcp"/);
+  assert.match(files.patch, /url: "https:\/\/example\.test\/mcp"/);
   assert.match(files.patch, /Authorization: !!js process\.env\.MCP_TOKEN/);
+  assert.match(files.patch, /toolCallTimeoutMs: 120000/);
+  assert.throws(() => model.bundleFiles({ serverName: "remote", command: "x", toolCallTimeoutMs: -5 }), /toolCallTimeoutMs/);
 });
 
 test("import drops sse, ws, oauth, unknown types and a bare url", () => {
@@ -120,8 +125,9 @@ test("client.js inlines model.cjs and every locale inside the main factory", () 
   execFileSync(process.execPath, [join(root, "scripts/embed-model.mjs"), "--check"], { cwd: root });
 });
 
-test("8 locales share exactly the same keys and placeholders", () => {
+test("8 locales share exactly the same keys and placeholders, and package locale/*.json meta is synced", () => {
   const dir = join(root, "lib/locales");
+  const pkgLocaleDir = join(root, "locale");
   const langs = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
   assert.deepEqual(langs, ["de", "en", "es", "fr", "ja", "ko", "pt", "zh"]);
   const en = JSON.parse(readFileSync(join(dir, "en.json"), "utf8"));
@@ -133,9 +139,26 @@ test("8 locales share exactly the same keys and placeholders", () => {
       assert.ok(String(dict[key]).trim(), lang + " " + key + " empty");
       assert.equal(params(dict[key]), params(en[key]), lang + " " + key + " placeholders");
     }
+    const pkgMeta = JSON.parse(readFileSync(join(pkgLocaleDir, lang + ".json"), "utf8"));
+    assert.equal(pkgMeta.meta.title, dict.title, lang + " meta.title");
+    assert.equal(pkgMeta.meta.description, dict.description, lang + " meta.description");
   }
   for (const code of ["externalDelete", "renameOwned", "editDisabled", "placeholder", "badRequest"]) assert.ok(en["error." + code], code);
   for (const code of ["empty", "connected", "failed", "disabled", "unknown"]) assert.ok(en["status." + code], code);
+});
+
+test("package.json and icon.svg follow DSH 0.2.1+ manifest and artwork conventions", () => {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  assert.equal(pkg.engines?.dsh, ">=0.2.0-rc.1");
+  assert.equal(pkg.exports?.["./locale/*.json"], "./locale/*.json");
+  assert.ok(pkg.files?.includes("locale/"));
+  assert.ok(pkg.files?.includes("icon.svg"));
+  const iconPath = join(root, "icon.svg");
+  const iconStat = statSync(iconPath);
+  assert.ok(iconStat.size > 0 && iconStat.size < 256 * 1024);
+  const svg = readFileSync(iconPath, "utf8");
+  assert.match(svg, /viewBox="0 0 36 36"/);
+  assert.match(svg, /linearGradient/);
 });
 
 test("statusOf derives the row status", () => {
@@ -156,10 +179,13 @@ test("launchChanged only fires for a new or changed stdio launch", () => {
   assert.equal(model.launchChanged({ transport: "streamable-http" }, base), true);
 });
 
-test("maskUrl hides query, fragment and userinfo", () => {
+test("maskUrl and redactText hide query, fragment, userinfo, bearer tokens, and secret assignments", () => {
   assert.equal(model.maskUrl("https://h.test/mcp?key=abc"), "https://h.test/mcp?…");
   assert.equal(model.maskUrl("https://u:p@h.test/mcp#t"), "https://…@h.test/mcp?…");
   assert.equal(model.maskUrl("http://127.0.0.1:1/mcp"), "http://127.0.0.1:1/mcp");
+  const redacted = model.redactText("Failed https://u:pass@example.com/mcp?api_key=12345 with Bearer my-secret-jwt and API_TOKEN=xyz987");
+  assert.doesNotMatch(redacted, /pass|12345|my-secret-jwt|xyz987/);
+  assert.match(redacted, /\?\[credentials-redacted\]/);
 });
 
 test("templates only fill a disabled draft and keep placeholders blocking", () => {
@@ -227,7 +253,7 @@ test("bundleSecrets reads back what bundleFiles wrote, keep keeps refs as refs",
   assert.deepEqual(model.bundleSecrets(http.patch).headers, { Authorization: { ref: "TOK" } });
 });
 
-test("Host exposes authenticated fetch routes and keeps Config empty", async () => {
+test("Host exposes authenticated fetch routes, scans schemas once per snapshot, and supports reconnect & redacted lastError", async () => {
   const host = readFileSync(join(root, "lib/index.js"), "utf8");
   assert.match(host, /connection\.fetch\.register/);
   assert.match(host, /export const Config = z\.object\(\{\}\)/);
@@ -236,4 +262,116 @@ test("Host exposes authenticated fetch routes and keeps Config empty", async () 
   assert.equal(mod.STATE_PATH, "/api/dsh-mcp-manager/state");
   assert.equal(mod.ACTION_PATH, "/api/dsh-mcp-manager/action");
   assert.ok(mod.inject.includes("connection"));
+
+  const routes = new Map();
+  let schemaCalls = 0;
+  let alphaPhase = "failed";
+  const toggleCalls = [];
+  const ctx = {
+    configEditor: {
+      documentPath: "/tmp/fake-profile/cordis.patch.yml",
+      entries: () => [
+        {
+          options: {
+            id: "dsh-mcp-alpha-1",
+            name: model.MCP_CLIENT,
+            config: { serverName: "alpha", transport: "streamable-http", url: "https://example.test/mcp?secret=1" },
+          },
+          disabled: false,
+        },
+        {
+          options: {
+            id: "dsh-mcp-beta-2",
+            name: model.MCP_CLIENT,
+            config: { serverName: "beta", transport: "stdio", command: "node", args: ["b.js"] },
+          },
+          disabled: false,
+        },
+      ],
+    },
+    pluginManager: {
+      listPlugins: async () => [
+        { patchId: "dsh-mcp-alpha-1", entryId: "entry-alpha", moduleName: model.MCP_CLIENT, enabled: true, fiberPhase: alphaPhase },
+        { patchId: "dsh-mcp-beta-2", entryId: "entry-beta", moduleName: model.MCP_CLIENT, enabled: true, fiberPhase: "active" },
+      ],
+      listBundles: async () => [
+        { name: "@local/dsh-mcp-alpha" },
+        { name: "@local/dsh-mcp-beta" },
+      ],
+      setPluginEnabled: async (entryId, enabled) => {
+        toggleCalls.push([entryId, enabled]);
+        if (entryId === "entry-alpha" && enabled && alphaPhase === "failed") {
+          return { application: "failed", error: { diagnostic: "Connect failed to https://u:pw@example.test/mcp?token=topsecret with Bearer abc123xyz" } };
+        }
+        return { application: "applied" };
+      },
+    },
+    tools: {
+      schemas: () => {
+        schemaCalls += 1;
+        return [
+          { name: "mcp__beta__echo", description: "Echoes input text" },
+          { name: "mcp__beta__add", description: "Adds two numbers" },
+          { name: "bash", description: "Run shell" },
+        ];
+      },
+    },
+    workspaceRegistry: {
+      list: () => [],
+    },
+    connection: {
+      fetch: {
+        register: (spec) => {
+          routes.set(spec.path, spec.fetch);
+          return () => routes.delete(spec.path);
+        },
+      },
+    },
+    inject: (_deps, fn) => fn({ workspaceRegistry: ctx.workspaceRegistry }),
+    effect: (fn) => fn(),
+  };
+
+  mod.apply(ctx);
+  assert.equal(routes.size, 2);
+
+  // 1) Initial state scan: 2 enabled servers -> schemas() called only ONCE
+  const stateRes1 = await routes.get(mod.STATE_PATH)();
+  const state1 = await stateRes1.json();
+  assert.equal(schemaCalls, 1);
+  const beta = state1.servers.find((s) => s.serverName === "beta");
+  assert.deepEqual(beta.tools, ["add", "echo"]);
+  assert.equal(beta.toolDetails.length, 2);
+  assert.equal(beta.toolDetails[0].publicName, "mcp__beta__add");
+
+  // 2) Failing reconnect records redacted lastError on alpha
+  const failRes = await routes.get(mod.ACTION_PATH)(
+    new Request("http://localhost" + mod.ACTION_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "reconnect", patchId: "dsh-mcp-alpha-1", serverName: "alpha", pluginEntryId: "entry-alpha" }),
+    })
+  );
+  const failBody = await failRes.json();
+  assert.equal(failBody.ok, false);
+  assert.doesNotMatch(failBody.message, /topsecret|abc123xyz|pw/);
+  const alphaFailed = failBody.state.servers.find((s) => s.serverName === "alpha");
+  assert.ok(alphaFailed.lastError.includes("?[credentials-redacted]"));
+  assert.doesNotMatch(alphaFailed.lastError, /topsecret|abc123xyz|pw/);
+
+  // 3) Successful reconnect cycles false -> true and clears lastError
+  alphaPhase = "active";
+  toggleCalls.length = 0;
+  const okRes = await routes.get(mod.ACTION_PATH)(
+    new Request("http://localhost" + mod.ACTION_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "reconnect", patchId: "dsh-mcp-alpha-1", serverName: "alpha", pluginEntryId: "entry-alpha" }),
+    })
+  );
+  const okBody = await okRes.json();
+  assert.equal(okBody.ok, true);
+  assert.equal(okBody.notice, "reconnected");
+  assert.deepEqual(toggleCalls, [["entry-alpha", false], ["entry-alpha", true]]);
+  const alphaRecovered = okBody.state.servers.find((s) => s.serverName === "alpha");
+  assert.equal(alphaRecovered.lastError, "");
 });

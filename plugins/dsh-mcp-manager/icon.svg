@@ -1,4 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#0f1115"/>
-  <path d="M8 16h16M16 8v16M11 11l10 10M21 11L11 21" stroke="#fff" stroke-width="1.8" fill="none"/>
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- MCP server rack / hub body -->
+  <rect x="6" y="7.5" width="15.5" height="21" rx="3.5" fill="url(#mcp_hub)"/>
+  <!-- Server slot 1 (stdio) -->
+  <rect x="8.5" y="10.5" width="10.5" height="6" rx="1.6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <circle cx="10.8" cy="13.5" r="1.15" fill="#45D9E7"/>
+  <rect x="13" y="12.65" width="4.4" height="1.7" rx="0.85" fill="#FFFFFF" fill-opacity="0.92"/>
+  <!-- Server slot 2 (streamable-http) -->
+  <rect x="8.5" y="19.5" width="10.5" height="6" rx="1.6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <circle cx="10.8" cy="22.5" r="1.15" fill="#F2AF63"/>
+  <rect x="13" y="21.65" width="4.4" height="1.7" rx="0.85" fill="#FFFFFF" fill-opacity="0.92"/>
+  <!-- Protocol bridge lines from hub to MCP nodes -->
+  <path d="M21.5 13.5H25.2M21.5 22.5H25.2M23.3 13.5V22.5" stroke="url(#mcp_bridge)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Top MCP tool node (cyan/blue plug) -->
+  <rect x="24.5" y="9.5" width="6" height="8" rx="2.2" fill="url(#mcp_node)"/>
+  <circle cx="27.5" cy="13.5" r="1.35" fill="#FFFFFF" fill-opacity="0.95"/>
+  <!-- Bottom MCP resource/approval node (warm amber) -->
+  <rect x="24.5" y="18.5" width="6" height="8" rx="2.2" fill="#F2AF63"/>
+  <path d="M26.35 22.5L27.25 23.4L28.85 21.65" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="mcp_hub" x1="6" y1="7.5" x2="21.5" y2="28.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CB7FF"/>
+      <stop offset="1" stop-color="#145AF3"/>
+    </linearGradient>
+    <linearGradient id="mcp_bridge" x1="21.5" y1="13.5" x2="25.2" y2="22.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE"/>
+      <stop offset="1" stop-color="#3F77D8"/>
+    </linearGradient>
+    <linearGradient id="mcp_node" x1="24.5" y1="9.5" x2="30.5" y2="17.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#45D9E7"/>
+      <stop offset="1" stop-color="#2B76E5"/>
+    </linearGradient>
+  </defs>
 </svg>

@@ -5,19 +5,22 @@
  *   - lib/locales/*.json   UI dictionaries (browser; tests check key parity)
  * DSH serves only the package's "./client" entry to the browser, so this script
  * inlines both into lib/client.js between BEGIN/END markers, inside the main
- * ModuleLoader factory. It must not register a second ModuleLoader id: DSH
- * re-executes the client bundle on live patch reload and only invalidates the
- * package's own id, so a second id throws "duplicate factory registration".
+ * ModuleLoader factory, and syncs package-level `locale/*.json` (`meta.title`,
+ * `meta.description`) consumed by DSH 0.2.1+ `PluginPackages.metaOf`.
+ * It must not register a second ModuleLoader id: DSH re-executes the client
+ * bundle on live patch reload and only invalidates the package's own id, so a
+ * second id throws "duplicate factory registration".
  *
- *   node scripts/embed-model.mjs           rewrite lib/client.js
- *   node scripts/embed-model.mjs --check   exit 1 when lib/client.js is stale
+ *   node scripts/embed-model.mjs           rewrite lib/client.js & locale/*.json
+ *   node scripts/embed-model.mjs --check   exit 1 when files are stale
  */
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const clientPath = join(root, "lib/client.js");
+const pkgLocaleDir = join(root, "locale");
 const LOCALE_ORDER = ["en", "zh", "de", "fr", "es", "ja", "ko", "pt"];
 
 function marker(kind) {
@@ -67,6 +70,19 @@ export function readLocales() {
   return out;
 }
 
+export function packageMetaFiles(locales) {
+  const out = {};
+  for (const [id, dict] of Object.entries(locales)) {
+    out[id] = JSON.stringify({
+      meta: {
+        title: dict.title,
+        description: dict.description,
+      },
+    }, null, 2) + "\n";
+  }
+  return out;
+}
+
 export function render(client) {
   client = client.replace(/\r\n/g, "\n");
   const main = client.indexOf('window.__ModuleLoader__.load({\n\tid: "dsh-mcp-manager",');
@@ -80,13 +96,26 @@ export function render(client) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("embed-model.mjs")) {
+  const locales = readLocales();
+  const metaFiles = packageMetaFiles(locales);
   const current = readFileSync(clientPath, "utf8");
   const next = render(current);
   if (process.argv.includes("--check")) {
     if (next !== current) { console.error("lib/client.js is stale: run node scripts/embed-model.mjs"); process.exit(1); }
+    for (const [id, expected] of Object.entries(metaFiles)) {
+      const target = join(pkgLocaleDir, id + ".json");
+      if (!existsSync(target) || readFileSync(target, "utf8").replace(/\r\n/g, "\n") !== expected) {
+        console.error(`locale/${id}.json is stale: run node scripts/embed-model.mjs`);
+        process.exit(1);
+      }
+    }
     console.log("embed up to date");
   } else {
     writeFileSync(clientPath, next);
-    console.log("embedded lib/model.cjs and lib/locales/*.json into lib/client.js");
+    mkdirSync(pkgLocaleDir, { recursive: true });
+    for (const [id, content] of Object.entries(metaFiles)) {
+      writeFileSync(join(pkgLocaleDir, id + ".json"), content);
+    }
+    console.log("embedded lib/model.cjs, lib/locales/*.json into lib/client.js and synced locale/*.json");
   }
 }

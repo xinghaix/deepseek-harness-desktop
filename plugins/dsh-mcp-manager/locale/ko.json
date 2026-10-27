@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP 서버",
+    "description": "각 서버는 dsh-mcp-client를 삽입하는 공식 구성 번들입니다."
+  }
+}

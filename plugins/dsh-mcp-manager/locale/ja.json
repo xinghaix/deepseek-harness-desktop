@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP サーバー",
+    "description": "各サーバーは dsh-mcp-client を挿入する公式の設定バンドルです。"
+  }
+}
