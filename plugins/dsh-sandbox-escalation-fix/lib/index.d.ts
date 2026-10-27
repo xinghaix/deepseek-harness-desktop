@@ -5,17 +5,17 @@ import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 export declare const name = "sandbox-escalation-fix";
 export declare const inject: string[];
 /**
- * Built-in DSH tools that advertise sandbox escalation on 0.1.6.
- * PTC / `run_code` existed earlier (Code Mode in 0.1.0-rc.6); the outer
- * `run_code` tool only gained these fields in 0.1.6. `schemas()` may add
- * more later first-party or plugin tools that expose the same pair.
+ * Built-in DSH tools and common host-compatible shell extensions (`dsh-ops`)
+ * that advertise sandbox escalation (`sandbox_permissions` + `justification`).
+ * `schemas()` may add other first-party or plugin tools exposing the same pair.
  */
-export declare const KNOWN_ESCALATION_TOOL_NAMES: readonly ["bash", "pwsh", "write", "edit", "run_code"];
+export declare const KNOWN_ESCALATION_TOOL_NAMES: readonly ["bash", "pwsh", "write", "edit", "run_code", "ops_bash"];
 type ModeResolver = (exec: ToolRunContext) => SandboxMode;
 type ToolLookup = {
     get(name: string, scope?: unknown): ToolDefinition | undefined;
     schemas?(scope?: unknown): ReadonlyArray<{
         readonly name?: unknown;
+        readonly parameters?: unknown;
     }>;
 };
 export interface ToolDefinitionPatch {
@@ -25,8 +25,8 @@ export interface ToolDefinitionPatch {
 export declare function exposesSandboxEscalation(definition: ToolDefinition): boolean;
 /**
  * Drop a sandbox escalation that is not strictly wider than the session's
- * current mode. DSH rejects same-mode and narrower requests with
- * "not strictly wider"; those calls should run under the standing policy.
+ * current mode, strip null/blank escalation placeholders or orphan reasons,
+ * and fill a fallback reason when a genuinely wider request omits one.
  */
 export declare function normalizeSandboxEscalation(args: unknown, currentMode: SandboxMode): unknown;
 export declare function patchToolDefinition(definition: ToolDefinition, resolveMode: ModeResolver): ToolDefinitionPatch | undefined;

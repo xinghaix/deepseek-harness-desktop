@@ -11,10 +11,9 @@ export const name = "sandbox-escalation-fix";
 export const inject = ["agents", "tools", "sandboxPolicy"];
 
 /**
- * Built-in DSH tools that advertise sandbox escalation on 0.1.6.
- * PTC / `run_code` existed earlier (Code Mode in 0.1.0-rc.6); the outer
- * `run_code` tool only gained these fields in 0.1.6. `schemas()` may add
- * more later first-party or plugin tools that expose the same pair.
+ * Built-in DSH tools and common host-compatible shell extensions (`dsh-ops`)
+ * that advertise sandbox escalation (`sandbox_permissions` + `justification`).
+ * `schemas()` may add other first-party or plugin tools exposing the same pair.
  */
 export const KNOWN_ESCALATION_TOOL_NAMES = [
   "bash",
@@ -22,6 +21,7 @@ export const KNOWN_ESCALATION_TOOL_NAMES = [
   "write",
   "edit",
   "run_code",
+  "ops_bash",
 ] as const;
 
 const SANDBOX_MODE_RANK: Readonly<Record<SandboxMode, number>> = {
@@ -39,7 +39,10 @@ type ModeResolver = (exec: ToolRunContext) => SandboxMode;
 
 type ToolLookup = {
   get(name: string, scope?: unknown): ToolDefinition | undefined;
-  schemas?(scope?: unknown): ReadonlyArray<{ readonly name?: unknown }>;
+  schemas?(scope?: unknown): ReadonlyArray<{
+    readonly name?: unknown;
+    readonly parameters?: unknown;
+  }>;
 };
 
 export interface ToolDefinitionPatch {
@@ -55,20 +58,24 @@ function isToolName(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-export function exposesSandboxEscalation(
-  definition: ToolDefinition,
-): boolean {
-  if (!isRecord(definition.parameters)) return false;
-  const properties = definition.parameters.properties;
+function hasEscalationProperties(parameters: unknown): boolean {
+  if (!isRecord(parameters)) return false;
+  const properties = parameters.properties;
   return isRecord(properties)
     && Object.hasOwn(properties, "sandbox_permissions")
     && Object.hasOwn(properties, "justification");
 }
 
+export function exposesSandboxEscalation(
+  definition: ToolDefinition,
+): boolean {
+  return hasEscalationProperties(definition.parameters);
+}
+
 /**
  * Drop a sandbox escalation that is not strictly wider than the session's
- * current mode. DSH rejects same-mode and narrower requests with
- * "not strictly wider"; those calls should run under the standing policy.
+ * current mode, strip null/blank escalation placeholders or orphan reasons,
+ * and fill a fallback reason when a genuinely wider request omits one.
  */
 export function normalizeSandboxEscalation(
   args: unknown,
@@ -76,9 +83,17 @@ export function normalizeSandboxEscalation(
 ): unknown {
   if (!isRecord(args)) return args;
   const requestedMode = args.sandbox_permissions;
-  if (requestedMode === undefined) {
-    if (!Object.hasOwn(args, "justification")) return args;
+  if (
+    requestedMode === undefined
+    || requestedMode === null
+    || (typeof requestedMode === "string" && requestedMode.trim() === "")
+  ) {
+    if (
+      !Object.hasOwn(args, "sandbox_permissions")
+      && !Object.hasOwn(args, "justification")
+    ) return args;
     const normalized = { ...args };
+    delete normalized.sandbox_permissions;
     delete normalized.justification;
     return normalized;
   }
@@ -96,12 +111,18 @@ export function normalizeSandboxEscalation(
 
   if (
     args.justification === undefined
+    || args.justification === null
     || (typeof args.justification === "string" && args.justification.trim() === "")
   ) {
     return { ...args, justification: EMPTY_JUSTIFICATION };
   }
 
   return args;
+}
+
+function hasStaticParameters(definition: ToolDefinition): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(definition, "parameters");
+  return descriptor !== undefined && "value" in descriptor;
 }
 
 export function patchToolDefinition(
@@ -173,7 +194,9 @@ export function collectCandidateToolNames(
     const schemas = tools.schemas(agent);
     if (!Array.isArray(schemas)) return [...names];
     for (const schema of schemas) {
-      if (isRecord(schema) && isToolName(schema.name)) names.add(schema.name);
+      if (!isRecord(schema) || !isToolName(schema.name)) continue;
+      if (isRecord(schema.parameters) && !hasEscalationProperties(schema.parameters)) continue;
+      names.add(schema.name);
     }
   } catch (error) {
     onSchemasError?.(error);
@@ -184,6 +207,7 @@ export function collectCandidateToolNames(
 export function apply(ctx: Context): void {
   const patches = new Map<ToolDefinition, ToolDefinitionPatch>();
   const incompatible = new WeakSet<ToolDefinition>();
+  const nonEscalating = new WeakSet<ToolDefinition>();
 
   const resolveMode: ModeResolver = (exec) => ctx.sandboxPolicy.resolve(
     exec.agent === undefined ? undefined : { session: exec.agent.session },
@@ -233,9 +257,12 @@ export function apply(ctx: Context): void {
     added: ToolDefinitionPatch[],
   ): void => {
     for (const definition of lookupVisible(agent).definitions) {
-      if (patches.has(definition)) continue;
+      if (patches.has(definition) || nonEscalating.has(definition)) continue;
       const patch = patchToolDefinition(definition, resolveMode);
-      if (patch === undefined) continue;
+      if (patch === undefined) {
+        if (hasStaticParameters(definition)) nonEscalating.add(definition);
+        continue;
+      }
       patches.set(definition, patch);
       added.push(patch);
     }
@@ -302,10 +329,18 @@ export function apply(ctx: Context): void {
     }
 
     for (const definition of visible) {
-      if (patches.has(definition) || incompatible.has(definition)) continue;
+      if (
+        patches.has(definition)
+        || incompatible.has(definition)
+        || nonEscalating.has(definition)
+      ) continue;
       try {
         const patch = patchToolDefinition(definition, resolveMode);
-        if (patch !== undefined) patches.set(definition, patch);
+        if (patch !== undefined) {
+          patches.set(definition, patch);
+        } else if (hasStaticParameters(definition)) {
+          nonEscalating.add(definition);
+        }
       } catch (error) {
         incompatible.add(definition);
         warnSafely(`${source} target definition`, error);

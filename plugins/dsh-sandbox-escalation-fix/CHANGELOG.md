@@ -2,6 +2,18 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.5] - 2026-10-27
+
+### Added
+
+- 将 `dsh-ops` 的 `ops_bash` 纳入 `KNOWN_ESCALATION_TOOL_NAMES` 默认扫描列表。
+- 兼容模型传入 `sandbox_permissions: null` / 空白字符串占位符（自动剥离并清理附带的 `justification`），以及真实提权时 `justification: null` 的 fallback 补齐（填为 `"Empty justification"`）。
+- 在 `package.json` 顶层补充 `"engines": { "dsh": "^0.2.0-rc.1" }` 声明，对齐 DSH `0.2.x` 的 `evaluatePluginCompatibility` 优先检查规则。
+
+### Changed
+
+- 优化 `collectCandidateToolNames` 与运行时扫描：当 `tools.schemas()` 返回带 `parameters` 的工具定义时直接过滤掉不含 `sandbox_permissions` + `justification` 的普通工具，并用 `WeakSet` 缓存静态非提权工具定义，大幅降低 `dsh-ops` 等插件高频触发 `tools/change` 时的 `tools.get()` 作用域查找开销。
+
 ## [0.2.4] - 2026-09-29
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-sandbox-escalation-fix",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Normalize redundant sandbox requests and malformed justifications in DeepSeek Harness tools, including PTC run_code",
   "keywords": [
     "deepseek-harness",
@@ -43,7 +43,8 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24",
+    "dsh": "^0.2.0-rc.1"
   },
   "dsh": {
     "bundle": {

@@ -13,6 +13,18 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.5] - 2026-10-27
+
+### Added
+
+- 将 `dsh-ops` 的 `ops_bash` 纳入 `KNOWN_ESCALATION_TOOL_NAMES` 默认扫描列表。
+- 兼容模型传入 `sandbox_permissions: null` / 空白字符串占位符（自动剥离并清理附带的 `justification`），以及真实提权时 `justification: null` 的 fallback 补齐（填为 `"Empty justification"`）。
+- 在 `package.json` 顶层补充 `"engines": { "dsh": "^0.2.0-rc.1" }` 声明，对齐 DSH `0.2.x` 的 `evaluatePluginCompatibility` 优先检查规则。
+
+### Changed
+
+- 优化 `collectCandidateToolNames` 与运行时扫描：当 `tools.schemas()` 返回带 `parameters` 的工具定义时直接过滤掉不含 `sandbox_permissions` + `justification` 的普通工具，并用 `WeakSet` 缓存静态非提权工具定义，大幅降低 `dsh-ops` 等插件高频触发 `tools/change` 时的 `tools.get()` 作用域查找开销。
+
 ## [0.2.4] - 2026-09-29
 
 ### Changed
@@ -56,11 +68,12 @@
 
 PTC 从 DSH 早期版本就存在：`0.1.0-rc.6` 时内部叫 Code Mode，preset id 为 `code`，中文名已经是「PTC 模式」；`0.1.5` 起 preset 改名为 `ptc`。那时外层 `run_code` **没有** `sandbox_permissions`，提权只出现在程序内部的 `bash` / `pwsh` / `write` / `edit` 上，所以 `0.1.x` 包装这四个工具即可。`0.1.6` 把提权字段加到了外层 `run_code`：模型给整个 program 带上相同或更低的权限时，程序还没启动就会收到 `not strictly wider`。`0.2.0` 补上这个入口。
 
-当前 DSH `0.1.6` 自带工具里带这对字段的是：
+当前 DSH 自带工具与常用扩展工具里带这对字段的是：
 
 - PTC 外层 `run_code`（`ptc` preset 下模型直接调用的唯一入口；这是 `0.1.6` 新出现的提权面，不是新出现的 PTC）
 - `bash` / `pwsh`（`standard`、`ptc`、`cordis` 的一次性 shell；`minimal` 的持久 shell **没有**提权字段，无需处理）
 - `write` / `edit`
+- `ops_bash`（安装 `dsh-ops` 后注入的会话级 shell 工具，同样声明并校验 `sandbox_permissions` 与 `justification`）
 
 其它带 `sandbox_permissions` + `justification` 的可见工具也会通过 `tools.schemas()` 被发现并一并修复，不需要额外配置。装的若仍是 `0.1.2`，PTC 会话里内部 shell / 写文件仍会被修复，但外层 `run_code` 的无效提权不会。
 
@@ -75,22 +88,25 @@ this call's current "danger-full-access" mode
 
 ![DSH 在 danger-full-access 下重复请求 workspace-write](assets/teaser_add.png)
 
-对于确实需要升级的请求，如果模型遗漏 `justification`，或只提供空字符串和空白字符，插件会自动填入 `"Empty justification"`：
+对于确实需要升级的请求，如果模型遗漏 `justification`、传入 `null`，或只提供空字符串和空白字符，插件会自动填入 `"Empty justification"`：
 
 ![DSH 缺少非空 justification](assets/teaser_justification.png)
 
-反过来，如果模型只提供 `justification`，却没有提供 `sandbox_permissions`，插件会忽略这个没有实际作用的理由，避免触发下面的参数配对错误：
+反过来，如果模型只提供 `justification`（或传入 `sandbox_permissions: null` / 空白占位符），却没有提供实际的 `sandbox_permissions` 目标，插件会忽略这些无效字段，避免触发下面的参数配对或类型校验错误：
 
 ```text
 Error: invalid escalation: justification is only valid together with sandbox_permissions
 ```
 
-安装后，如果模型请求的权限不比 Session 当前权限更高（相同或更小），插件就忽略这个无效的提权请求，并使用当前 Session 权限正常执行工具。真正更宽的请求仍进入 DSH 审批流程；缺失或空白的理由会使用上述 fallback，合法的非空理由保持不变。`read-only`、未知 target 或非字符串 justification 等非法值仍由 DSH 拒绝。
+安装后，如果模型请求的权限不比 Session 当前权限更高（相同或更小），插件就忽略这个无效的提权请求，并使用当前 Session 权限正常执行工具。真正更宽的请求仍进入 DSH 审批流程；缺失、`null` 或空白的理由会使用上述 fallback，合法的非空理由保持不变。`read-only`、未知 target 或非字符串（非 `null`）justification 等非法值仍由 DSH 拒绝。
+
+> **关于 DSH `0.2.1+` 与 `dsh-ops` 的说明**：DSH `0.2.1` 起上游 `approveEscalation` 与 `tool-bash` 已原生放行带非空理由的同级请求，但在**过时更窄模式请求**（`danger-full-access` 下请求 `workspace-write`）、**非 `bash` 工具同级请求漏传/传空理由**（`write` / `edit` / `pwsh` / `run_code` 仍先调严格的 `validateEscalationArgs`）、**真实提权漏传/`null`/空理由**、**孤立 `justification`** 以及 **`dsh-ops` 的 `ops_bash` 同类校验报错**下，仍需本插件进行前置参数正规化。
 
 插件只作为 bundle layer 安装到目标 profile，不修改 DSH 安装目录。
 
 ## 兼容性
 
+- **0.2.5+**：顶层补充 `engines.dsh: "^0.2.0-rc.1"`，默认扫描列表加入 `ops_bash`，兼容 `sandbox_permissions: null` / 空白占位符，并在 `schemas()` 阶段预筛非提权工具以降低 `tools/change` 扫描开销。
 - **0.2.4+**：`peerDependencies` 声明为 `^0.2.0-rc.1`（及 `@deepseek-ai/cordis` `^4.0.4`），适配 DSH `0.2.0-rc.1` 严格的 `semver.satisfies` 预检机制，原生通过兼容性检查，无需 `dsh plugin allow-version`。
 - **0.2.3+**：新增 `icon.svg` 插件图标（Plugin Manager 卡片/详情）。
 - **0.2.2+**：`peerDependencies` 声明为 `^0.1.7-rc.1`（及 `@deepseek-ai/cordis` `^4.0.4`），可在 DSH `0.1.7-rc.1` 上原生通过兼容性检查，无需 `dsh plugin allow-version`。
@@ -124,28 +140,28 @@ dsh plugin --profile web remove dsh-plugin-sandbox-escalation-fix
 
 | 当前 mode | 请求的 `sandbox_permissions` | 处理结果 |
 | --- | --- | --- |
-| `read-only` | `workspace-write` | 保持参数，继续走原有审批 |
-| `read-only` | `danger-full-access` | 保持参数，继续走原有审批 |
+| `read-only` | `workspace-write` | 保持参数，继续走原有审批（缺失/`null`/空白理由自动补齐） |
+| `read-only` | `danger-full-access` | 保持参数，继续走原有审批（缺失/`null`/空白理由自动补齐） |
 | `workspace-write` | `workspace-write` | 删除冗余参数，按普通调用执行 |
-| `workspace-write` | `danger-full-access` | 保持参数，继续走原有审批 |
+| `workspace-write` | `danger-full-access` | 保持参数，继续走原有审批（缺失/`null`/空白理由自动补齐） |
 | `danger-full-access` | `danger-full-access` | 删除冗余参数，按普通调用执行 |
 | `danger-full-access` | `workspace-write` | 删除过时参数，按普通调用执行 |
-| 任意 mode | 未提供，只有 `justification` | 删除无效理由，按普通调用执行 |
+| 任意 mode | 未提供 / `null` / 空白，或只有 `justification` | 删除无效占位符与孤立理由，按普通调用执行 |
 
 `approval: never` 表示审批请求自动拒绝，不表示自动授予权限。本插件只让不高于当前权限的无效请求不再误入审批路径，不会放行真正的提权请求。
 
 ## 工作原理
 
-DSH `0.1.6` 的公开 `tools/pre-execute` Waterfall 接收到的参数已经深度冻结，不能在该扩展点修改。插件因此包装目标 `ToolDefinition.execute`，在调用原实现前完成最小参数正规化：
+DSH 的公开 `tools/pre-execute` Waterfall 接收到的参数已经深度冻结，不能在该扩展点修改。插件因此包装目标 `ToolDefinition.execute`，在调用原实现前完成最小参数正规化：
 
 ```text
 model tool call
   -> resolve current per-session sandbox policy
-  -> ignore same-or-narrower targets, remove an orphan reason, or fill a missing reason
+  -> ignore same-or-narrower targets, strip null/blank placeholders or orphan reason, or fill a missing reason
   -> original DSH tool validation and execution
 ```
 
-PTC 下模型从一开始就只能直接调用 `run_code`。`run_code` 是 registry 预留 transport，不在普通工具层里，第一次非 native `view()` 才会创建。`0.1.6` 起它自己也广告 `sandbox_permissions`，因此必须包装；插件除了固定扫描 `bash` / `pwsh` / `write` / `edit` / `run_code`，还会读取 `tools.schemas()` 里当时可见的全部工具，所以后创建的 Agent 和 HMR 之后出现的 `run_code` 也会被包到。
+PTC 下模型从一开始就只能直接调用 `run_code`。`run_code` 是 registry 预留 transport，不在普通工具层里，第一次非 native `view()` 才会创建。`0.1.6` 起它自己也广告 `sandbox_permissions`，因此必须包装；插件除了固定扫描 `bash` / `pwsh` / `write` / `edit` / `run_code` / `ops_bash`，还会读取 `tools.schemas()` 里当时可见且含提权字段的工具，并对静态非提权工具做 `WeakSet` 缓存，所以后创建的 Agent、`dsh-ops` 动态重注册工具和 HMR 之后出现的 `run_code` 也会被低开销地覆盖。
 
 插件监听工具和 Agent 生命周期，因此可以处理全局定义、preset scoped shadow、后创建 Agent 和工具 HMR。工具替换或 Agent 销毁后，已经不可见的包装会被恢复并释放；插件卸载后，即使旧包装被其他插件重新挂回，也只会惰性透传参数。
 
@@ -154,13 +170,16 @@ PTC 下模型从一开始就只能直接调用 `run_code`。`run_code` 是 regis
 运行时要求：
 
 - Node.js 24 或更高版本
-- DSH `0.1.6-alpha.1`（0.1.6 系列）。`0.1.2` 针对 `0.1.0-rc.6`，覆盖内部 `bash` / `pwsh` / `write` / `edit`，不能处理外层 `run_code` 提权
+- DSH `0.2.0-rc.1` 及以上（`0.2.x` 系列；历史版本见下表）
 - DSH 支持的 Host 平台
 
 | 插件 | 目标 DSH | 覆盖的提权入口 |
 | --- | --- | --- |
 | `0.1.2` | `0.1.0-rc.6` | `bash` / `pwsh` / `write` / `edit`（含 PTC 程序内部的这些调用） |
-| `0.2.0` | `0.1.6-alpha.1` | 上述四个，加上外层 `run_code`，以及 `schemas()` 里其它带提权字段的可见工具 |
+| `0.2.0` – `0.2.1` | `0.1.6-alpha.1` | 上述四个，加上外层 `run_code`，以及 `schemas()` 里其它带提权字段的可见工具 |
+| `0.2.2` – `0.2.3` | `^0.1.7-rc.1` | 同上，适配 DSH `0.1.7` 兼容性预检并补充插件图标 |
+| `0.2.4` | `^0.2.0-rc.1` | 同上，升级 `peerDependencies` 适配 DSH `0.2.0-rc.1+` |
+| `0.2.5` | `^0.2.0-rc.1` | 同上，默认加入 `ops_bash`、补充 `engines.dsh`、兼容 `null`/空白占位符并优化 `tools/change` 扫描 |
 
 升级 DSH 后应先运行测试并检查上游是否已经原生接受这类无效提权 no-op；上游修复后可以移除此插件。
 

@@ -323,3 +323,72 @@ test("incompatible agent-scoped tools cannot veto agent creation", async () => {
   await ctx.fiber.dispose();
   assert.equal(write.execute, writeOriginal);
 });
+
+test("patches agent-scoped ops_bash and skips get() for non-escalation schema tools", async () => {
+  const ctx = new Context();
+  const agents = [];
+  const scopedTools = new Map();
+  const received = [];
+  const lookedUp = [];
+
+  ctx.provide("agents", { list: () => [...agents] });
+  ctx.provide("tools", {
+    get(name, agent) {
+      lookedUp.push(name);
+      return scopedTools.get(agent)?.get(name);
+    },
+    schemas(agent) {
+      const scoped = scopedTools.get(agent);
+      if (!scoped) return [];
+      return [...scoped.values()].map((definition) => ({
+        name: definition.name,
+        description: definition.description,
+        parameters: definition.parameters,
+      }));
+    },
+  });
+  ctx.provide("sandboxPolicy", sandboxPolicy("danger-full-access"));
+
+  apply(ctx);
+
+  const agent = { id: "agent-ops", session: { mode: "danger-full-access" } };
+  const opsBash = escalationTool("ops_bash", received);
+  const opsBashOriginal = opsBash.execute;
+  const opsReadFiles = {
+    name: "ops_read_files",
+    description: "Read files",
+    parameters: {
+      type: "object",
+      properties: { files: { type: "array" } },
+    },
+    output: {
+      schema: { type: "string" },
+      render: (_args, value) => [{ type: "text", text: value }],
+    },
+    async execute(args) {
+      received.push(args);
+      return "ok";
+    },
+  };
+
+  agents.push(agent);
+  scopedTools.set(agent, new Map([
+    ["ops_bash", opsBash],
+    ["ops_read_files", opsReadFiles],
+  ]));
+  lookedUp.length = 0;
+
+  ctx.emit("agent/created", { agent });
+  assert.notEqual(opsBash.execute, opsBashOriginal);
+  assert.equal(lookedUp.includes("ops_read_files"), false);
+
+  await opsBash.execute({
+    value: "ops",
+    sandbox_permissions: "workspace-write",
+    justification: "narrower under danger-full-access",
+  }, { agent });
+  assert.deepEqual(received[0], { value: "ops" });
+
+  await ctx.fiber.dispose();
+  assert.equal(opsBash.execute, opsBashOriginal);
+});

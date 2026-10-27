@@ -151,7 +151,38 @@ test("removes an orphan justification without mutating input", () => {
   assert.equal(args.justification, "orphan reason");
 });
 
-test("fills missing or blank justification on genuinely wider requests", () => {
+test("removes null, undefined, or blank sandbox_permissions placeholders", () => {
+  const nullPlaceholder = Object.freeze({
+    value: "kept",
+    sandbox_permissions: null,
+    justification: null,
+  });
+  const blankPlaceholder = Object.freeze({
+    value: "kept",
+    sandbox_permissions: "   ",
+    justification: "stale reason",
+  });
+  const explicitUndefined = Object.freeze({
+    value: "kept",
+    sandbox_permissions: undefined,
+  });
+
+  assert.deepEqual(
+    normalizeSandboxEscalation(nullPlaceholder, "workspace-write"),
+    { value: "kept" },
+  );
+  assert.deepEqual(
+    normalizeSandboxEscalation(blankPlaceholder, "read-only"),
+    { value: "kept" },
+  );
+  assert.deepEqual(
+    normalizeSandboxEscalation(explicitUndefined, "workspace-write"),
+    { value: "kept" },
+  );
+  assert.equal(nullPlaceholder.sandbox_permissions, null);
+});
+
+test("fills missing, null, or blank justification on genuinely wider requests", () => {
   const nonWider = {
     sandbox_permissions: "workspace-write",
     justification: "",
@@ -162,6 +193,10 @@ test("fills missing or blank justification on genuinely wider requests", () => {
   };
   const missing = {
     sandbox_permissions: "danger-full-access",
+  };
+  const nullJustification = {
+    sandbox_permissions: "workspace-write",
+    justification: null,
   };
 
   assert.deepEqual(
@@ -182,8 +217,16 @@ test("fills missing or blank justification on genuinely wider requests", () => {
       justification: "Empty justification",
     },
   );
+  assert.deepEqual(
+    normalizeSandboxEscalation(nullJustification, "read-only"),
+    {
+      sandbox_permissions: "workspace-write",
+      justification: "Empty justification",
+    },
+  );
   assert.equal(blank.justification, "   ");
   assert.equal(Object.hasOwn(missing, "justification"), false);
+  assert.equal(nullJustification.justification, null);
 });
 
 test("preserves illegal or unknown escalation target values", () => {
@@ -197,7 +240,7 @@ test("preserves illegal or unknown escalation target values", () => {
   };
   const nonStringJustification = {
     sandbox_permissions: "workspace-write",
-    justification: null,
+    justification: 123,
   };
 
   assert.equal(normalizeSandboxEscalation(readOnly, "danger-full-access"), readOnly);
@@ -230,14 +273,14 @@ test("detects escalation fields when parameters is a getter", () => {
   assert.equal(exposesSandboxEscalation(definition), true);
 });
 
-test("known DSH 0.1.6 escalation tools include run_code", () => {
+test("known DSH escalation tools include run_code and ops_bash", () => {
   assert.deepEqual(
     [...KNOWN_ESCALATION_TOOL_NAMES],
-    ["bash", "pwsh", "write", "edit", "run_code"],
+    ["bash", "pwsh", "write", "edit", "run_code", "ops_bash"],
   );
 });
 
-test("candidate names always include known tools and union schemas()", () => {
+test("candidate names always include known tools and filter schema-bearing non-escalation tools", () => {
   const withoutSchemas = collectCandidateToolNames({
     get: () => undefined,
   }, undefined);
@@ -248,14 +291,36 @@ test("candidate names always include known tools and union schemas()", () => {
     schemas: () => [
       { name: "run_code" },
       { name: "future_shell" },
+      {
+        name: "custom_escalating_shell",
+        parameters: {
+          type: "object",
+          properties: {
+            sandbox_permissions: { type: "string" },
+            justification: { type: "string" },
+          },
+        },
+      },
+      {
+        name: "ops_read_files",
+        parameters: {
+          type: "object",
+          properties: {
+            files: { type: "array" },
+          },
+        },
+      },
       { name: "" },
       { name: 1 },
       {},
     ],
   }, undefined);
   assert.ok(withSchemas.includes("run_code"));
+  assert.ok(withSchemas.includes("ops_bash"));
   assert.ok(withSchemas.includes("future_shell"));
+  assert.ok(withSchemas.includes("custom_escalating_shell"));
   assert.ok(withSchemas.includes("bash"));
+  assert.equal(withSchemas.includes("ops_read_files"), false);
   assert.equal(withSchemas.includes(""), false);
 });
 
@@ -400,8 +465,9 @@ test("does not patch tools without escalation parameters", () => {
   assert.equal(definition.execute, original);
 });
 
-test("peerDependencies declare DSH 0.2.0-rc.1 support", () => {
+test("package.json declares engines.dsh and peerDependencies for DSH 0.2.0-rc.1+", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(manifest.engines.dsh, "^0.2.0-rc.1");
   assert.equal(manifest.peerDependencies["@deepseek-ai/cordis"], "^4.0.4");
   assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-agent"], "^0.2.0-rc.1");
   assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-sandbox"], "^0.2.0-rc.1");
