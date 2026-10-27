@@ -6099,23 +6099,80 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		function syncBodyDesktopThemeAttribute(activeId) {
-			if (typeof document === "undefined" || !document.body) return;
-			if (activeId === IDEA_DARK_THEME_ID) {
-				if (typeof document.body.setAttribute === "function") {
-					document.body.setAttribute(DESKTOP_THEME_ATTRIBUTE, IDEA_DARK_THEME_ID);
+		function parseCssColorToRgb(raw) {
+			if (typeof raw !== "string") return null;
+			const trimmed = raw.trim();
+			const hexMatch = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+			if (hexMatch) {
+				const hex = hexMatch[1];
+				if (hex.length === 3) {
+					return {
+						r: parseInt(hex[0] + hex[0], 16),
+						g: parseInt(hex[1] + hex[1], 16),
+						b: parseInt(hex[2] + hex[2], 16)
+					};
 				}
-				if (document.body.dataset) {
-					document.body.dataset.dshDesktopTheme = IDEA_DARK_THEME_ID;
-				}
-			} else {
-				if (typeof document.body.removeAttribute === "function") {
-					document.body.removeAttribute(DESKTOP_THEME_ATTRIBUTE);
-				}
-				if (document.body.dataset && "dshDesktopTheme" in document.body.dataset) {
-					delete document.body.dataset.dshDesktopTheme;
+				return {
+					r: parseInt(hex.slice(0, 2), 16),
+					g: parseInt(hex.slice(2, 4), 16),
+					b: parseInt(hex.slice(4, 6), 16)
+				};
+			}
+			const rgbMatch = trimmed.match(/^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/i);
+			if (rgbMatch) {
+				return {
+					r: Math.min(255, Math.max(0, Number(rgbMatch[1]))),
+					g: Math.min(255, Math.max(0, Number(rgbMatch[2]))),
+					b: Math.min(255, Math.max(0, Number(rgbMatch[3])))
+				};
+			}
+			return null;
+		}
+
+		function syncNativeWindowBackground(themeHint) {
+			if (typeof window === "undefined") return;
+			const handler = window.webkit?.messageHandlers?.dshWindowBackground;
+			if (typeof handler?.postMessage !== "function") return;
+			let rgb = null;
+			if (themeHint === IDEA_DARK_THEME_ID) {
+				rgb = { r: 36, g: 36, b: 36 };
+			} else if (typeof getComputedStyle === "function" && typeof document !== "undefined" && document.documentElement) {
+				try {
+					const tokenVal = getComputedStyle(document.documentElement).getPropertyValue("--dsw-alias-bg-base");
+					rgb = parseCssColorToRgb(tokenVal);
+				} catch (_) { /* ignore */ }
+			}
+			if (!rgb) {
+				if (themeHint === "light") {
+					rgb = { r: 255, g: 255, b: 255 };
+				} else if (themeHint === "dark") {
+					rgb = { r: 21, g: 22, b: 26 };
 				}
 			}
+			if (rgb) {
+				try { handler.postMessage(rgb); } catch (_) { /* ignore */ }
+			}
+		}
+
+		function syncBodyDesktopThemeAttribute(activeId) {
+			if (typeof document !== "undefined" && document.body) {
+				if (activeId === IDEA_DARK_THEME_ID) {
+					if (typeof document.body.setAttribute === "function") {
+						document.body.setAttribute(DESKTOP_THEME_ATTRIBUTE, IDEA_DARK_THEME_ID);
+					}
+					if (document.body.dataset) {
+						document.body.dataset.dshDesktopTheme = IDEA_DARK_THEME_ID;
+					}
+				} else {
+					if (typeof document.body.removeAttribute === "function") {
+						document.body.removeAttribute(DESKTOP_THEME_ATTRIBUTE);
+					}
+					if (document.body.dataset && "dshDesktopTheme" in document.body.dataset) {
+						delete document.body.dataset.dshDesktopTheme;
+					}
+				}
+			}
+			syncNativeWindowBackground(activeId);
 		}
 
 		function ThemeLightIcon16() {
@@ -6307,6 +6364,7 @@ window.__ModuleLoader__.load({
 					currentPreference = nextPref;
 				}
 				const effective = currentPreference === IDEA_DARK_THEME_ID && !eyeCareEnabled ? "dark" : currentPreference;
+				syncNativeWindowBackground(effective);
 				for (const fn of [...listeners]) {
 					try { fn(effective); } catch (_) { /* listener isolation */ }
 				}

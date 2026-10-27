@@ -192,3 +192,33 @@ func TestRestoreLastSessionPersistenceAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestResolveChatBackgroundRGBAMatchesTheme(t *testing.T) {
+	if got := resolveChatBackgroundRGBA("idea-dark", true, false); got != chatIdeaDarkBackgroundRGBA {
+		t.Fatalf("idea-dark with eyeCare enabled: got %+v, want %+v", got, chatIdeaDarkBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("idea-dark", false, false); got != chatDarkBackgroundRGBA {
+		t.Fatalf("idea-dark with eyeCare disabled must fall back to dark: got %+v, want %+v", got, chatDarkBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("dark", true, false); got != chatDarkBackgroundRGBA {
+		t.Fatalf("dark theme: got %+v, want %+v", got, chatDarkBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("light", true, true); got != chatLightBackgroundRGBA {
+		t.Fatalf("light theme: got %+v, want %+v", got, chatLightBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("system", true, true); got != chatDarkBackgroundRGBA {
+		t.Fatalf("system theme in dark mode: got %+v, want %+v", got, chatDarkBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("system", true, false); got != chatLightBackgroundRGBA {
+		t.Fatalf("system theme in light mode: got %+v, want %+v", got, chatLightBackgroundRGBA)
+	}
+	if got := resolveChatBackgroundRGBA("", true, false); got != chatIdeaDarkBackgroundRGBA {
+		t.Fatalf("unset theme with eyeCare default: got %+v, want %+v", got, chatIdeaDarkBackgroundRGBA)
+	}
+
+	opts := ChatWindowOptions("http://127.0.0.1:12345/?token=test")
+	if opts.BackgroundColour.Alpha != 255 {
+		t.Fatalf("ChatWindowOptions must set an opaque initial BackgroundColour, got %+v", opts.BackgroundColour)
+	}
+}
+
+

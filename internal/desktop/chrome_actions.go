@@ -13,6 +13,11 @@ const desktopWindowActionJS = `
     try {
       if (!["minimize", "maximize", "close", "settings", "dismiss-config"].includes(action)) throw new Error("unsupported action");
       if (!document.querySelector("body > .app-shell")) {
+        const nativeAction = window.webkit?.messageHandlers?.dshWindowAction;
+        if ((action === "maximize" || action === "minimize") && typeof nativeAction?.postMessage === "function") {
+          nativeAction.postMessage(action);
+          return;
+        }
         const invoke = window.__DSH_DESKTOP_WINDOW_ACTION__;
         if (typeof invoke !== "function") throw new Error("bridge unavailable");
         Promise.resolve(invoke(action)).catch(fail);

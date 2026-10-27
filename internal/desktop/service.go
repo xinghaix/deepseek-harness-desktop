@@ -444,11 +444,10 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 		if !d.prefs.getRememberWindowSize() {
 			return
 		}
-		d.recordChatWindowState(window)
+		d.scheduleChatWindowStateRecord(window)
 	}
 
 	registerMoveResize := func(evt events.WindowEventType) {
-		window.RegisterHook(evt, onResizeOrMove)
 		window.OnWindowEvent(evt, onResizeOrMove)
 	}
 
@@ -514,8 +513,34 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 	}
 }
 
+const windowStateRecordDebounce = 200 * time.Millisecond
+
+func (d *Service) scheduleChatWindowStateRecord(window application.Window) {
+	if d.closing.Load() || window == nil {
+		return
+	}
+	d.windowStateMu.Lock()
+	if d.closing.Load() {
+		d.windowStateMu.Unlock()
+		return
+	}
+	if d.windowStateTimer != nil {
+		d.windowStateTimer.Stop()
+	}
+	d.windowStateTimer = time.AfterFunc(windowStateRecordDebounce, func() {
+		d.windowStateMu.Lock()
+		d.windowStateTimer = nil
+		d.windowStateMu.Unlock()
+		if !d.prefs.getRememberWindowSize() {
+			return
+		}
+		d.recordChatWindowState(window)
+	})
+	d.windowStateMu.Unlock()
+}
+
 func (d *Service) monitorChatWindowGeometry(window application.Window) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	wid := window.ID()
@@ -528,6 +553,12 @@ func (d *Service) monitorChatWindowGeometry(window application.Window) {
 			return
 		}
 		if !d.prefs.getRememberWindowSize() {
+			continue
+		}
+		d.windowStateMu.Lock()
+		pending := d.windowStateTimer != nil
+		d.windowStateMu.Unlock()
+		if pending {
 			continue
 		}
 		d.recordChatWindowState(window)

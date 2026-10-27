@@ -39,6 +39,16 @@ const source = fs.readFileSync(0,"utf8");
   assert.equal(alerts.length,0);
   if(!management) {delete window.__DSH_DESKTOP_WINDOW_ACTION__;window.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__("close");await Promise.resolve();assert.equal(alerts.length,1,"missing transport must be visible, never poll forever");}
  }
+ // Verify native WKScriptMessageHandler fast-path for maximize/minimize on macOS
+ const nativeActions=[];
+ const windowWithNative={
+  webkit:{messageHandlers:{dshWindowAction:{postMessage(action){nativeActions.push(action);}}}},
+  alert:()=>{throw new Error("unexpected alert");}
+ };
+ vm.runInNewContext(source,{window:windowWithNative,document:{querySelector:()=>null}});
+ windowWithNative.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__("maximize");
+ windowWithNative.__DSH_DESKTOP_REQUEST_WINDOW_ACTION__("minimize");
+ assert.deepEqual(nativeActions,["maximize","minimize"]);
 })().catch(err=>{console.error(err);process.exitCode=1;});
 `)
 	cmd.Stdin = strings.NewReader(script[start : start+end])

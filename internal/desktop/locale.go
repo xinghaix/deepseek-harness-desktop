@@ -155,6 +155,7 @@ func (d *Service) SetEyeCareTheme(enabled bool) (DesktopPrefs, error) {
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
+	d.syncChatWindowBackground()
 	return d.DesktopPrefs(), nil
 }
 
@@ -187,7 +188,19 @@ func (d *Service) SetThemePreference(preference string) (DesktopPrefs, error) {
 	if err := d.prefs.save(); err != nil {
 		return d.DesktopPrefs(), err
 	}
+	d.syncChatWindowBackground()
 	return d.DesktopPrefs(), nil
+}
+
+func (d *Service) syncChatWindowBackground() {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	if chat, ok := app.Window.GetByName(chatWindowName); ok && chat != nil {
+		colour := resolveChatBackgroundRGBA(d.prefs.getThemePreference(), d.prefs.eyeCareTheme.Load(), isPlatformDarkMode())
+		applyNativeWindowBackground(chat, colour)
+	}
 }
 
 // SetPromptOverlayMaxLines stores how many prompt lines the floating card shows.

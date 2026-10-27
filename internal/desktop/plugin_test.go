@@ -177,6 +177,8 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		`"uiWorkspace"`,
 		`"workspaces"`,
 		`"layout"`,
+		"dshWindowBackground",
+		"syncNativeWindowBackground",
 	} {
 		if !strings.Contains(client, fragment) {
 			t.Fatalf("client bridge missing %q", fragment)

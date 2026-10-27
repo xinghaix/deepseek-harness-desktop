@@ -115,6 +115,11 @@ const desktopChromeCSS = `
 `
 
 const desktopWindowInsetCSS = `
+html:has(#root),
+body:has(#root),
+#root {
+  background-color: var(--dsw-alias-bg-base);
+}
 .dsh-window-content {
   box-sizing: border-box !important;
   --dsh-window-top-inset: 36px;
@@ -156,6 +161,11 @@ body[data-dsh-sidebar-dragging] #root > [data-slot="root"] > div,
 `
 
 const desktopNativeWindowInsetCSS = `
+html:has(#root),
+body:has(#root),
+#root {
+  background-color: var(--dsw-alias-bg-base);
+}
 .dsh-window-content {
   box-sizing: border-box !important;
   --dsh-window-collapsed-rail-width: 84px;
