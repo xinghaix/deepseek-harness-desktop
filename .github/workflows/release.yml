@@ -41,7 +41,7 @@ jobs:
       - name: Run Node bridge and WebView contracts
         run: |
           node internal/dsh/desktopbridge/client_test.mjs
-          node internal/dsh/desktopbridge/copy_session_menu_test.mjs
+          node internal/dsh/desktopbridge/session_menu_test.mjs
           node internal/dsh/webviewboot/hook_test.mjs
 
   build:
