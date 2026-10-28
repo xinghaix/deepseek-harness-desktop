@@ -152,6 +152,7 @@ test("8 locales share exactly the same keys and placeholders, and package locale
 test("package.json and icon.svg follow DSH 0.2.1+ manifest and artwork conventions", () => {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.equal(pkg.engines?.dsh, ">=0.2.0-rc.1");
+  assert.equal(pkg.scripts?.prepare, undefined);
   assert.equal(pkg.exports?.["./locale/*.json"], "./locale/*.json");
   assert.ok(pkg.files?.includes("locale/"));
   assert.ok(pkg.files?.includes("icon.svg"));

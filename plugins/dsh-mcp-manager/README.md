@@ -31,17 +31,17 @@
 
 ## 安装
 
-优先用绝对路径（会按依赖安装，比 `link:` 更稳）：
-
-```bash
-dsh plugin --profile web add /absolute/path/to/plugins/dsh-mcp-manager
-```
-
-或从本仓库：
+直接从本仓库 GitHub 子目录安装：
 
 ```bash
 dsh plugin --profile web add "xinghaix/deepseek-harness-desktop#main&path:/plugins/dsh-mcp-manager"
 dsh plugin --profile web remove dsh-mcp-manager
+```
+
+本地开发也可以用绝对路径（会按依赖安装，比 `link:` 更稳）：
+
+```bash
+dsh plugin --profile web add /absolute/path/to/plugins/dsh-mcp-manager
 ```
 
 本地开发也可以在 web profile 的 `package.json` 里写：

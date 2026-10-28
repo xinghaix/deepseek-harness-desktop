@@ -54,8 +54,7 @@
   "icon": "./icon.svg",
   "scripts": {
     "embed": "node scripts/embed-model.mjs",
-    "test": "node scripts/embed-model.mjs --check && node --test test/",
-    "prepare": "node scripts/embed-model.mjs"
+    "test": "node scripts/embed-model.mjs --check && node --test test/"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-storage-json": ">=0.2.0-rc.1 <0.3.0"
