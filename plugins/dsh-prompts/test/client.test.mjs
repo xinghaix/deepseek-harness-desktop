@@ -19,6 +19,7 @@ function renderVNodeToText(node) {
 function loadClientModule() {
   let registered = null;
   const fakeReact = {
+    Fragment: ({ children }) => children,
     createElement(type, props, ...children) {
       const flat = children.flat(Infinity);
       return {
@@ -213,6 +214,28 @@ test("Client plugin registers all 8 locales, settings.section, plugins.bundle.co
   assert.match(textGlobal, /全局提示词 \(1\)/);
   assert.match(textGlobal, /工作区提示词 \(0\)/);
   assert.match(textGlobal, /中文与结论先行/);
+
+  // Verify bundle view omits duplicate top heading (host plugin page already renders it)
+  const textBundlePage = renderVNodeToText(React.createElement(bundleSlot.Component, { view: "page" }));
+  assert.doesNotMatch(textBundlePage, /提示词管理统一配置/);
+
+  // Verify inline expandable creation panel opens and toggles closed cleanly without popup modal
+  controller.openEditor({ scope: "global" });
+  assert.ok(controller.getSnapshot().editorModal);
+  const textWithInlineEditor = renderVNodeToText(React.createElement(settingsSlot.Component, {}));
+  assert.match(textWithInlineEditor, /新建全局提示词/);
+  controller.openEditor({ scope: "global" }); // second click toggles closed
+  assert.equal(controller.getSnapshot().editorModal, null);
+
+  // Verify inline row expansion for editing an existing prompt item and closing it
+  controller.openEditor({
+    scope: "global",
+    item: controller.getSnapshot().state.globalItems[0],
+  });
+  assert.equal(controller.getSnapshot().expandedItemId, "g1");
+  controller.closeEditor();
+  assert.equal(controller.getSnapshot().expandedItemId, null);
+  assert.equal(controller.getSnapshot().editorModal, null);
 
   // Switch to workspace tab and verify current session workspace is recognized
   controller.setTab("workspace");

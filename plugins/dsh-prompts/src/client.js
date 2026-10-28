@@ -3,7 +3,6 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require("react");
     const { createSnapshotStore } = require("@deepseek-ai/dsh-client-store");
-    const { Modal } = require("@deepseek-ai/dsh-client-ui-primitives");
     const model = __PROMPTS_MODEL__;
     const locales = __PROMPTS_LOCALES__;
     const h = React.createElement;
@@ -15,49 +14,597 @@ window.__ModuleLoader__.load({
     const ROW_KEY = "dsh-prompts#dsh-prompts";
     const STATE_PATH = "/api/dsh-prompts/state";
     const ACTION_PATH = "/api/dsh-prompts/action";
-    const STYLE_TAG_ID = "dsh-prompts/PromptsManager.css";
+    const STYLE_TAG_ID = "dsh-prompts/PromptsManager.v2.css";
 
-    const CSS_TEXT = [
-      ".dsh-prompts-root{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;box-sizing:border-box}",
-      ".dsh-prompts-root[data-variant=settings]{max-width:760px;padding:2px 0 24px}",
-      ".dsh-prompts-root[data-variant=bundle]{max-width:960px;padding:4px 0 24px}",
-      ".dsh-prompts-root[data-variant=main]{max-width:960px;margin:0 auto;padding:24px 28px;width:100%}",
-      ".dsh-prompts-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}",
-      ".dsh-prompts-heading{margin:0;font-size:18px;font-weight:600;line-height:26px;color:var(--dsw-alias-label-primary)}",
-      ".dsh-prompts-desc{margin:4px 0 0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}",
-      ".dsh-prompts-live{display:inline-flex;align-items:center;gap:7px;margin-top:8px;padding:4px 10px;border-radius:999px;font-size:12px;line-height:18px;background:var(--dsw-alias-bg-layer-2);border:0.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}",
-      ".dsh-prompts-live-dot{width:7px;height:7px;border-radius:50%;background:#10B981;flex:none}",
-      ".dsh-prompts-live-dot[data-off=true]{background:var(--dsw-alias-label-tertiary)}",
-      ".dsh-prompts-tabs{display:flex;align-items:flex-end;gap:22px;border-bottom:0.5px solid var(--dsw-alias-border-l2);margin-top:2px}",
-      ".dsh-prompts-tab{color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer;background:transparent;border:0;padding:7px 2px 9px;font-size:13px;line-height:20px;position:relative;font-weight:500}",
-      ".dsh-prompts-tab:hover,.dsh-prompts-tab[data-active=true]{color:var(--dsw-alias-label-primary)}",
-      ".dsh-prompts-tab[data-active=true]::after{background:var(--dsw-alias-label-primary);content:'';border-radius:2px 2px 0 0;height:2px;position:absolute;bottom:-0.5px;left:0;right:0}",
-      ".dsh-prompts-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}",
-      ".dsh-prompts-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
-      ".dsh-prompts-btn{font:inherit;font-size:13px;line-height:18px;padding:6px 12px;border-radius:8px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:opacity .15s}",
-      ".dsh-prompts-btn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2))}",
-      ".dsh-prompts-btn:disabled{opacity:0.45;cursor:not-allowed}",
-      ".dsh-prompts-btn[data-variant=primary]{background:var(--dsw-alias-state-business-primary,#2563EB);border-color:transparent;color:#FFFFFF;font-weight:500}",
-      ".dsh-prompts-btn[data-variant=danger]{color:#EF4444;border-color:rgba(239,68,68,0.35)}",
-      ".dsh-prompts-btn[data-size=sm]{padding:4px 9px;font-size:12px;border-radius:6px}",
-      ".dsh-prompts-select,.dsh-prompts-input,.dsh-prompts-textarea{font:inherit;font-size:13px;line-height:20px;padding:7px 11px;border-radius:8px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-sizing:border-box}",
-      ".dsh-prompts-textarea{width:100%;min-height:160px;resize:vertical;font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12.5px;line-height:19px}",
-      ".dsh-prompts-card{display:flex;flex-direction:column;gap:8px;padding:13px 15px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2))}",
-      ".dsh-prompts-card[data-disabled=true]{opacity:0.62}",
-      ".dsh-prompts-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}",
-      ".dsh-prompts-card-title{font-weight:600;font-size:14px;color:var(--dsw-alias-label-primary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}",
-      ".dsh-prompts-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:18px;font-weight:500;background:var(--dsw-alias-bg-layer-2);border:0.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}",
-      ".dsh-prompts-badge[data-tone=accent]{color:var(--dsw-alias-state-business-primary,#3B82F6);border-color:currentColor}",
-      ".dsh-prompts-badge[data-tone=current]{color:#10B981;border-color:rgba(16,185,129,0.4)}",
-      ".dsh-prompts-pre{margin:0;padding:10px 12px;border-radius:8px;background:var(--dsw-alias-bg-module-platform,var(--dsw-alias-bg-layer-2));border:0.5px solid var(--dsw-alias-border-l2);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12px;line-height:18px;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary);max-height:220px;overflow:auto}",
-      ".dsh-prompts-preview-box{max-height:420px}",
-      ".dsh-prompts-ws-bar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}",
-      ".dsh-prompts-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}",
-      ".dsh-prompts-pill{font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1,transparent);color:var(--dsw-alias-label-secondary);cursor:pointer;display:inline-flex;align-items:center;gap:5px}",
-      ".dsh-prompts-pill[data-active=true]{background:var(--dsw-alias-state-business-primary,#2563EB);color:#FFFFFF;border-color:transparent}",
-      ".dsh-prompts-empty{padding:26px 18px;text-align:center;border-radius:10px;border:1px dashed var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);margin:0}",
-      ".dsh-prompts-error{padding:9px 12px;border-radius:8px;border:0.5px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.08);color:#EF4444;margin:0;font-size:12.5px}",
-    ].join("\n");
+    // Official DSH typography & visual design tokens (matching PluginManagerPage & SubagentSettings)
+    const CSS_TEXT = `
+.dsh-prompts-root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font-size: 13px;
+  line-height: 20px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.dsh-prompts-root[data-variant="settings"] {
+  max-width: 820px;
+  padding: 4px 0 36px;
+}
+.dsh-prompts-root[data-variant="bundle"] {
+  max-width: 960px;
+  padding: 4px 0 32px;
+}
+.dsh-prompts-root[data-variant="main"] {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px clamp(24px, 4vw, 48px) 48px;
+}
+[data-platform="darwin"] .dsh-prompts-root[data-variant="main"] {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+/* Top Page Heading (used in Settings & Main views; omitted in Bundle view where host already renders header) */
+.dsh-prompts-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.dsh-prompts-page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-prompts-page-intro {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Section Group & Toggle Row (matches Subagent "运行限制" / "模型选择" & toggleRow) */
+.dsh-prompts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dsh-prompts-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-prompts-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: var(--dsw-radius-xl, 12px);
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-2, rgba(255,255,255,0.03)));
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2, rgba(255,255,255,0.08)));
+}
+.dsh-prompts-toggle-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dsh-prompts-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dsh-prompts-toggle-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-prompts-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-success-primary, #10b981);
+  flex: none;
+}
+.dsh-prompts-live-dot[data-off="true"] {
+  background: var(--dsw-alias-label-tertiary, #81858c);
+}
+
+/* Official DSH Switch (36x20 pill track, 16x16 thumb) */
+.dsh-prompts-switch {
+  box-sizing: border-box;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  background: var(--dsw-alias-border-l4, rgba(128, 128, 128, 0.38));
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  transition: background 0.14s ease;
+}
+.dsh-prompts-switch[aria-checked="true"] {
+  background: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #3b82f6));
+}
+.dsh-prompts-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dsh-prompts-switch-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: block;
+  transition: transform 0.14s ease;
+  transform: translateX(0);
+}
+.dsh-prompts-switch[aria-checked="true"] .dsh-prompts-switch-thumb {
+  transform: translateX(16px);
+}
+
+/* Top Navigation Bar: Capsule Segmented Control (matches Official Plugin Page "已安装 | 插件市场 | 发现") */
+.dsh-prompts-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-capsule-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.05));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.07));
+}
+.dsh-prompts-capsule-tab {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+  white-space: nowrap;
+}
+.dsh-prompts-capsule-tab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-prompts-capsule-tab[data-active="true"] {
+  background: var(--dsw-alias-bg-layer-4, rgba(255, 255, 255, 0.12));
+  color: var(--dsw-alias-label-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Buttons & Controls */
+.dsh-prompts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-btn {
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.14));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.04));
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.12s ease, opacity 0.12s ease, border-color 0.12s ease;
+}
+.dsh-prompts-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08));
+}
+.dsh-prompts-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.dsh-prompts-btn[data-variant="primary"] {
+  background: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #3b82f6));
+  border-color: transparent;
+  color: #ffffff;
+}
+.dsh-prompts-btn[data-variant="primary"]:hover:not(:disabled) {
+  opacity: 0.92;
+}
+.dsh-prompts-btn[data-variant="danger"] {
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ef4444) 35%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ef4444) 8%, transparent);
+}
+.dsh-prompts-btn[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  padding: 0 8px;
+  border-radius: var(--dsw-radius-md, 8px);
+}
+.dsh-prompts-btn[data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.06));
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-prompts-btn[data-size="sm"] {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Rounded Inputs, Selects & Textarea (matches Official Subagent "最大递归深度" input boxes) */
+.dsh-prompts-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 14px;
+}
+.dsh-prompts-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dsh-prompts-field-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-prompts-input,
+.dsh-prompts-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  border-radius: var(--dsw-radius-lg, 10px);
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.14));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.04));
+  color: var(--dsw-alias-label-primary);
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+.dsh-prompts-select {
+  padding-right: 30px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+  cursor: pointer;
+}
+.dsh-prompts-select-pill {
+  width: auto;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0 28px 0 12px;
+  font-size: 12.5px;
+}
+.dsh-prompts-input:focus,
+.dsh-prompts-select:focus,
+.dsh-prompts-textarea:focus {
+  border-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #3b82f6));
+}
+.dsh-prompts-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 140px;
+  padding: 10px 12px;
+  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12.5px;
+  line-height: 19px;
+  border-radius: var(--dsw-radius-lg, 10px);
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.14));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.04));
+  color: var(--dsw-alias-label-primary);
+  resize: vertical;
+  outline: none;
+}
+
+/* Segmented Radio Pills for Anchor Selection */
+.dsh-prompts-anchor-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 8px;
+}
+.dsh-prompts-anchor-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--dsw-radius-lg, 10px);
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.12));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.03));
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dsh-prompts-anchor-option[data-checked="true"] {
+  border-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #3b82f6));
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #3b82f6) 10%, transparent);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Inline Collapsible Drawer / Editor Panel (No Popup Modal!) */
+.dsh-prompts-inline-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--dsw-radius-xl, 12px);
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.16));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.04));
+}
+.dsh-prompts-inline-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dsh-prompts-inline-editor-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Official Plugin-Style List & Expandable Row Cards (matches Screenshot 6 "子智能体 / 网页搜索 / 智能体团队") */
+.dsh-prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dsh-prompts-row-card {
+  border-radius: var(--dsw-radius-xl, 12px);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08)));
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.02)));
+  overflow: hidden;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dsh-prompts-row-card[data-expanded="true"] {
+  border-color: var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.18));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.035));
+}
+.dsh-prompts-row-card[data-disabled="true"] {
+  opacity: 0.65;
+}
+.dsh-prompts-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+.dsh-prompts-row-head:hover {
+  background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.03));
+}
+.dsh-prompts-row-trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dsh-prompts-row-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.04));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.dsh-prompts-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dsh-prompts-row-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.dsh-prompts-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-prompts-row-desc {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-prompts-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-secondary);
+  flex: none;
+}
+.dsh-prompts-tag[data-tone="accent"] {
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #3b82f6) 18%, transparent);
+  color: var(--dsw-alias-brand-primary, #60a5fa);
+}
+.dsh-prompts-tag[data-tone="current"] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #10b981) 18%, transparent);
+  color: var(--dsw-alias-state-success-primary, #34d399);
+}
+.dsh-prompts-chevron {
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.14s ease;
+  flex: none;
+  display: inline-flex;
+}
+.dsh-prompts-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+.dsh-prompts-row-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.dsh-prompts-row-body {
+  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08));
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Workspace Selector Card */
+.dsh-prompts-ws-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--dsw-radius-xl, 12px);
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.03));
+}
+.dsh-prompts-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-pill {
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.12));
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dsh-prompts-pill[data-active="true"] {
+  background: var(--dsw-alias-brand-primary, #3b82f6);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+/* Preview & Empty / Error States */
+.dsh-prompts-pre {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--dsw-radius-lg, 10px);
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.22));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08));
+  font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-secondary);
+  max-height: 360px;
+  overflow: auto;
+}
+.dsh-prompts-empty {
+  padding: 24px 18px;
+  text-align: center;
+  border-radius: var(--dsw-radius-xl, 12px);
+  border: 0.5px dashed var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.14));
+  color: var(--dsw-alias-label-tertiary);
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.dsh-prompts-error {
+  padding: 9px 12px;
+  border-radius: var(--dsw-radius-md, 8px);
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-error-primary, #ef4444) 40%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ef4444) 10%, transparent);
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+  margin: 0;
+  font-size: 12.5px;
+}
+`;
 
     function ensureStyleTag() {
       if (typeof document === "undefined") return;
@@ -100,9 +647,7 @@ window.__ModuleLoader__.load({
           // Fall through.
         }
         const active = String(ctx?.locale?.getSnapshot?.()?.active || "zh").toLowerCase();
-        const langKey = active.startsWith("zh")
-          ? "zh"
-          : active.slice(0, 2);
+        const langKey = active.startsWith("zh") ? "zh" : active.slice(0, 2);
         const dict = locales[langKey] || locales.en || locales.zh || {};
         const fallback = dict[key] ?? locales.en?.[key] ?? key;
         return fillTemplate(fallback, params);
@@ -172,6 +717,45 @@ window.__ModuleLoader__.load({
           strokeLinecap: "round",
           strokeLinejoin: "round",
         })
+      );
+    }
+
+    function ChevronIcon({ open }) {
+      return h(
+        "span",
+        { className: "dsh-prompts-chevron", "data-open": open ? "true" : "false", "aria-hidden": "true" },
+        h(
+          "svg",
+          { width: 12, height: 12, viewBox: "0 0 12 12", fill: "none" },
+          h("path", {
+            d: "M4.5 2.75L7.75 6L4.5 9.25",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          })
+        )
+      );
+    }
+
+    function Switch({ checked, disabled, onChange, label }) {
+      return h(
+        "button",
+        {
+          type: "button",
+          role: "switch",
+          className: "dsh-prompts-switch",
+          "aria-checked": checked ? "true" : "false",
+          "aria-label": label,
+          disabled: Boolean(disabled),
+          onClick: (event) => {
+            event.stopPropagation();
+            if (!disabled && typeof onChange === "function") {
+              onChange(!checked);
+            }
+          },
+        },
+        h("span", { className: "dsh-prompts-switch-thumb" })
       );
     }
 
@@ -287,8 +871,12 @@ window.__ModuleLoader__.load({
       let activeTab = "global";
       let selectedWorkspacePath = "";
       let previewWorkspacePath = "__current__";
-      let editorModal = null;
-      let confirmModal = null;
+      // Inline expandable editor state (replaces secondary Modal dialog)
+      let editorDraft = null;
+      // Inline expanded item ID (or null)
+      let expandedItemId = null;
+      // Inline pending confirmation key (e.g. "clear:global", "clear:workspace", "delete:<id>")
+      let pendingConfirmKey = "";
       const listeners = new Set();
 
       const getClientWorkspaces = () => {
@@ -351,8 +939,9 @@ window.__ModuleLoader__.load({
           previewWorkspacePath,
           previewTargetCwd: targetPreviewCwd,
           preview,
-          editorModal,
-          confirmModal,
+          editorModal: editorDraft,
+          expandedItemId,
+          pendingConfirmKey,
         };
       };
 
@@ -395,24 +984,64 @@ window.__ModuleLoader__.load({
         setTab(tab) {
           activeTab = tab;
           error = "";
+          pendingConfirmKey = "";
           publish();
         },
         selectWorkspace(wsPath) {
           selectedWorkspacePath = model.normalizePath(wsPath);
           error = "";
+          pendingConfirmKey = "";
+          if (editorDraft && editorDraft.scope === "workspace" && !editorDraft.id) {
+            const snap = buildSnapshot();
+            editorDraft = {
+              ...editorDraft,
+              workspacePath: snap.selectedWorkspacePath,
+              workspaceTitle: snap.selectedWorkspace?.title || "",
+            };
+          }
           publish();
         },
         setPreviewWorkspace(wsPath) {
           previewWorkspacePath = wsPath;
           publish();
         },
+        toggleExpandItem(id) {
+          const targetId = String(id || "");
+          if (expandedItemId === targetId) {
+            expandedItemId = null;
+            if (editorDraft?.id === targetId) editorDraft = null;
+          } else {
+            expandedItemId = targetId;
+          }
+          pendingConfirmKey = "";
+          publish();
+        },
         openEditor(config) {
           const scope = config?.scope === "workspace" ? "workspace" : "global";
           const item = config?.item || null;
-          editorModal = {
+          const snap = store.getSnapshot();
+          // Toggle closed if clicking "+ New Prompt" when the blank inline creator is already open
+          if (
+            !item &&
+            !config?.defaultContent &&
+            editorDraft &&
+            !editorDraft.id &&
+            editorDraft.scope === scope
+          ) {
+            editorDraft = null;
+            publish();
+            return;
+          }
+          if (item?.id) {
+            expandedItemId = item.id;
+          }
+          editorDraft = {
             scope,
-            workspacePath: scope === "workspace" ? model.normalizePath(config.workspacePath || store.getSnapshot().selectedWorkspacePath) : "",
-            workspaceTitle: config?.workspaceTitle || store.getSnapshot().selectedWorkspace?.title || "",
+            workspacePath:
+              scope === "workspace"
+                ? model.normalizePath(config.workspacePath || snap.selectedWorkspacePath)
+                : "",
+            workspaceTitle: config?.workspaceTitle || snap.selectedWorkspace?.title || "",
             id: item?.id || "",
             title: item?.title || config?.defaultTitle || "",
             content: item?.content || config?.defaultContent || "",
@@ -420,18 +1049,19 @@ window.__ModuleLoader__.load({
             enabled: item ? item.enabled !== false : true,
             validationError: "",
           };
+          pendingConfirmKey = "";
           publish();
         },
         updateEditor(patch) {
-          if (!editorModal) return;
-          editorModal = { ...editorModal, ...patch, validationError: "" };
+          if (!editorDraft) return;
+          editorDraft = { ...editorDraft, ...patch, validationError: "" };
           publish();
         },
         applyTemplateToEditor(template) {
-          if (!editorModal || !template) return;
-          editorModal = {
-            ...editorModal,
-            title: editorModal.title.trim() ? editorModal.title : template.title,
+          if (!editorDraft || !template) return;
+          editorDraft = {
+            ...editorDraft,
+            title: editorDraft.title.trim() ? editorDraft.title : template.title,
             content: template.content,
             position: template.position || "suffix",
             validationError: "",
@@ -439,15 +1069,18 @@ window.__ModuleLoader__.load({
           publish();
         },
         closeEditor() {
-          editorModal = null;
+          if (editorDraft?.id && expandedItemId === editorDraft.id) {
+            expandedItemId = null;
+          }
+          editorDraft = null;
           publish();
         },
-        openConfirm(config) {
-          confirmModal = config;
+        requestConfirm(key) {
+          pendingConfirmKey = pendingConfirmKey === key ? "" : String(key || "");
           publish();
         },
-        closeConfirm() {
-          confirmModal = null;
+        cancelConfirm() {
+          pendingConfirmKey = "";
           publish();
         },
         async load() {
@@ -477,6 +1110,7 @@ window.__ModuleLoader__.load({
           }
           saving = true;
           error = "";
+          pendingConfirmKey = "";
           publish();
           try {
             const data = await requestApi(ACTION_PATH, action, options.fetch);
@@ -494,39 +1128,43 @@ window.__ModuleLoader__.load({
           }
         },
         async saveEditor(t) {
-          if (!editorModal) return false;
-          const title = String(editorModal.title || "").trim();
-          const content = String(editorModal.content || "").trim();
+          if (!editorDraft) return false;
+          const title = String(editorDraft.title || "").trim();
+          const content = String(editorDraft.content || "").trim();
           if (!title) {
-            editorModal = { ...editorModal, validationError: t("errorTitleRequired") };
+            editorDraft = { ...editorDraft, validationError: t("errorTitleRequired") };
             publish();
             return false;
           }
           if (!content) {
-            editorModal = { ...editorModal, validationError: t("errorContentRequired") };
+            editorDraft = { ...editorDraft, validationError: t("errorContentRequired") };
             publish();
             return false;
           }
           const itemPayload = {
-            ...(editorModal.id ? { id: editorModal.id } : {}),
+            ...(editorDraft.id ? { id: editorDraft.id } : {}),
             title,
             content,
-            position: editorModal.position,
-            enabled: editorModal.enabled !== false,
+            position: editorDraft.position,
+            enabled: editorDraft.enabled !== false,
           };
           const action =
-            editorModal.scope === "workspace"
+            editorDraft.scope === "workspace"
               ? {
                   type: "upsertWorkspaceItem",
-                  workspacePath: editorModal.workspacePath,
-                  workspaceTitle: editorModal.workspaceTitle,
+                  workspacePath: editorDraft.workspacePath,
+                  workspaceTitle: editorDraft.workspaceTitle,
                   item: itemPayload,
                 }
               : {
                   type: "upsertGlobalItem",
                   item: itemPayload,
                 };
-          editorModal = null;
+          const editedId = editorDraft.id;
+          editorDraft = null;
+          if (editedId && expandedItemId === editedId) {
+            expandedItemId = null;
+          }
           return controller.mutate(action);
         },
         async pickAndSelectDirectory() {
@@ -568,15 +1206,180 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function PromptCard({ item, index, total, scope, workspacePath, controller, saving, t }) {
+    function InlinePromptEditor({ draft, saving, controller, t, embedded = false }) {
+      if (!draft) return null;
+      const templates = model.getTemplates(t);
+      const isEdit = Boolean(draft.id);
+      const heading =
+        draft.scope === "workspace"
+          ? t(isEdit ? "modalEditWorkspace" : "modalAddWorkspace", {
+              workspace: draft.workspaceTitle || model.pathBaseName(draft.workspacePath),
+            })
+          : t(isEdit ? "modalEditGlobal" : "modalAddGlobal");
+
+      const content = [
+        !embedded
+          ? h(
+              "div",
+              { key: "head", className: "dsh-prompts-inline-editor-head" },
+              h("h4", { className: "dsh-prompts-inline-editor-title" }, heading),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "dsh-prompts-btn",
+                  "data-variant": "ghost",
+                  "data-size": "sm",
+                  onClick: () => controller.closeEditor(),
+                },
+                t("cancel")
+              )
+            )
+          : null,
+        h(
+          "div",
+          { key: "grid", className: "dsh-prompts-field-grid" },
+          h(
+            "div",
+            { className: "dsh-prompts-field" },
+            h("label", { className: "dsh-prompts-field-label" }, t("itemTitleLabel")),
+            h("input", {
+              type: "text",
+              className: "dsh-prompts-input",
+              value: draft.title,
+              placeholder: t("itemTitlePlaceholder"),
+              onChange: (event) => controller.updateEditor({ title: event.target.value }),
+            })
+          ),
+          h(
+            "div",
+            { className: "dsh-prompts-field" },
+            h("label", { className: "dsh-prompts-field-label" }, t("templatePickerLabel")),
+            h(
+              "select",
+              {
+                className: "dsh-prompts-select",
+                value: "",
+                onChange: (event) => {
+                  const found = templates.find((tpl) => tpl.id === event.target.value);
+                  event.target.value = "";
+                  if (found) controller.applyTemplateToEditor(found);
+                },
+              },
+              h("option", { value: "" }, t("templatePickerHint")),
+              templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
+            )
+          )
+        ),
+        h(
+          "div",
+          { key: "anchor", className: "dsh-prompts-field" },
+          h("label", { className: "dsh-prompts-field-label" }, t("positionLabel")),
+          h(
+            "div",
+            { className: "dsh-prompts-anchor-group" },
+            h(
+              "label",
+              {
+                className: "dsh-prompts-anchor-option",
+                "data-checked": (draft.position || "suffix") === "suffix" ? "true" : "false",
+              },
+              h("input", {
+                type: "radio",
+                name: `anchor-${draft.id || "new"}`,
+                checked: (draft.position || "suffix") === "suffix",
+                onChange: () => controller.updateEditor({ position: "suffix" }),
+              }),
+              h("span", null, t("positionSuffix"))
+            ),
+            h(
+              "label",
+              {
+                className: "dsh-prompts-anchor-option",
+                "data-checked": draft.position === "prefix" ? "true" : "false",
+              },
+              h("input", {
+                type: "radio",
+                name: `anchor-${draft.id || "new"}`,
+                checked: draft.position === "prefix",
+                onChange: () => controller.updateEditor({ position: "prefix" }),
+              }),
+              h("span", null, t("positionPrefix"))
+            )
+          )
+        ),
+        h(
+          "div",
+          { key: "content", className: "dsh-prompts-field" },
+          h("label", { className: "dsh-prompts-field-label" }, t("itemContentLabel")),
+          h("textarea", {
+            className: "dsh-prompts-textarea",
+            value: draft.content,
+            placeholder: t("itemContentPlaceholder"),
+            onChange: (event) => controller.updateEditor({ content: event.target.value }),
+          })
+        ),
+        draft.validationError
+          ? h("p", { key: "err", className: "dsh-prompts-error", role: "alert" }, draft.validationError)
+          : null,
+        h(
+          "div",
+          {
+            key: "foot",
+            style: { display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 },
+          },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "dsh-prompts-btn",
+              onClick: () => controller.closeEditor(),
+            },
+            t("cancel")
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "dsh-prompts-btn",
+              "data-variant": "primary",
+              disabled: saving,
+              onClick: () => void controller.saveEditor(t),
+            },
+            saving ? t("saving") : t("save")
+          )
+        ),
+      ];
+
+      if (embedded) {
+        return h("div", { className: "dsh-prompts-row-body" }, content);
+      }
+      return h("div", { className: "dsh-prompts-inline-editor", "data-inline-editor": draft.scope }, content);
+    }
+
+    function PromptRowCard({ item, index, total, scope, workspacePath, workspaceTitle, snap, controller, t }) {
       const isPrefix = item.position === "prefix";
-      const onToggle = () => {
+      const isEditingThis = Boolean(snap.editorModal && snap.editorModal.id === item.id);
+      const isExpanded = isEditingThis || snap.expandedItemId === item.id;
+      const confirmDeleteKey = `delete:${scope}:${item.id}`;
+      const isConfirmingDelete = snap.pendingConfirmKey === confirmDeleteKey;
+
+      const onToggleExpand = () => {
+        if (isEditingThis) {
+          controller.closeEditor();
+        } else {
+          controller.openEditor({ scope, workspacePath, workspaceTitle, item });
+        }
+      };
+
+      const onToggleSwitch = (nextEnabled) => {
         void controller.mutate(
           scope === "workspace"
-            ? { type: "toggleWorkspaceItem", workspacePath, id: item.id, enabled: !item.enabled }
-            : { type: "toggleGlobalItem", id: item.id, enabled: !item.enabled }
+            ? { type: "toggleWorkspaceItem", workspacePath, id: item.id, enabled: nextEnabled }
+            : { type: "toggleGlobalItem", id: item.id, enabled: nextEnabled }
         );
       };
+
       const onMove = (direction) => {
         void controller.mutate(
           scope === "workspace"
@@ -584,128 +1387,186 @@ window.__ModuleLoader__.load({
             : { type: "moveGlobalItem", id: item.id, direction }
         );
       };
-      const onEdit = () => {
-        controller.openEditor({ scope, workspacePath, item });
-      };
-      const onDelete = () => {
-        controller.openConfirm({
-          title: t("confirmDeleteItemTitle", { title: item.title }),
-          body: t("confirmDeleteItemBody"),
-          action:
-            scope === "workspace"
-              ? { type: "deleteWorkspaceItem", workspacePath, id: item.id }
-              : { type: "deleteGlobalItem", id: item.id },
-        });
-      };
+
+      const singleLinePreview = String(item.content || "")
+        .replace(/\s+/g, " ")
+        .trim();
 
       return h(
         "div",
         {
-          className: "dsh-prompts-card",
+          className: "dsh-prompts-row-card",
+          "data-expanded": isExpanded ? "true" : "false",
           "data-disabled": item.enabled === false ? "true" : "false",
           "data-prompt-id": item.id,
         },
         h(
           "div",
-          { className: "dsh-prompts-card-head" },
+          { className: "dsh-prompts-row-head" },
           h(
-            "div",
-            { className: "dsh-prompts-card-title" },
-            h("span", null, `#${index + 1} ${item.title}`),
+            "button",
+            {
+              type: "button",
+              className: "dsh-prompts-row-trigger",
+              "aria-expanded": isExpanded ? "true" : "false",
+              onClick: onToggleExpand,
+            },
+            h("span", { className: "dsh-prompts-row-icon" }, `#${index + 1}`),
             h(
-              "span",
-              { className: "dsh-prompts-badge", "data-tone": isPrefix ? "default" : "accent" },
-              isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
-            ),
-            h(
-              "span",
-              { className: "dsh-prompts-badge" },
-              item.enabled !== false ? t("enabled") : t("disabled")
+              "div",
+              { className: "dsh-prompts-row-main" },
+              h(
+                "div",
+                { className: "dsh-prompts-row-title-line" },
+                h("span", { className: "dsh-prompts-row-title" }, item.title),
+                h(
+                  "span",
+                  { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
+                  isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
+                ),
+                h(ChevronIcon, { open: isExpanded })
+              ),
+              h("p", { className: "dsh-prompts-row-desc" }, singleLinePreview)
             )
           ),
           h(
             "div",
-            { className: "dsh-prompts-actions" },
-            h(
-              "label",
-              {
-                style: {
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12,
-                  cursor: "pointer",
-                  marginRight: 4,
-                },
-              },
-              h("input", {
-                type: "checkbox",
-                checked: item.enabled !== false,
-                disabled: saving,
-                onChange: onToggle,
-              }),
-              h("span", null, item.enabled !== false ? t("enabled") : t("disabled"))
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-size": "sm",
-                disabled: saving || index === 0,
-                onClick: () => onMove("up"),
-                title: t("moveUp"),
-              },
-              "↑"
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-size": "sm",
-                disabled: saving || index >= total - 1,
-                onClick: () => onMove("down"),
-                title: t("moveDown"),
-              },
-              "↓"
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-size": "sm",
-                disabled: saving,
-                onClick: onEdit,
-              },
-              t("edit")
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-size": "sm",
-                "data-variant": "danger",
-                disabled: saving,
-                onClick: onDelete,
-              },
-              t("delete")
-            )
+            { className: "dsh-prompts-row-end" },
+            isConfirmingDelete
+              ? h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "danger",
+                      "data-size": "sm",
+                      disabled: snap.saving,
+                      onClick: () =>
+                        void controller.mutate(
+                          scope === "workspace"
+                            ? { type: "deleteWorkspaceItem", workspacePath, id: item.id }
+                            : { type: "deleteGlobalItem", id: item.id }
+                        ),
+                    },
+                    t("confirmOk")
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "ghost",
+                      "data-size": "sm",
+                      onClick: () => controller.cancelConfirm(),
+                    },
+                    t("cancel")
+                  )
+                )
+              : h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "ghost",
+                      "data-size": "sm",
+                      disabled: snap.saving || index === 0,
+                      onClick: () => onMove("up"),
+                      title: t("moveUp"),
+                    },
+                    "↑"
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "ghost",
+                      "data-size": "sm",
+                      disabled: snap.saving || index >= total - 1,
+                      onClick: () => onMove("down"),
+                      title: t("moveDown"),
+                    },
+                    "↓"
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "ghost",
+                      "data-size": "sm",
+                      disabled: snap.saving,
+                      onClick: onToggleExpand,
+                    },
+                    isExpanded ? t("cancel") : t("edit")
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "dsh-prompts-btn",
+                      "data-variant": "ghost",
+                      "data-size": "sm",
+                      disabled: snap.saving,
+                      onClick: () => controller.requestConfirm(confirmDeleteKey),
+                    },
+                    t("delete")
+                  )
+                ),
+            h(Switch, {
+              checked: item.enabled !== false,
+              disabled: snap.saving,
+              label: item.title,
+              onChange: onToggleSwitch,
+            })
           )
         ),
-        h("pre", { className: "dsh-prompts-pre" }, item.content)
+        isExpanded
+          ? h(InlinePromptEditor, {
+              draft: isEditingThis
+                ? snap.editorModal
+                : {
+                    scope,
+                    workspacePath,
+                    workspaceTitle,
+                    id: item.id,
+                    title: item.title,
+                    content: item.content,
+                    position: item.position,
+                    enabled: item.enabled !== false,
+                    validationError: "",
+                  },
+              saving: snap.saving,
+              controller,
+              t,
+              embedded: true,
+            })
+          : null
       );
     }
 
-    function ScopeToolbar({ scope, workspace, itemCount, controller, saving, t }) {
+    function ScopeActionControls({ scope, workspace, itemCount, snap, controller, t }) {
       const templates = model.getTemplates(t);
       const workspacePath = workspace?.path || "";
       const workspaceTitle = workspace?.title || "";
+      const isAddOpen = Boolean(
+        snap.editorModal && !snap.editorModal.id && snap.editorModal.scope === scope
+      );
+      const clearConfirmKey = `clear:${scope}`;
+      const isConfirmingClear = snap.pendingConfirmKey === clearConfirmKey;
 
-      const onAddBlank = () => {
-        controller.openEditor({ scope, workspacePath, workspaceTitle });
+      const onToggleAdd = () => {
+        if (isAddOpen) {
+          controller.closeEditor();
+        } else {
+          controller.openEditor({ scope, workspacePath, workspaceTitle });
+        }
       };
 
       const onTemplateSelect = (event) => {
@@ -723,96 +1584,120 @@ window.__ModuleLoader__.load({
         });
       };
 
-      const onClearAll = () => {
-        controller.openConfirm(
-          scope === "workspace"
-            ? {
-                title: t("confirmClearWorkspaceTitle", { workspace: workspaceTitle || workspacePath }),
-                body: t("confirmClearWorkspaceBody"),
-                action: { type: "clearWorkspaceItems", workspacePath },
-              }
-            : {
-                title: t("confirmClearGlobalTitle"),
-                body: t("confirmClearGlobalBody"),
-                action: { type: "clearGlobalItems" },
-              }
-        );
-      };
-
       return h(
         "div",
-        { className: "dsh-prompts-toolbar" },
+        { className: "dsh-prompts-actions" },
         h(
-          "div",
-          { className: "dsh-prompts-actions" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "dsh-prompts-btn",
-              "data-variant": "primary",
-              "data-action": `add-${scope}`,
-              disabled: saving || (scope === "workspace" && !workspacePath),
-              onClick: onAddBlank,
-            },
-            "+ " + t("addPrompt")
-          ),
-          h(
-            "select",
-            {
-              className: "dsh-prompts-select",
-              "aria-label": t("insertTemplate"),
-              value: "",
-              disabled: saving || (scope === "workspace" && !workspacePath),
-              onChange: onTemplateSelect,
-            },
-            h("option", { value: "" }, t("insertTemplate")),
-            templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
-          )
+          "button",
+          {
+            type: "button",
+            className: "dsh-prompts-btn",
+            "data-variant": isAddOpen ? "default" : "primary",
+            "data-action": `add-${scope}`,
+            disabled: snap.saving || (scope === "workspace" && !workspacePath),
+            onClick: onToggleAdd,
+          },
+          isAddOpen ? t("cancel") : "+ " + t("addPrompt")
+        ),
+        h(
+          "select",
+          {
+            className: "dsh-prompts-select dsh-prompts-select-pill",
+            "aria-label": t("insertTemplate"),
+            value: "",
+            disabled: snap.saving || (scope === "workspace" && !workspacePath),
+            onChange: onTemplateSelect,
+          },
+          h("option", { value: "" }, t("insertTemplate")),
+          templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
         ),
         itemCount > 0
-          ? h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-variant": "danger",
-                "data-action": `clear-${scope}`,
-                disabled: saving,
-                onClick: onClearAll,
-              },
-              t("clearAll")
-            )
+          ? isConfirmingClear
+            ? h(
+                React.Fragment,
+                null,
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "dsh-prompts-btn",
+                    "data-variant": "danger",
+                    "data-size": "sm",
+                    disabled: snap.saving,
+                    onClick: () =>
+                      void controller.mutate(
+                        scope === "workspace"
+                          ? { type: "clearWorkspaceItems", workspacePath }
+                          : { type: "clearGlobalItems" }
+                      ),
+                  },
+                  t("confirmOk")
+                ),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "dsh-prompts-btn",
+                    "data-variant": "ghost",
+                    "data-size": "sm",
+                    onClick: () => controller.cancelConfirm(),
+                  },
+                  t("cancel")
+                )
+              )
+            : h(
+                "button",
+                {
+                  type: "button",
+                  className: "dsh-prompts-btn",
+                  "data-variant": "danger",
+                  "data-action": `clear-${scope}`,
+                  disabled: snap.saving,
+                  onClick: () => controller.requestConfirm(clearConfirmKey),
+                },
+                t("clearAll")
+              )
           : null
       );
     }
 
     function GlobalTabView({ snap, controller, t }) {
       const items = snap.state.globalItems || [];
+      const showNewInline = Boolean(
+        snap.editorModal && !snap.editorModal.id && snap.editorModal.scope === "global"
+      );
+
       return h(
         "div",
-        { style: { display: "flex", flexDirection: "column", gap: 12 } },
-        h(ScopeToolbar, {
-          scope: "global",
-          itemCount: items.length,
-          controller,
-          saving: snap.saving,
-          t,
-        }),
-        items.length === 0
+        { className: "dsh-prompts-section" },
+        showNewInline
+          ? h(InlinePromptEditor, {
+              draft: snap.editorModal,
+              saving: snap.saving,
+              controller,
+              t,
+              embedded: false,
+            })
+          : null,
+        items.length === 0 && !showNewInline
           ? h("p", { className: "dsh-prompts-empty" }, t("emptyGlobal"))
-          : items.map((item, index) =>
-              h(PromptCard, {
-                key: item.id,
-                item,
-                index,
-                total: items.length,
-                scope: "global",
-                workspacePath: "",
-                controller,
-                saving: snap.saving,
-                t,
-              })
+          : h(
+              "div",
+              { className: "dsh-prompts-list" },
+              items.map((item, index) =>
+                h(PromptRowCard, {
+                  key: item.id,
+                  item,
+                  index,
+                  total: items.length,
+                  scope: "global",
+                  workspacePath: "",
+                  workspaceTitle: "",
+                  snap,
+                  controller,
+                  t,
+                })
+              )
             )
       );
     }
@@ -822,11 +1707,14 @@ window.__ModuleLoader__.load({
       const selected = snap.selectedWorkspace;
       const configuredList = catalog.filter((w) => w.configuredCount > 0);
       const items = selected?.items || [];
+      const showNewInline = Boolean(
+        snap.editorModal && !snap.editorModal.id && snap.editorModal.scope === "workspace"
+      );
 
       if (catalog.length === 0) {
         return h(
           "div",
-          { style: { display: "flex", flexDirection: "column", gap: 12 } },
+          { className: "dsh-prompts-section" },
           h("p", { className: "dsh-prompts-empty" }, t("noWorkspaces")),
           canPickDir
             ? h(
@@ -846,14 +1734,14 @@ window.__ModuleLoader__.load({
         );
       }
 
-      const onToggleWorkspaceEnabled = (event) => {
+      const onToggleWorkspaceEnabled = (nextEnabled) => {
         if (!selected) return;
         void controller.mutate({
           type: "setWorkspacePolicy",
           workspacePath: selected.path,
           workspaceId: selected.workspaceId,
           workspaceTitle: selected.title,
-          enabled: event.target.checked,
+          enabled: nextEnabled,
         });
       };
 
@@ -870,58 +1758,76 @@ window.__ModuleLoader__.load({
 
       return h(
         "div",
-        { style: { display: "flex", flexDirection: "column", gap: 12 } },
+        { className: "dsh-prompts-section" },
         h(
           "div",
-          { className: "dsh-prompts-ws-bar" },
+          { className: "dsh-prompts-ws-card" },
           h(
             "div",
-            { className: "dsh-prompts-toolbar" },
+            { className: "dsh-prompts-field-grid" },
             h(
               "div",
-              { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 } },
+              { className: "dsh-prompts-field" },
               h(
-                "label",
-                { style: { fontWeight: 600, fontSize: 12.5 } },
-                t("selectWorkspace") + ":"
+                "div",
+                { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 } },
+                h("label", { className: "dsh-prompts-field-label" }, t("selectWorkspace")),
+                selected?.isCurrent
+                  ? h("span", { className: "dsh-prompts-tag", "data-tone": "current" }, t("currentSessionBadge"))
+                  : null
               ),
               h(
-                "select",
-                {
-                  className: "dsh-prompts-select",
-                  "data-workspace-select": "",
-                  style: { minWidth: 260, flex: 1 },
-                  value: selected?.path || "",
-                  onChange: (event) => controller.selectWorkspace(event.target.value),
-                },
-                catalog.map((ws) =>
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: 8 } },
+                h(
+                  "select",
+                  {
+                    className: "dsh-prompts-select",
+                    "data-workspace-select": "",
+                    style: { flex: 1 },
+                    value: selected?.path || "",
+                    onChange: (event) => controller.selectWorkspace(event.target.value),
+                  },
+                  catalog.map((ws) =>
+                    h(
+                      "option",
+                      { key: ws.path, value: ws.path },
+                      `${ws.isCurrent ? "★ " : ""}${ws.title} (${ws.activeCount}/${ws.configuredCount}) — ${ws.path}`
+                    )
+                  )
+                ),
+                canPickDir
+                  ? h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "dsh-prompts-btn",
+                        onClick: () => void controller.pickAndSelectDirectory(),
+                      },
+                      t("pickDirectory")
+                    )
+                  : null
+              )
+            ),
+            selected
+              ? h(
+                  "div",
+                  { className: "dsh-prompts-field" },
+                  h("label", { className: "dsh-prompts-field-label" }, t("mergeModeLabel")),
                   h(
-                    "option",
-                    { key: ws.path, value: ws.path },
-                    `${ws.isCurrent ? "★ " : ""}${ws.title} (${ws.activeCount}/${ws.configuredCount}) — ${ws.path}`
+                    "select",
+                    {
+                      className: "dsh-prompts-select",
+                      "data-merge-mode": "",
+                      value: selected.mergeMode || "append",
+                      disabled: snap.saving,
+                      onChange: onChangeMergeMode,
+                    },
+                    h("option", { value: "append" }, t("mergeAppend")),
+                    h("option", { value: "override" }, t("mergeOverride"))
                   )
                 )
-              ),
-              selected?.isCurrent
-                ? h(
-                    "span",
-                    { className: "dsh-prompts-badge", "data-tone": "current" },
-                    t("currentSessionBadge")
-                  )
-                : null,
-              canPickDir
-                ? h(
-                    "button",
-                    {
-                      type: "button",
-                      className: "dsh-prompts-btn",
-                      "data-size": "sm",
-                      onClick: () => void controller.pickAndSelectDirectory(),
-                    },
-                    t("pickDirectory")
-                  )
-                : null
-            )
+              : null
           ),
           configuredList.length > 0
             ? h(
@@ -944,11 +1850,7 @@ window.__ModuleLoader__.load({
                     },
                     `${ws.title} (${ws.activeCount})`,
                     ws.mergeMode === "override"
-                      ? h(
-                          "span",
-                          { style: { opacity: 0.85, fontSize: 11 } },
-                          `[${t("mergeOverrideShort")}]`
-                        )
+                      ? h("span", { style: { opacity: 0.85, fontSize: 11 } }, `[${t("mergeOverrideShort")}]`)
                       : null
                   )
                 )
@@ -963,76 +1865,48 @@ window.__ModuleLoader__.load({
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 12,
-                    flexWrap: "wrap",
-                    paddingTop: 6,
+                    paddingTop: 8,
                     borderTop: "0.5px solid var(--dsw-alias-border-l2)",
                   },
                 },
-                h(
-                  "label",
-                  {
-                    style: {
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 7,
-                      cursor: "pointer",
-                      fontSize: 12.5,
-                    },
-                  },
-                  h("input", {
-                    type: "checkbox",
-                    checked: selected.enabled !== false,
-                    disabled: snap.saving,
-                    onChange: onToggleWorkspaceEnabled,
-                  }),
-                  h("span", null, t("workspaceEnabled"))
-                ),
-                h(
-                  "div",
-                  { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
-                  h(
-                    "label",
-                    { style: { fontSize: 12, color: "var(--dsw-alias-label-secondary)" } },
-                    t("mergeModeLabel") + ":"
-                  ),
-                  h(
-                    "select",
-                    {
-                      className: "dsh-prompts-select",
-                      "data-merge-mode": "",
-                      value: selected.mergeMode || "append",
-                      disabled: snap.saving,
-                      onChange: onChangeMergeMode,
-                    },
-                    h("option", { value: "append" }, t("mergeAppend")),
-                    h("option", { value: "override" }, t("mergeOverride"))
-                  )
-                )
+                h("span", { style: { fontSize: 13, fontWeight: 500 } }, t("workspaceEnabled")),
+                h(Switch, {
+                  checked: selected.enabled !== false,
+                  disabled: snap.saving,
+                  label: t("workspaceEnabled"),
+                  onChange: onToggleWorkspaceEnabled,
+                })
               )
             : null
         ),
-        h(ScopeToolbar, {
-          scope: "workspace",
-          workspace: selected,
-          itemCount: items.length,
-          controller,
-          saving: snap.saving,
-          t,
-        }),
-        items.length === 0
+        showNewInline
+          ? h(InlinePromptEditor, {
+              draft: snap.editorModal,
+              saving: snap.saving,
+              controller,
+              t,
+              embedded: false,
+            })
+          : null,
+        items.length === 0 && !showNewInline
           ? h("p", { className: "dsh-prompts-empty" }, t("emptyWorkspace"))
-          : items.map((item, index) =>
-              h(PromptCard, {
-                key: item.id,
-                item,
-                index,
-                total: items.length,
-                scope: "workspace",
-                workspacePath: selected?.path || "",
-                controller,
-                saving: snap.saving,
-                t,
-              })
+          : h(
+              "div",
+              { className: "dsh-prompts-list" },
+              items.map((item, index) =>
+                h(PromptRowCard, {
+                  key: item.id,
+                  item,
+                  index,
+                  total: items.length,
+                  scope: "workspace",
+                  workspacePath: selected?.path || "",
+                  workspaceTitle: selected?.title || "",
+                  snap,
+                  controller,
+                  t,
+                })
+              )
             )
       );
     }
@@ -1044,18 +1918,19 @@ window.__ModuleLoader__.load({
 
       return h(
         "div",
-        { style: { display: "flex", flexDirection: "column", gap: 16 } },
+        { style: { display: "flex", flexDirection: "column", gap: 20 } },
         h(
           "div",
-          { className: "dsh-prompts-card" },
+          { className: "dsh-prompts-section" },
           h(
             "div",
             { className: "dsh-prompts-toolbar" },
-            h("strong", { style: { fontSize: 13.5 } }, t("previewScopeLabel")),
+            h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
             h(
               "select",
               {
                 className: "dsh-prompts-select",
+                style: { maxWidth: 360 },
                 value: snap.previewWorkspacePath,
                 onChange: (event) => controller.setPreviewWorkspace(event.target.value),
               },
@@ -1072,216 +1947,52 @@ window.__ModuleLoader__.load({
               )
             )
           ),
-          h(
-            "p",
-            { style: { margin: "2px 0 4px", color: "var(--dsw-alias-label-tertiary)", fontSize: 12.5 } },
-            t("previewHint")
-          ),
+          h("p", { className: "dsh-prompts-toggle-hint" }, t("previewHint")),
           preview.hasActive
-            ? h(
-                "pre",
-                { className: "dsh-prompts-pre dsh-prompts-preview-box", "data-preview-envelope": "" },
-                preview.combinedText
-              )
+            ? h("pre", { className: "dsh-prompts-pre", "data-preview-envelope": "" }, preview.combinedText)
             : h("p", { className: "dsh-prompts-empty" }, t("previewEmpty"))
         ),
         h(
           "div",
-          { className: "dsh-prompts-card" },
-          h("strong", { style: { fontSize: 13.5 } }, t("optionsHeading")),
+          { className: "dsh-prompts-section" },
+          h("h4", { className: "dsh-prompts-section-title" }, t("optionsHeading")),
           h(
-            "label",
-            { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" } },
-            h("input", {
-              type: "checkbox",
+            "div",
+            { className: "dsh-prompts-toggle-row" },
+            h(
+              "div",
+              { className: "dsh-prompts-toggle-main" },
+              h("span", { className: "dsh-prompts-toggle-label" }, t("optShowInSettings"))
+            ),
+            h(Switch, {
               checked: state.showInSettings !== false,
               disabled: snap.saving,
-              onChange: (event) =>
+              label: t("optShowInSettings"),
+              onChange: (next) =>
                 void controller.mutate({
                   type: "setOptions",
-                  showInSettings: event.target.checked,
+                  showInSettings: next,
                 }),
-            }),
-            h("span", null, t("optShowInSettings"))
+            })
           ),
           h(
-            "label",
-            { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" } },
-            h("input", {
-              type: "checkbox",
+            "div",
+            { className: "dsh-prompts-toggle-row" },
+            h(
+              "div",
+              { className: "dsh-prompts-toggle-main" },
+              h("span", { className: "dsh-prompts-toggle-label" }, t("optShowInSidebar"))
+            ),
+            h(Switch, {
               checked: state.showInSidebar === true,
               disabled: snap.saving,
-              onChange: (event) =>
+              label: t("optShowInSidebar"),
+              onChange: (next) =>
                 void controller.mutate({
                   type: "setOptions",
-                  showInSidebar: event.target.checked,
+                  showInSidebar: next,
                 }),
-            }),
-            h("span", null, t("optShowInSidebar"))
-          )
-        )
-      );
-    }
-
-    function EditorModalView({ modal, saving, controller, t }) {
-      if (!modal) return null;
-      const templates = model.getTemplates(t);
-      const isEdit = Boolean(modal.id);
-      const heading =
-        modal.scope === "workspace"
-          ? t(isEdit ? "modalEditWorkspace" : "modalAddWorkspace", {
-              workspace: modal.workspaceTitle || model.pathBaseName(modal.workspacePath),
             })
-          : t(isEdit ? "modalEditGlobal" : "modalAddGlobal");
-
-      return h(
-        Modal,
-        {
-          open: true,
-          onOpenChange: (open) => {
-            if (!open) controller.closeEditor();
-          },
-          title: heading,
-        },
-        h(
-          "div",
-          { style: { display: "flex", flexDirection: "column", gap: 12, minWidth: 480, maxWidth: "100%" } },
-          h("h3", { style: { margin: 0, fontSize: 16, fontWeight: 600 } }, heading),
-          h(
-            "div",
-            { style: { display: "flex", flexDirection: "column", gap: 5 } },
-            h(
-              "label",
-              { style: { fontSize: 12.5, color: "var(--dsw-alias-label-secondary)" } },
-              t("templatePickerLabel")
-            ),
-            h(
-              "select",
-              {
-                className: "dsh-prompts-select",
-                value: "",
-                onChange: (event) => {
-                  const found = templates.find((tpl) => tpl.id === event.target.value);
-                  event.target.value = "";
-                  if (found) controller.applyTemplateToEditor(found);
-                },
-              },
-              h("option", { value: "" }, t("templatePickerHint")),
-              templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
-            )
-          ),
-          h(
-            "div",
-            { style: { display: "flex", flexDirection: "column", gap: 5 } },
-            h("label", { style: { fontSize: 12.5, fontWeight: 500 } }, t("itemTitleLabel")),
-            h("input", {
-              type: "text",
-              className: "dsh-prompts-input",
-              value: modal.title,
-              placeholder: t("itemTitlePlaceholder"),
-              onChange: (event) => controller.updateEditor({ title: event.target.value }),
-            })
-          ),
-          h(
-            "div",
-            { style: { display: "flex", flexDirection: "column", gap: 5 } },
-            h("label", { style: { fontSize: 12.5, fontWeight: 500 } }, t("positionLabel")),
-            h(
-              "select",
-              {
-                className: "dsh-prompts-select",
-                value: modal.position || "suffix",
-                onChange: (event) => controller.updateEditor({ position: event.target.value }),
-              },
-              h("option", { value: "suffix" }, t("positionSuffix")),
-              h("option", { value: "prefix" }, t("positionPrefix"))
-            )
-          ),
-          h(
-            "div",
-            { style: { display: "flex", flexDirection: "column", gap: 5 } },
-            h("label", { style: { fontSize: 12.5, fontWeight: 500 } }, t("itemContentLabel")),
-            h("textarea", {
-              className: "dsh-prompts-textarea",
-              value: modal.content,
-              placeholder: t("itemContentPlaceholder"),
-              onChange: (event) => controller.updateEditor({ content: event.target.value }),
-            })
-          ),
-          modal.validationError
-            ? h("p", { className: "dsh-prompts-error", role: "alert" }, modal.validationError)
-            : null,
-          h(
-            "div",
-            { style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 } },
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                onClick: () => controller.closeEditor(),
-              },
-              t("cancel")
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-variant": "primary",
-                disabled: saving,
-                onClick: () => void controller.saveEditor(t),
-              },
-              saving ? t("saving") : t("save")
-            )
-          )
-        )
-      );
-    }
-
-    function ConfirmModalView({ modal, saving, controller, t }) {
-      if (!modal) return null;
-      return h(
-        Modal,
-        {
-          open: true,
-          onOpenChange: (open) => {
-            if (!open) controller.closeConfirm();
-          },
-          title: modal.title,
-        },
-        h(
-          "div",
-          { style: { display: "flex", flexDirection: "column", gap: 12, maxWidth: 440 } },
-          h("h3", { style: { margin: 0, fontSize: 16, fontWeight: 600 } }, modal.title),
-          h("p", { style: { margin: 0, color: "var(--dsw-alias-label-secondary)" } }, modal.body),
-          h(
-            "div",
-            { style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 } },
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                onClick: () => controller.closeConfirm(),
-              },
-              t("cancel")
-            ),
-            h(
-              "button",
-              {
-                type: "button",
-                className: "dsh-prompts-btn",
-                "data-variant": "danger",
-                disabled: saving,
-                onClick: () => {
-                  const action = modal.action;
-                  controller.closeConfirm();
-                  if (action) void controller.mutate(action);
-                },
-              },
-              t("confirmOk")
-            )
           )
         )
       );
@@ -1292,6 +2003,7 @@ window.__ModuleLoader__.load({
       const snap = useControllerState(controller);
       const t = createTranslator(ctx, propT);
       const summary = snap.summary;
+      const isBundleView = variant === "bundle";
 
       return h(
         "section",
@@ -1300,115 +2012,120 @@ window.__ModuleLoader__.load({
           "data-variant": variant,
           "aria-label": t("title"),
         },
+        !isBundleView
+          ? h(
+              "div",
+              { className: "dsh-prompts-page-head" },
+              h(
+                "div",
+                { style: { flex: 1, minWidth: 240 } },
+                h("h2", { className: "dsh-prompts-page-title" }, t("title")),
+                h("p", { className: "dsh-prompts-page-intro" }, t("description"))
+              )
+            )
+          : null,
         h(
           "div",
-          { className: "dsh-prompts-header" },
+          { className: "dsh-prompts-toggle-row" },
           h(
             "div",
-            { style: { flex: 1, minWidth: 240 } },
-            h("h2", { className: "dsh-prompts-heading" }, t("title")),
-            h("p", { className: "dsh-prompts-desc" }, t("description")),
+            { className: "dsh-prompts-toggle-main" },
             h(
-              "div",
-              { className: "dsh-prompts-live" },
+              "span",
+              { className: "dsh-prompts-toggle-label" },
               h("span", {
                 className: "dsh-prompts-live-dot",
                 "data-off": snap.state.enabled === false ? "true" : "false",
               }),
-              h("span", null, t("liveBadge"))
-            )
+              h("span", null, t("masterToggle"))
+            ),
+            h("p", { className: "dsh-prompts-toggle-hint" }, t("liveBadge"))
           ),
-          h(
-            "label",
-            {
-              style: {
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-                fontWeight: 500,
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "0.5px solid var(--dsw-alias-border-l2)",
-                background: "var(--dsw-alias-bg-layer-2)",
-              },
-            },
-            h("input", {
-              type: "checkbox",
-              checked: snap.state.enabled !== false,
-              disabled: snap.saving,
-              onChange: (event) =>
-                void controller.mutate({
-                  type: "setOptions",
-                  enabled: event.target.checked,
-                }),
-            }),
-            h("span", null, t("masterToggle"))
-          )
+          h(Switch, {
+            checked: snap.state.enabled !== false,
+            disabled: snap.saving,
+            label: t("masterToggle"),
+            onChange: (next) =>
+              void controller.mutate({
+                type: "setOptions",
+                enabled: next,
+              }),
+          })
         ),
         snap.error
           ? h("p", { className: "dsh-prompts-error", role: "alert" }, snap.error)
           : null,
         h(
           "div",
-          { className: "dsh-prompts-tabs", role: "tablist" },
+          { className: "dsh-prompts-nav-bar" },
           h(
-            "button",
-            {
-              type: "button",
-              role: "tab",
-              className: "dsh-prompts-tab",
-              "data-tab": "global",
-              "data-active": snap.activeTab === "global" ? "true" : "false",
-              "aria-selected": snap.activeTab === "global",
-              onClick: () => controller.setTab("global"),
-            },
-            t("tabGlobal", { count: summary.globalCount })
+            "div",
+            { className: "dsh-prompts-capsule-tabs", role: "tablist" },
+            h(
+              "button",
+              {
+                type: "button",
+                role: "tab",
+                className: "dsh-prompts-capsule-tab",
+                "data-tab": "global",
+                "data-active": snap.activeTab === "global" ? "true" : "false",
+                "aria-selected": snap.activeTab === "global",
+                onClick: () => controller.setTab("global"),
+              },
+              t("tabGlobal", { count: summary.globalCount })
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                role: "tab",
+                className: "dsh-prompts-capsule-tab",
+                "data-tab": "workspace",
+                "data-active": snap.activeTab === "workspace" ? "true" : "false",
+                "aria-selected": snap.activeTab === "workspace",
+                onClick: () => controller.setTab("workspace"),
+              },
+              t("tabWorkspace", { count: summary.workspaceCount })
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                role: "tab",
+                className: "dsh-prompts-capsule-tab",
+                "data-tab": "preview",
+                "data-active": snap.activeTab === "preview" ? "true" : "false",
+                "aria-selected": snap.activeTab === "preview",
+                onClick: () => controller.setTab("preview"),
+              },
+              t("tabPreview")
+            )
           ),
-          h(
-            "button",
-            {
-              type: "button",
-              role: "tab",
-              className: "dsh-prompts-tab",
-              "data-tab": "workspace",
-              "data-active": snap.activeTab === "workspace" ? "true" : "false",
-              "aria-selected": snap.activeTab === "workspace",
-              onClick: () => controller.setTab("workspace"),
-            },
-            t("tabWorkspace", { count: summary.workspaceCount })
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              role: "tab",
-              className: "dsh-prompts-tab",
-              "data-tab": "preview",
-              "data-active": snap.activeTab === "preview" ? "true" : "false",
-              "aria-selected": snap.activeTab === "preview",
-              onClick: () => controller.setTab("preview"),
-            },
-            t("tabPreview")
-          )
+          snap.activeTab === "global"
+            ? h(ScopeActionControls, {
+                scope: "global",
+                workspace: null,
+                itemCount: (snap.state.globalItems || []).length,
+                snap,
+                controller,
+                t,
+              })
+            : snap.activeTab === "workspace"
+              ? h(ScopeActionControls, {
+                  scope: "workspace",
+                  workspace: snap.selectedWorkspace,
+                  itemCount: (snap.selectedWorkspace?.items || []).length,
+                  snap,
+                  controller,
+                  t,
+                })
+              : null
         ),
         snap.activeTab === "global"
           ? h(GlobalTabView, { snap, controller, t })
           : snap.activeTab === "workspace"
             ? h(WorkspaceTabView, { snap, controller, canPickDir, t })
-            : h(PreviewAndOptionsTabView, { snap, controller, t }),
-        h(EditorModalView, {
-          modal: snap.editorModal,
-          saving: snap.saving,
-          controller,
-          t,
-        }),
-        h(ConfirmModalView, {
-          modal: snap.confirmModal,
-          saving: snap.saving,
-          controller,
-          t,
-        })
+            : h(PreviewAndOptionsTabView, { snap, controller, t })
       );
     }
 
