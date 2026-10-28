@@ -1,0 +1,4 @@
+# Global and workspace-scoped system prompts manager for DeepSeek Harness.
+- insert:
+    - id: dsh-prompts
+      name: dsh-prompts

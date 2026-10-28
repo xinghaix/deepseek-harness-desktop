@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Prompt Manager",
+    "description": "Manage global and workspace-scoped system prompts with cross-model priority envelopes and real-time updates."
+  }
+}

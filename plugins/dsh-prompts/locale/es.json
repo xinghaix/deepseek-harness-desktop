@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Gestor de prompts",
+    "description": "Administre prompts del sistema globales y por espacio de trabajo con prioridad entre modelos y aplicación en tiempo real."
+  }
+}

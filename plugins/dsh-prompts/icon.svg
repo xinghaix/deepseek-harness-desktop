@@ -1,0 +1,23 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main prompt sheet / terminal card -->
+  <rect x="5.5" y="6.5" width="21" height="23" rx="4.2" fill="url(#prompts_card)"/>
+  <!-- Prompt chevron & lines -->
+  <path d="M10 13L12.6 15.2L10 17.4" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="14.5" y="14.2" width="7.8" height="2" rx="1" fill="#FFFFFF" fill-opacity="0.94"/>
+  <rect x="9.8" y="19.5" width="12.5" height="1.9" rx="0.95" fill="#FFFFFF" fill-opacity="0.68"/>
+  <rect x="9.8" y="23.2" width="9.2" height="1.9" rx="0.95" fill="#FFFFFF" fill-opacity="0.48"/>
+  <!-- Workspace / Global scope badge -->
+  <rect x="19.5" y="17.5" width="11" height="11" rx="3.2" fill="url(#prompts_badge)" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="0.8"/>
+  <path d="M22.4 21.8H27.6M22.4 24.4H25.8" stroke="#FFFFFF" stroke-width="1.65" stroke-linecap="round"/>
+  <circle cx="27.3" cy="24.4" r="1.15" fill="#FFF3D1"/>
+  <defs>
+    <linearGradient id="prompts_card" x1="5.5" y1="6.5" x2="26.5" y2="29.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6DA8FF"/>
+      <stop offset="1" stop-color="#1D5BF0"/>
+    </linearGradient>
+    <linearGradient id="prompts_badge" x1="19.5" y1="17.5" x2="30.5" y2="28.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35C9B6"/>
+      <stop offset="1" stop-color="#0E8F82"/>
+    </linearGradient>
+  </defs>
+</svg>

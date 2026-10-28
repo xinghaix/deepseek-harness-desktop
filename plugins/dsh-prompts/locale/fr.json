@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Gestionnaire de prompts",
+    "description": "Gérez les prompts système globaux et par espace de travail avec priorité inter-modèles et effet en temps réel."
+  }
+}
