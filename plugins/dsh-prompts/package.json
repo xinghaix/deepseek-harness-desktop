@@ -60,8 +60,7 @@
   "icon": "./icon.svg",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "test": "node scripts/build-client.mjs --check && node --test test/",
-    "prepare": "node scripts/build-client.mjs"
+    "test": "node scripts/build-client.mjs --check && node --test test/"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.4"
