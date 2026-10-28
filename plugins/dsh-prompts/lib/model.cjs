@@ -486,15 +486,35 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   };
 }
 
+function compactPromptContent(text) {
+  const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let inFence = false;
+  for (const rawLine of lines) {
+    const trimmedEnd = rawLine.replace(/[ \t]+$/g, "");
+    if (/^\s*```/.test(trimmedEnd)) {
+      inFence = !inFence;
+      out.push(trimmedEnd);
+      continue;
+    }
+    if (!inFence && trimmedEnd.trim() === "") {
+      continue;
+    }
+    out.push(trimmedEnd);
+  }
+  return out.join("\n").trim();
+}
+
 function formatItemBlock(item, index, total, prefix) {
+  const body = compactPromptContent(item.content);
   const showTitle = Boolean(item.includeTitle === true && item.title);
   if (showTitle) {
-    return `### ${prefix}#${index + 1} ${item.title}\n${item.content}`;
+    return `### ${prefix}#${index + 1} ${item.title}\n${body}`;
   }
   if (total > 1) {
-    return `### ${prefix}#${index + 1}\n${item.content}`;
+    return `### ${prefix}#${index + 1}\n${body}`;
   }
-  return item.content;
+  return body;
 }
 
 function renderPriorityEnvelope(resolved, options = {}) {
@@ -522,7 +542,7 @@ function renderPriorityEnvelope(resolved, options = {}) {
     lines.push(
       resolved.globalItems
         .map((item, idx) => formatItemBlock(item, idx, total, "Global"))
-        .join("\n\n")
+        .join("\n")
     );
     lines.push("</global-instructions>");
   }
@@ -537,7 +557,7 @@ function renderPriorityEnvelope(resolved, options = {}) {
     lines.push(
       resolved.workspaceItems
         .map((item, idx) => formatItemBlock(item, idx, total, "Workspace"))
-        .join("\n\n")
+        .join("\n")
     );
     lines.push("</workspace-instructions>");
   }

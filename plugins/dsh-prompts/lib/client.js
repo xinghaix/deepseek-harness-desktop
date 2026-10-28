@@ -493,15 +493,35 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   };
 }
 
+function compactPromptContent(text) {
+  const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let inFence = false;
+  for (const rawLine of lines) {
+    const trimmedEnd = rawLine.replace(/[ \t]+$/g, "");
+    if (/^\s*```/.test(trimmedEnd)) {
+      inFence = !inFence;
+      out.push(trimmedEnd);
+      continue;
+    }
+    if (!inFence && trimmedEnd.trim() === "") {
+      continue;
+    }
+    out.push(trimmedEnd);
+  }
+  return out.join("\n").trim();
+}
+
 function formatItemBlock(item, index, total, prefix) {
+  const body = compactPromptContent(item.content);
   const showTitle = Boolean(item.includeTitle === true && item.title);
   if (showTitle) {
-    return `### ${prefix}#${index + 1} ${item.title}\n${item.content}`;
+    return `### ${prefix}#${index + 1} ${item.title}\n${body}`;
   }
   if (total > 1) {
-    return `### ${prefix}#${index + 1}\n${item.content}`;
+    return `### ${prefix}#${index + 1}\n${body}`;
   }
-  return item.content;
+  return body;
 }
 
 function renderPriorityEnvelope(resolved, options = {}) {
@@ -529,7 +549,7 @@ function renderPriorityEnvelope(resolved, options = {}) {
     lines.push(
       resolved.globalItems
         .map((item, idx) => formatItemBlock(item, idx, total, "Global"))
-        .join("\n\n")
+        .join("\n")
     );
     lines.push("</global-instructions>");
   }
@@ -544,7 +564,7 @@ function renderPriorityEnvelope(resolved, options = {}) {
     lines.push(
       resolved.workspaceItems
         .map((item, idx) => formatItemBlock(item, idx, total, "Workspace"))
-        .join("\n\n")
+        .join("\n")
     );
     lines.push("</workspace-instructions>");
   }
@@ -1823,8 +1843,9 @@ return module.exports; })();
   top: calc(100% + 6px);
   left: 0;
   z-index: 80;
-  min-width: max(100%, 184px);
-  max-width: min(520px, 90vw);
+  width: max-content;
+  min-width: max(100%, 200px);
+  max-width: min(380px, 78vw);
   max-height: 260px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1840,21 +1861,28 @@ return module.exports; })();
   left: auto;
   right: 0;
 }
+.dsh-prompts-dropdown[data-full="true"] .dsh-prompts-dropdown-menu {
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
 .dsh-prompts-dropdown-option {
   box-sizing: border-box;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 9px 12px;
   border: none;
   border-radius: 10px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13.5px;
+  line-height: 20px;
   cursor: pointer;
   text-align: left;
   transition: background 0.1s ease;
@@ -1870,9 +1898,9 @@ return module.exports; })();
   gap: 2px;
 }
 .dsh-prompts-dropdown-option-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 20px;
 }
 .dsh-prompts-dropdown-option-sub {
   font-size: 11.5px;
@@ -2967,46 +2995,62 @@ return module.exports; })();
           : null,
         h(
           "div",
+          { key: "title-field", className: "dsh-prompts-field" },
+          h(
+            "div",
+            { className: "dsh-prompts-field-label-row" },
+            h(
+              "label",
+              { className: "dsh-prompts-field-label" },
+              t("itemTitleLabel"),
+              " ",
+              h(
+                "span",
+                { className: "dsh-prompts-field-subhint" },
+                `(${draft.includeTitle === true ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
+              )
+            ),
+            h(
+              "span",
+              {
+                className: "dsh-prompts-inline-switch-label",
+                onClick: () =>
+                  controller.updateEditor({ includeTitle: !(draft.includeTitle === true) }),
+              },
+              h("span", null, t("includeTitleToggle")),
+              h(Switch, {
+                size: "sm",
+                checked: draft.includeTitle === true,
+                label: t("includeTitleToggle"),
+                onChange: (next) => controller.updateEditor({ includeTitle: next }),
+              })
+            )
+          ),
+          h("input", {
+            type: "text",
+            className: "dsh-prompts-input",
+            value: draft.title,
+            placeholder: t("itemTitlePlaceholder"),
+            onChange: (event) => controller.updateEditor({ title: event.target.value }),
+          })
+        ),
+        h(
+          "div",
           { key: "grid", className: "dsh-prompts-field-grid" },
           h(
             "div",
             { className: "dsh-prompts-field" },
-            h(
-              "div",
-              { className: "dsh-prompts-field-label-row" },
-              h(
-                "label",
-                { className: "dsh-prompts-field-label" },
-                t("itemTitleLabel"),
-                " ",
-                h(
-                  "span",
-                  { className: "dsh-prompts-field-subhint" },
-                  `(${draft.includeTitle === true ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
-                )
-              ),
-              h(
-                "span",
-                {
-                  className: "dsh-prompts-inline-switch-label",
-                  onClick: () =>
-                    controller.updateEditor({ includeTitle: !(draft.includeTitle === true) }),
-                },
-                h("span", null, t("includeTitleToggle")),
-                h(Switch, {
-                  size: "sm",
-                  checked: draft.includeTitle === true,
-                  label: t("includeTitleToggle"),
-                  onChange: (next) => controller.updateEditor({ includeTitle: next }),
-                })
-              )
-            ),
-            h("input", {
-              type: "text",
-              className: "dsh-prompts-input",
-              value: draft.title,
-              placeholder: t("itemTitlePlaceholder"),
-              onChange: (event) => controller.updateEditor({ title: event.target.value }),
+            h("label", { className: "dsh-prompts-field-label" }, t("positionLabel")),
+            h(DropdownSelect, {
+              dropdownId: `anchor-editor-${draft.id || "new"}`,
+              value: draft.position || "suffix",
+              fullWidth: true,
+              options: [
+                { value: "suffix", label: t("positionSuffix") },
+                { value: "prefix", label: t("positionPrefix") },
+              ],
+              controller,
+              onChange: (pos) => controller.updateEditor({ position: pos }),
             })
           ),
           h(
@@ -3026,43 +3070,6 @@ return module.exports; })();
                 if (found) controller.applyTemplateToEditor(found);
               },
             })
-          )
-        ),
-        h(
-          "div",
-          { key: "anchor", className: "dsh-prompts-field" },
-          h("label", { className: "dsh-prompts-field-label" }, t("positionLabel")),
-          h(
-            "div",
-            { className: "dsh-prompts-anchor-group" },
-            h(
-              "label",
-              {
-                className: "dsh-prompts-anchor-option",
-                "data-checked": (draft.position || "suffix") === "suffix" ? "true" : "false",
-              },
-              h("input", {
-                type: "radio",
-                name: `anchor-${draft.id || "new"}`,
-                checked: (draft.position || "suffix") === "suffix",
-                onChange: () => controller.updateEditor({ position: "suffix" }),
-              }),
-              h("span", null, t("positionSuffix"))
-            ),
-            h(
-              "label",
-              {
-                className: "dsh-prompts-anchor-option",
-                "data-checked": draft.position === "prefix" ? "true" : "false",
-              },
-              h("input", {
-                type: "radio",
-                name: `anchor-${draft.id || "new"}`,
-                checked: draft.position === "prefix",
-                onChange: () => controller.updateEditor({ position: "prefix" }),
-              }),
-              h("span", null, t("positionPrefix"))
-            )
           )
         ),
         h(
@@ -3363,7 +3370,7 @@ return module.exports; })();
           value: "",
           placeholder: t("insertTemplate"),
           size: "sm",
-          align: "right",
+          align: "left",
           showCheck: false,
           ariaLabel: t("insertTemplate"),
           disabled: snap.saving || (scope === "workspace" && !workspacePath),

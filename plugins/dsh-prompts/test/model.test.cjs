@@ -102,7 +102,7 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
   const withTitleEnvelope = model.renderPriorityEnvelope(withTitleResolved);
   assert.match(withTitleEnvelope, /### Workspace#1 Explicit Injected Title\nAlways run unit tests after editing\./);
 
-  // Add a second global item with includeTitle: false -> both get ### Global#1 and ### Global#2
+  // Add a second global item with includeTitle: false and blank lines -> blank lines outside code fences are stripped
   state = model.applyMutation(state, {
     type: "setWorkspacePolicy",
     workspacePath: "/work/app",
@@ -113,14 +113,17 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
     item: {
       id: "g2",
       title: "Second Global",
-      content: "Keep responses concise.",
+      content: "**MUST**:\n1. Keep responses concise.\n\n\n**NEVER**:\n- Do not repeat.",
       position: "suffix",
     },
   });
   const multiGlobalResolved = model.resolveEffectiveItems(state, "/work/app/src", "suffix");
   const multiGlobalEnvelope = model.renderPriorityEnvelope(multiGlobalResolved);
   assert.match(multiGlobalEnvelope, /### Global#1\nAlways reply in Simplified Chinese/);
-  assert.match(multiGlobalEnvelope, /### Global#2\nKeep responses concise\./);
+  assert.match(
+    multiGlobalEnvelope,
+    /### Global#2\n\*\*MUST\*\*:\n1\. Keep responses concise\.\n\*\*NEVER\*\*:\n- Do not repeat\./
+  );
 });
 
 test("createSessionPromptTracker emits status=cleared for existing sessions after clearing prompts, and empty string for clean sessions", () => {
