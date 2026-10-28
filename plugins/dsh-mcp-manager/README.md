@@ -2,7 +2,7 @@
 
 管理当前 DSH profile 里的 MCP 连接。连接记录存入官方 `storageDomain`，运行时通过私有 Loader 子树创建 `@deepseek-ai/dsh-mcp-client` 实例；**添加服务器不再生成独立配置包，也不会让「已安装插件」列表每台服务器多出一行**。
 
-页面在插件详情（`plugins.bundle.config`）里。页面和 Host 之间只走两条带登录态的 Host 路由（`ctx.connection.fetch.register`，cookie 会话 + Host/Origin 校验）：
+同时提供设置页左侧一级菜单项（`settings.section`，id `dsh-mcp-manager`）、插件详情页（`plugins.bundle.config`）以及可选的左侧边栏快捷面板（`sidebar.panellist` + `main`），三处入口共享并实时同步同一套设置 UI 与连接状态。页面和 Host 之间只走两条带登录态的 Host 路由（`ctx.connection.fetch.register`，cookie 会话 + Host/Origin 校验）：
 
 | 路由 | 作用 |
 | --- | --- |

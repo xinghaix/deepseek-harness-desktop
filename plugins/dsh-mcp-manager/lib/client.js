@@ -1452,6 +1452,13 @@ module.exports = {
 	font-size: 13px;
 	line-height: 20px;
 }
+.dsh-mcp-settings-page {
+	width: 100%;
+	min-width: 0;
+	max-width: 960px;
+	padding: 4px 0 36px;
+	box-sizing: border-box;
+}
 .dsh-mcp-main-page {
 	width: 100%;
 	min-width: 0;
@@ -2098,11 +2105,26 @@ module.exports = {
 		function fill(template, params) {
 			return String(template ?? "").replace(/\{(\w+)\}/g, (_, key) => (params && params[key] != null ? String(params[key]) : ""));
 		}
+		let activeLocaleService = null;
+
 		/** Framework `t` plus `{param}` filling and an English fallback when a key is missing. */
 		function translator(t) {
 			return (key, params) => {
 				let text = typeof t === "function" ? t(key) : undefined;
-				if (text == null || text === key || text === NS + "." + key) text = LOCALES.en[key] ?? key;
+				if (text == null || text === key || text === NS + "." + key) {
+					try {
+						if (typeof activeLocaleService?.bind === "function") {
+							const bound = activeLocaleService.bind(NS);
+							const resolved = typeof bound === "function" ? bound(key) : undefined;
+							if (resolved != null && resolved !== key && resolved !== NS + "." + key) text = resolved;
+						}
+					} catch { /* ignore */ }
+				}
+				if (text == null || text === key || text === NS + "." + key) {
+					const active = String(activeLocaleService?.getSnapshot?.()?.active || "").toLowerCase();
+					const lang = active.startsWith("zh") ? "zh" : active.slice(0, 2);
+					text = LOCALES[lang]?.[key] ?? LOCALES.en[key] ?? key;
+				}
 				return fill(text, params);
 			};
 		}
@@ -2225,6 +2247,16 @@ module.exports = {
 		}
 
 		let sidebarPrefEnabled = readStoredSidebarPref();
+		let sharedServerState = null;
+		const serverStateListeners = new Set();
+
+		function publishServerState(nextState) {
+			if (!nextState || typeof nextState !== "object") return;
+			sharedServerState = nextState;
+			for (const fn of [...serverStateListeners]) {
+				try { fn(nextState); } catch { /* ignore */ }
+			}
+		}
 
 		function publishSidebarPref(enabled, opts = {}) {
 			const next = enabled !== false;
@@ -2243,6 +2275,65 @@ module.exports = {
 			if (opts.persistRemote === true && typeof fetch === "function") {
 				void call("action", { op: "setPrefs", showSidebarEntry: next }).catch(() => {});
 			}
+		}
+
+		function mcpNavIconSVG(className, size = 16) {
+			const ns = "http://www.w3.org/2000/svg";
+			const svg = document.createElementNS(ns, "svg");
+			svg.setAttribute("width", String(size));
+			svg.setAttribute("height", String(size));
+			svg.setAttribute("viewBox", "0 0 16 16");
+			svg.setAttribute("fill", "none");
+			svg.setAttribute("stroke", "currentColor");
+			svg.setAttribute("stroke-width", "1.3");
+			svg.setAttribute("stroke-linecap", "round");
+			svg.setAttribute("stroke-linejoin", "round");
+			svg.setAttribute("aria-hidden", "true");
+			svg.setAttribute("class", [className, "dshMcpNavIcon"].filter(Boolean).join(" "));
+			const mk = (tag, attrs) => {
+				const el = document.createElementNS(ns, tag);
+				for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+				return el;
+			};
+			svg.appendChild(mk("rect", { x: "2", y: "2.5", width: "6.5", height: "11", rx: "1.6" }));
+			svg.appendChild(mk("path", { d: "M4.2 5.5H6.3M4.2 8H6.3" }));
+			svg.appendChild(mk("circle", { cx: "5.25", cy: "10.8", r: "0.7", fill: "currentColor", stroke: "none" }));
+			svg.appendChild(mk("path", { d: "M8.5 5.5H11.2M8.5 10.5H11.2" }));
+			svg.appendChild(mk("circle", { cx: "12.6", cy: "5.5", r: "1.4" }));
+			svg.appendChild(mk("circle", { cx: "12.6", cy: "10.5", r: "1.4" }));
+			return svg;
+		}
+
+		function installMcpNavIcon(getLabels) {
+			if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
+				return () => {};
+			}
+			const paint = () => {
+				const accepted = new Set(
+					[
+						...(typeof getLabels === "function" ? getLabels() : []),
+						...Object.values(LOCALES).map((dict) => dict?.title).filter(Boolean),
+					].map((s) => String(s).trim())
+				);
+				const candidates = document.querySelectorAll("button, [role='button'], span, div");
+				for (const el of candidates) {
+					const txt = (el.textContent || "").trim();
+					if (!accepted.has(txt)) continue;
+					const row = el.closest("button") || el.parentElement;
+					if (!row) continue;
+					if (row.querySelector("svg.dshMcpNavIcon")) continue;
+					const oldSvg = row.querySelector("svg");
+					if (!oldSvg) continue;
+					oldSvg.replaceWith(mcpNavIconSVG(oldSvg.getAttribute("class") || "", 16));
+				}
+			};
+			paint();
+			const obs = new MutationObserver(() => paint());
+			obs.observe(document.body || document.documentElement, {
+				childList: true,
+				subtree: true,
+			});
+			return () => obs.disconnect();
 		}
 
 		function McpPanelIcon(props) {
@@ -2319,13 +2410,22 @@ module.exports = {
 		}
 
 		function Page(props) {
-			const tr = translator(props.t);
-			if (props.view === "summary") return tr("description");
+			const tr = translator(props?.t);
+			if (props?.view === "summary") return tr("description");
 			return jsx(Manager, { tr, isMainPanel: false });
 		}
 
+		function SettingsSectionPage(props) {
+			const tr = translator(props?.t);
+			return jsx("div", {
+				"data-dsh-mcp-settings-section": "",
+				className: "dsh-mcp-settings-page",
+				children: jsx(Manager, { tr, isMainPanel: false }),
+			});
+		}
+
 		function MainPanelPage(props) {
-			const tr = translator(props.t);
+			const tr = translator(props?.t);
 			return jsx("section", {
 				"aria-label": tr("title"),
 				"data-dsh-mcp-main-panel": "",
@@ -2343,7 +2443,7 @@ module.exports = {
 		// ---------- main page ----------
 		function Manager(props) {
 			const tr = props.tr;
-			const [state, setState] = React.useState(null);
+			const [state, setState] = React.useState(() => sharedServerState);
 			const [showSidebar, setShowSidebar] = React.useState(() => sidebarPrefEnabled);
 			const [loadError, setLoadError] = React.useState("");
 			const [busy, setBusy] = React.useState(false);
@@ -2362,10 +2462,14 @@ module.exports = {
 			React.useEffect(() => {
 				ensureStyles();
 				setShowSidebar(sidebarPrefEnabled);
+				if (sharedServerState) setState(sharedServerState);
 				const onSidebarPref = (next) => setShowSidebar(next);
+				const onServerState = (next) => setState(next);
 				sidebarPrefListeners.add(onSidebarPref);
+				serverStateListeners.add(onServerState);
 				return () => {
 					sidebarPrefListeners.delete(onSidebarPref);
+					serverStateListeners.delete(onServerState);
 				};
 			}, []);
 
@@ -2376,6 +2480,7 @@ module.exports = {
 					if (typeof data?.prefs?.showSidebarEntry === "boolean") {
 						publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
 					}
+					publishServerState(data);
 					setState(data);
 					setLoadError("");
 				} catch (error) {
@@ -2436,7 +2541,10 @@ module.exports = {
 				setApplication("");
 				try {
 					const data = await call("action", job);
-					if (data?.state) setState(data.state);
+					if (data?.state) {
+						publishServerState(data.state);
+						setState(data.state);
+					}
 					if (!data?.ok) {
 						setNoteTone("error");
 						setNote(errorText(tr, data) || tr("error.badRequest"));
@@ -3617,6 +3725,8 @@ module.exports = {
 		}
 
 		function apply(ctx) {
+			activeLocaleService = ctx.locale || null;
+			sharedServerState = null;
 			ctx.effect(() => ctx.locale.register(NS, { zh: LOCALES.zh, en: LOCALES.en }), "dsh-mcp-manager: zh/en dictionaries");
 			// Further languages use the single-locale form language packs use; they apply when the shell adds that language.
 			for (const id of Object.keys(LOCALES)) {
@@ -3638,6 +3748,7 @@ module.exports = {
 				inject: () => ({}),
 			}, MainPanelPage));
 
+			let disposeSettingsSection = null;
 			let disposeSidebarEntry = null;
 			const resolveSidebarLabel = () => {
 				try {
@@ -3646,9 +3757,33 @@ module.exports = {
 						const val = typeof bound === "function" ? bound("title") : "";
 						if (val && val !== "title" && val !== NS + ".title") return val;
 					}
+					const active = String(ctx.locale?.getSnapshot?.()?.active || "").toLowerCase();
+					const lang = active.startsWith("zh") ? "zh" : active.slice(0, 2);
+					if (LOCALES[lang]?.title) return LOCALES[lang].title;
 				} catch { /* ignore */ }
 				return LOCALES.zh?.title || "MCP 服务器";
 			};
+
+			// 注册设置页左侧一级菜单项（settings.section），与插件配置页和侧边栏面板同步同一套设置 UI 与内容
+			const registerSettingsSection = () => {
+				if (typeof disposeSettingsSection === "function") {
+					try { disposeSettingsSection(); } catch { /* ignore */ }
+					disposeSettingsSection = null;
+				}
+				try {
+					if (typeof ctx.slots?.inject === "function" && typeof ctx.slots?.register === "function") {
+						disposeSettingsSection = ctx.slots.inject("settings.section", () => ctx.slots.register({
+							name: "settings.section",
+							id: PANEL_ID,
+							order: 23,
+							locale: NS,
+							label: resolveSidebarLabel,
+							inject: () => ({}),
+						}, SettingsSectionPage));
+					}
+				} catch { /* ignore */ }
+			};
+			registerSettingsSection();
 
 			const syncSidebarEntry = () => {
 				if (!sidebarPrefEnabled) {
@@ -3676,9 +3811,30 @@ module.exports = {
 			const onSidebarPrefChange = () => syncSidebarEntry();
 			sidebarPrefListeners.add(onSidebarPrefChange);
 
-			// 启动时从 Host 同步一次持久化偏好（防止新回环端口下 localStorage 为空时与磁盘状态不一致）
+			let activeLocaleCode = ctx.locale?.getSnapshot?.()?.active;
+			const offLocale = typeof ctx.locale?.subscribe === "function"
+				? ctx.locale.subscribe(() => {
+					const next = ctx.locale?.getSnapshot?.()?.active;
+					if (next !== activeLocaleCode) {
+						activeLocaleCode = next;
+						registerSettingsSection();
+						if (typeof disposeSidebarEntry === "function") {
+							try { disposeSidebarEntry(); } catch { /* ignore */ }
+							disposeSidebarEntry = null;
+						}
+						syncSidebarEntry();
+					}
+				})
+				: () => {};
+
+			const offNavIcon = installMcpNavIcon(() => [resolveSidebarLabel()]);
+
+			// 启动时从 Host 同步一次持久化偏好与初始状态（防止新回环端口下 localStorage 为空时与磁盘状态不一致）
 			if (typeof fetch === "function") {
 				void call("state").then((data) => {
+					if (data && !data.error) {
+						publishServerState(data);
+					}
 					if (typeof data?.prefs?.showSidebarEntry === "boolean") {
 						publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
 					}
@@ -3688,11 +3844,17 @@ module.exports = {
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
 					sidebarPrefListeners.delete(onSidebarPrefChange);
+					try { offLocale(); } catch { /* ignore */ }
+					try { offNavIcon(); } catch { /* ignore */ }
+					if (typeof disposeSettingsSection === "function") {
+						try { disposeSettingsSection(); } catch { /* ignore */ }
+						disposeSettingsSection = null;
+					}
 					if (typeof disposeSidebarEntry === "function") {
 						try { disposeSidebarEntry(); } catch { /* ignore */ }
 						disposeSidebarEntry = null;
 					}
-				}, "dsh-mcp-manager: sidebar entry lifecycle");
+				}, "dsh-mcp-manager: settings and sidebar entry lifecycle");
 			}
 		}
 

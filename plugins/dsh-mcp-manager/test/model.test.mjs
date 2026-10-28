@@ -153,6 +153,7 @@ test("package.json and icon.svg follow DSH 0.2.1+ manifest and artwork conventio
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.equal(pkg.engines?.dsh, ">=0.2.0-rc.1");
   assert.equal(pkg.scripts?.prepare, undefined);
+  assert.ok(pkg.dsh?.client?.inject?.includes("@deepseek-ai/dsh-client-ui-settings"));
   assert.equal(pkg.exports?.["./locale/*.json"], "./locale/*.json");
   assert.ok(pkg.files?.includes("locale/"));
   assert.ok(pkg.files?.includes("icon.svg"));
@@ -510,6 +511,7 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
       return {};
     });
     let registeredMainPage = null;
+    let settingsRegistration = null;
     let sidebarRegistration = null;
     clientMod.apply({
       effect: (fn) => fn(),
@@ -519,6 +521,12 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
         register: (meta, Comp) => {
           if (meta?.name === "plugins.bundle.config") registeredPage = Comp;
           if (meta?.name === "main" && meta?.key === "dsh-mcp-manager") registeredMainPage = Comp;
+          if (meta?.name === "settings.section" && meta?.id === "dsh-mcp-manager") {
+            settingsRegistration = { meta, Comp };
+            return () => {
+              settingsRegistration = null;
+            };
+          }
           if (meta?.name === "sidebar.panellist" && meta?.id === "dsh-mcp-manager") {
             sidebarRegistration = { meta, Comp };
             return () => {
@@ -531,11 +539,20 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     });
     assert.equal(typeof registeredPage, "function");
     assert.equal(typeof registeredMainPage, "function");
+    assert.ok(settingsRegistration, "settings.section top-level menu entry must be registered");
+    assert.equal(settingsRegistration.meta.order, 23);
+    assert.equal(typeof settingsRegistration.Comp, "function");
     assert.ok(sidebarRegistration, "sidebar.panellist entry must be registered by default");
     assert.equal(sidebarRegistration.meta.order, 15);
 
     // Pre-populate state slot (index 0 in Manager: [state, setState])
     states[0] = statePayload;
+    cursor = 0;
+    const treeSettings = expand(settingsRegistration.Comp({ t: (k) => k }));
+    assert.equal(findAll(treeSettings, (n) => n.props && "data-dsh-mcp-settings-section" in n.props).length, 1);
+    assert.equal(findAll(treeSettings, (n) => n.props && "data-sidebar-pref" in n.props).length, 1);
+    assert.equal(findAll(treeSettings, (n) => n.props?.["data-server"] === "alpha").length, 1);
+
     cursor = 0;
     const tree1 = expand(registeredPage({ t: (k) => k }));
 
