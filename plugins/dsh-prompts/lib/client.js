@@ -247,6 +247,18 @@ function mergeWorkspaceCatalog(dshWorkspaces = [], workspacesMap = {}, currentCw
     catalog.push(buildEntry(wsPath, profile.workspaceId, profile.workspaceTitle, [], false, profile));
   }
 
+  catalog.sort((a, b) => {
+    const cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (cmp !== 0) return cmp;
+    return String(a.path || "").localeCompare(String(b.path || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+
   return catalog;
 }
 
@@ -2419,7 +2431,7 @@ return module.exports; })();
       let error = "";
       let activeTab = "global";
       let selectedWorkspacePath = "";
-      let previewWorkspacePath = "__current__";
+      let previewWorkspacePath = "__global__";
       // Inline expandable editor state (replaces secondary Modal dialog)
       let editorDraft = null;
       // Inline expanded item ID (or null)
@@ -2467,11 +2479,9 @@ return module.exports; })();
           null;
 
         const targetPreviewCwd =
-          previewWorkspacePath === "__global__"
+          previewWorkspacePath === "__global__" || !previewWorkspacePath
             ? ""
-            : previewWorkspacePath === "__current__"
-              ? effectiveSelectedPath || currentCwd
-              : previewWorkspacePath;
+            : previewWorkspacePath;
 
         const preview = model.renderEffectivePreview(state, targetPreviewCwd);
         const summary = model.summaryCounts(state);
@@ -3663,7 +3673,12 @@ return module.exports; })();
     }
 
     function PreviewAndOptionsTabView({ snap, controller, t }) {
-      const catalog = snap.workspaceCatalog || [];
+      const catalog = [...(snap.workspaceCatalog || [])].sort((a, b) =>
+        String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
       const preview = snap.preview;
       const state = snap.state;
 
@@ -3679,19 +3694,9 @@ return module.exports; })();
             h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
             h(DropdownSelect, {
               dropdownId: "preview-workspace",
-              value: snap.previewWorkspacePath,
+              value: snap.previewWorkspacePath || "__global__",
               align: "right",
               options: [
-                {
-                  value: "__current__",
-                  triggerLabel: snap.selectedWorkspace
-                    ? `${snap.selectedWorkspace.title} (${snap.selectedWorkspace.path})`
-                    : t("previewGlobalOnly"),
-                  label: snap.selectedWorkspace
-                    ? snap.selectedWorkspace.title
-                    : t("previewGlobalOnly"),
-                  subLabel: snap.selectedWorkspace ? snap.selectedWorkspace.path : "",
-                },
                 {
                   value: "__global__",
                   label: t("previewGlobalOnly"),

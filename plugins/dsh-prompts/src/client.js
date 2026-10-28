@@ -1031,7 +1031,7 @@ window.__ModuleLoader__.load({
       let error = "";
       let activeTab = "global";
       let selectedWorkspacePath = "";
-      let previewWorkspacePath = "__current__";
+      let previewWorkspacePath = "__global__";
       // Inline expandable editor state (replaces secondary Modal dialog)
       let editorDraft = null;
       // Inline expanded item ID (or null)
@@ -1079,11 +1079,9 @@ window.__ModuleLoader__.load({
           null;
 
         const targetPreviewCwd =
-          previewWorkspacePath === "__global__"
+          previewWorkspacePath === "__global__" || !previewWorkspacePath
             ? ""
-            : previewWorkspacePath === "__current__"
-              ? effectiveSelectedPath || currentCwd
-              : previewWorkspacePath;
+            : previewWorkspacePath;
 
         const preview = model.renderEffectivePreview(state, targetPreviewCwd);
         const summary = model.summaryCounts(state);
@@ -2275,7 +2273,12 @@ window.__ModuleLoader__.load({
     }
 
     function PreviewAndOptionsTabView({ snap, controller, t }) {
-      const catalog = snap.workspaceCatalog || [];
+      const catalog = [...(snap.workspaceCatalog || [])].sort((a, b) =>
+        String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
       const preview = snap.preview;
       const state = snap.state;
 
@@ -2291,19 +2294,9 @@ window.__ModuleLoader__.load({
             h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
             h(DropdownSelect, {
               dropdownId: "preview-workspace",
-              value: snap.previewWorkspacePath,
+              value: snap.previewWorkspacePath || "__global__",
               align: "right",
               options: [
-                {
-                  value: "__current__",
-                  triggerLabel: snap.selectedWorkspace
-                    ? `${snap.selectedWorkspace.title} (${snap.selectedWorkspace.path})`
-                    : t("previewGlobalOnly"),
-                  label: snap.selectedWorkspace
-                    ? snap.selectedWorkspace.title
-                    : t("previewGlobalOnly"),
-                  subLabel: snap.selectedWorkspace ? snap.selectedWorkspace.path : "",
-                },
                 {
                   value: "__global__",
                   label: t("previewGlobalOnly"),

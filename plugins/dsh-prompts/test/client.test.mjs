@@ -252,9 +252,11 @@ test("Client plugin registers all 8 locales, settings.section, plugins.bundle.co
   controller.closeDropdown();
   assert.equal(controller.getSnapshot().openDropdownId, "");
 
-  // Switch to preview tab and verify priority envelope preview renders
+  // Switch to preview tab and verify priority envelope preview defaults to global first
   controller.setTab("preview");
+  assert.equal(controller.getSnapshot().previewWorkspacePath, "__global__");
   const textPreview = renderVNodeToText(React.createElement(settingsSlot.Component, {}));
+  assert.match(textPreview, /仅全局提示词（不匹配工作区）/);
   assert.match(textPreview, /<user-custom-instructions slot="suffix" status="active"/);
   assert.match(textPreview, /始终使用简体中文回答。/);
 

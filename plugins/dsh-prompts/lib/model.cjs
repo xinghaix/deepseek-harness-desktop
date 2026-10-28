@@ -240,6 +240,18 @@ function mergeWorkspaceCatalog(dshWorkspaces = [], workspacesMap = {}, currentCw
     catalog.push(buildEntry(wsPath, profile.workspaceId, profile.workspaceTitle, [], false, profile));
   }
 
+  catalog.sort((a, b) => {
+    const cmp = String(a.title || "").localeCompare(String(b.title || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (cmp !== 0) return cmp;
+    return String(a.path || "").localeCompare(String(b.path || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+
   return catalog;
 }
 
