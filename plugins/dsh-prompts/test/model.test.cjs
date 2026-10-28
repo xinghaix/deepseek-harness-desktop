@@ -81,6 +81,24 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
   assert.doesNotMatch(overrideEnvelope, /\n<global-instructions>\n/);
   assert.doesNotMatch(overrideEnvelope, /Global Chinese/);
   assert.match(overrideEnvelope, /mode="override"/);
+
+  // Verify includeTitle: false omits the rule title from the rendered prompt heading
+  state = model.applyMutation(state, {
+    type: "upsertWorkspaceItem",
+    workspacePath: "/work/app",
+    workspaceTitle: "App",
+    item: {
+      id: "w1",
+      title: "UI Only Memo Title",
+      content: "Always run unit tests after editing.",
+      includeTitle: false,
+      position: "suffix",
+    },
+  });
+  const noTitleResolved = model.resolveEffectiveItems(state, "/work/app/src", "suffix");
+  const noTitleEnvelope = model.renderPriorityEnvelope(noTitleResolved);
+  assert.doesNotMatch(noTitleEnvelope, /UI Only Memo Title/);
+  assert.match(noTitleEnvelope, /### \[Workspace #1\]\nAlways run unit tests after editing\./);
 });
 
 test("createSessionPromptTracker emits status=cleared for existing sessions after clearing prompts, and empty string for clean sessions", () => {

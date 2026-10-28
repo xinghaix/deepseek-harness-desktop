@@ -89,6 +89,7 @@ function normalizeItem(raw, now = Date.now()) {
     id,
     title,
     content,
+    includeTitle: raw.includeTitle !== false,
     enabled: raw.enabled !== false,
     position: normalizePosition(raw.position),
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : Number(now),
@@ -262,11 +263,18 @@ function mutateItemList(items, op, payload, now) {
       const existingIndex = typeof payload?.id === "string" && payload.id.trim()
         ? list.findIndex((item) => item.id === payload.id.trim())
         : -1;
+      const includeTitle =
+        payload?.includeTitle !== undefined
+          ? payload.includeTitle !== false
+          : existingIndex >= 0
+            ? list[existingIndex].includeTitle !== false
+            : true;
       if (existingIndex >= 0) {
         list[existingIndex] = {
           ...list[existingIndex],
           title,
           content,
+          includeTitle,
           position,
           enabled,
           updatedAt: now,
@@ -277,6 +285,7 @@ function mutateItemList(items, op, payload, now) {
           id: typeof payload?.id === "string" && payload.id.trim() ? payload.id.trim() : generateId(now),
           title,
           content,
+          includeTitle,
           position,
           enabled,
           updatedAt: now,
@@ -492,7 +501,11 @@ function renderPriorityEnvelope(resolved, options = {}) {
   if (resolved.globalItems.length > 0) {
     lines.push("", "<global-instructions>");
     resolved.globalItems.forEach((item, index) => {
-      lines.push(`### [Global #${index + 1}] ${item.title}`);
+      lines.push(
+        item.includeTitle === false
+          ? `### [Global #${index + 1}]`
+          : `### [Global #${index + 1}] ${item.title}`
+      );
       lines.push(item.content);
       if (index < resolved.globalItems.length - 1) lines.push("");
     });
@@ -508,7 +521,11 @@ function renderPriorityEnvelope(resolved, options = {}) {
       `<workspace-instructions workspace="${wsTitle}" path="${wsPath}" mode="${mode}">`
     );
     resolved.workspaceItems.forEach((item, index) => {
-      lines.push(`### [Workspace #${index + 1}] ${item.title}`);
+      lines.push(
+        item.includeTitle === false
+          ? `### [Workspace #${index + 1}]`
+          : `### [Workspace #${index + 1}] ${item.title}`
+      );
       lines.push(item.content);
       if (index < resolved.workspaceItems.length - 1) lines.push("");
     });
@@ -708,6 +725,10 @@ return module.exports; })();
     "positionSuffixBadge": "Suffix · Hohe Priorität",
     "positionPrefixBadge": "Präfix · Persona",
     "itemTitleLabel": "Regeltitel",
+    "includeTitleToggle": "In Prompt aufnehmen",
+    "includeTitleHintOn": "Als ###-Überschrift in den Prompt eingefügt",
+    "includeTitleHintOff": "Nur zur Listenanzeige, nicht im Prompt",
+    "includeTitleOffBadge": "Titel nur Anzeige",
     "itemTitlePlaceholder": "z. B. Standardsprache & Stil / Architekturregeln",
     "itemContentLabel": "Prompt-Inhalt (automatisch in <user-custom-instructions> eingebettet)",
     "itemContentPlaceholder": "Geben Sie klare, ausführbare Regeln ein (MUST / NEVER-Listen empfohlen)…",
@@ -791,6 +812,10 @@ return module.exports; })();
     "positionSuffixBadge": "Suffix · High Priority",
     "positionPrefixBadge": "Prefix · Persona",
     "itemTitleLabel": "Rule Title",
+    "includeTitleToggle": "Include in prompt",
+    "includeTitleHintOn": "Injected as ### heading in prompt",
+    "includeTitleHintOff": "UI display only, not injected",
+    "includeTitleOffBadge": "UI-only title",
     "itemTitlePlaceholder": "e.g., Default Language & Style / Cross-Platform Coding Standards",
     "itemContentLabel": "Prompt Content (automatically wrapped in <user-custom-instructions> priority envelope)",
     "itemContentPlaceholder": "Write explicit, actionable rules (MUST / NEVER bullet lists work best)…",
@@ -874,6 +899,10 @@ return module.exports; })();
     "positionSuffixBadge": "Sufijo · Alta prioridad",
     "positionPrefixBadge": "Prefijo · Rol",
     "itemTitleLabel": "Título de la regla",
+    "includeTitleToggle": "Incluir en el prompt",
+    "includeTitleHintOn": "Se inyecta como subtítulo ### en el prompt",
+    "includeTitleHintOff": "Solo visualización en lista, no se inyecta",
+    "includeTitleOffBadge": "Título solo visual",
     "itemTitlePlaceholder": "p. ej., Idioma y estilo predeterminados / Normas de arquitectura",
     "itemContentLabel": "Contenido del prompt (envuelto automáticamente en <user-custom-instructions>)",
     "itemContentPlaceholder": "Escriba reglas explícitas y accionables (se recomiendan listas MUST / NEVER)…",
@@ -957,6 +986,10 @@ return module.exports; })();
     "positionSuffixBadge": "Suffixe · Haute priorité",
     "positionPrefixBadge": "Préfixe · Persona",
     "itemTitleLabel": "Titre de la règle",
+    "includeTitleToggle": "Inclure dans le prompt",
+    "includeTitleHintOn": "Injecté comme sous-titre ### dans le prompt",
+    "includeTitleHintOff": "Affichage uniquement, non injecté",
+    "includeTitleOffBadge": "Titre non injecté",
     "itemTitlePlaceholder": "ex. Langue et style par défaut / Normes d'architecture",
     "itemContentLabel": "Contenu du prompt (encapsulé automatiquement dans <user-custom-instructions>)",
     "itemContentPlaceholder": "Saisissez des règles explicites et exploitables (listes MUST / NEVER recommandées)…",
@@ -1040,6 +1073,10 @@ return module.exports; })();
     "positionSuffixBadge": "末尾 · 高優先度",
     "positionPrefixBadge": "先頭 · ペルソナ",
     "itemTitleLabel": "ルール名",
+    "includeTitleToggle": "プロンプトに含める",
+    "includeTitleHintOn": "### 見出しとしてプロンプトに注入",
+    "includeTitleHintOff": "一覧表示のみ（プロンプトには含めない）",
+    "includeTitleOffBadge": "タイトル表示のみ",
     "itemTitlePlaceholder": "例：デフォルト言語と回答スタイル / クロスプラットフォーム開発規約",
     "itemContentLabel": "プロンプト本文（自動的に <user-custom-instructions> 優先エンベロープで保護されます）",
     "itemContentPlaceholder": "明確で実行可能なルールを入力してください（MUST / NEVER リスト形式を推奨）…",
@@ -1123,6 +1160,10 @@ return module.exports; })();
     "positionSuffixBadge": "후미 · 고우선순위",
     "positionPrefixBadge": "선두 · 페르소나",
     "itemTitleLabel": "규칙 제목",
+    "includeTitleToggle": "프롬프트에 포함",
+    "includeTitleHintOn": "### 소제목으로 프롬프트에 주입됨",
+    "includeTitleHintOff": "목록 표시 전용 (프롬프트에 미포함)",
+    "includeTitleOffBadge": "제목 표시 전용",
     "itemTitlePlaceholder": "예: 기본 응답 언어 및 스타일 / 크로스 플랫폼 개발 규칙",
     "itemContentLabel": "프롬프트 본문 (자동으로 <user-custom-instructions> 우선순위 봉투로 감싸짐)",
     "itemContentPlaceholder": "명확하고 실행 가능한 규칙을 입력하세요 (MUST / NEVER 목록 권장)…",
@@ -1206,6 +1247,10 @@ return module.exports; })();
     "positionSuffixBadge": "Sufixo · Alta prioridade",
     "positionPrefixBadge": "Prefixo · Persona",
     "itemTitleLabel": "Título da regra",
+    "includeTitleToggle": "Incluir no prompt",
+    "includeTitleHintOn": "Injetado como subtítulo ### no prompt",
+    "includeTitleHintOff": "Apenas exibição na lista, não injetado",
+    "includeTitleOffBadge": "Título só visual",
     "itemTitlePlaceholder": "ex.: Idioma e estilo padrão / Padrões de arquitetura",
     "itemContentLabel": "Conteúdo do prompt (envolvido automaticamente em <user-custom-instructions>)",
     "itemContentPlaceholder": "Digite regras explícitas e acionáveis (listas MUST / NEVER recomendadas)…",
@@ -1289,6 +1334,10 @@ return module.exports; })();
     "positionSuffixBadge": "后置高权重",
     "positionPrefixBadge": "前置角色",
     "itemTitleLabel": "规则标题",
+    "includeTitleToggle": "同步写入提示词",
+    "includeTitleHintOn": "作为 ### 小标题写入提示词",
+    "includeTitleHintOff": "仅作列表展示，不写入提示词",
+    "includeTitleOffBadge": "标题仅展示",
     "itemTitlePlaceholder": "例如：默认中文回复与精炼风格 / 跨平台开发与多语言规范",
     "itemContentLabel": "提示词正文（自动包裹 <user-custom-instructions> 高优先级信封）",
     "itemContentPlaceholder": "输入明确、可执行的规则（推荐使用 MUST / NEVER 结构化列表）…",
@@ -1492,6 +1541,39 @@ return module.exports; })();
 }
 .dsh-prompts-switch[aria-checked="true"] .dsh-prompts-switch-thumb {
   transform: translateX(16px);
+}
+.dsh-prompts-switch[data-size="sm"] {
+  width: 28px;
+  height: 16px;
+}
+.dsh-prompts-switch[data-size="sm"] .dsh-prompts-switch-thumb {
+  width: 12px;
+  height: 12px;
+}
+.dsh-prompts-switch[data-size="sm"][aria-checked="true"] .dsh-prompts-switch-thumb {
+  transform: translateX(12px);
+}
+.dsh-prompts-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-inline-switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.dsh-prompts-field-subhint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* Top Navigation Bar: Capsule Segmented Control (matches Official Plugin Page "已安装 | 插件市场 | 发现") */
@@ -2072,13 +2154,14 @@ return module.exports; })();
       );
     }
 
-    function Switch({ checked, disabled, onChange, label }) {
+    function Switch({ checked, disabled, onChange, label, size }) {
       return h(
         "button",
         {
           type: "button",
           role: "switch",
           className: "dsh-prompts-switch",
+          "data-size": size || undefined,
           "aria-checked": checked ? "true" : "false",
           "aria-label": label,
           disabled: Boolean(disabled),
@@ -2379,6 +2462,7 @@ return module.exports; })();
             id: item?.id || "",
             title: item?.title || config?.defaultTitle || "",
             content: item?.content || config?.defaultContent || "",
+            includeTitle: item ? item.includeTitle !== false : true,
             position: item?.position || config?.defaultPosition || "suffix",
             enabled: item ? item.enabled !== false : true,
             validationError: "",
@@ -2479,6 +2563,7 @@ return module.exports; })();
             ...(editorDraft.id ? { id: editorDraft.id } : {}),
             title,
             content,
+            includeTitle: editorDraft.includeTitle !== false,
             position: editorDraft.position,
             enabled: editorDraft.enabled !== false,
           };
@@ -2576,7 +2661,36 @@ return module.exports; })();
           h(
             "div",
             { className: "dsh-prompts-field" },
-            h("label", { className: "dsh-prompts-field-label" }, t("itemTitleLabel")),
+            h(
+              "div",
+              { className: "dsh-prompts-field-label-row" },
+              h(
+                "label",
+                { className: "dsh-prompts-field-label" },
+                t("itemTitleLabel"),
+                " ",
+                h(
+                  "span",
+                  { className: "dsh-prompts-field-subhint" },
+                  `(${draft.includeTitle !== false ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
+                )
+              ),
+              h(
+                "span",
+                {
+                  className: "dsh-prompts-inline-switch-label",
+                  onClick: () =>
+                    controller.updateEditor({ includeTitle: !(draft.includeTitle !== false) }),
+                },
+                h("span", null, t("includeTitleToggle")),
+                h(Switch, {
+                  size: "sm",
+                  checked: draft.includeTitle !== false,
+                  label: t("includeTitleToggle"),
+                  onChange: (next) => controller.updateEditor({ includeTitle: next }),
+                })
+              )
+            ),
             h("input", {
               type: "text",
               className: "dsh-prompts-input",
@@ -2758,6 +2872,9 @@ return module.exports; })();
                   { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
                   isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
                 ),
+                item.includeTitle === false
+                  ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleOffBadge"))
+                  : null,
                 h(ChevronIcon, { open: isExpanded })
               ),
               h("p", { className: "dsh-prompts-row-desc" }, singleLinePreview)
@@ -2872,6 +2989,7 @@ return module.exports; })();
                     id: item.id,
                     title: item.title,
                     content: item.content,
+                    includeTitle: item.includeTitle !== false,
                     position: item.position,
                     enabled: item.enabled !== false,
                     validationError: "",

@@ -159,6 +159,39 @@ window.__ModuleLoader__.load({
 .dsh-prompts-switch[aria-checked="true"] .dsh-prompts-switch-thumb {
   transform: translateX(16px);
 }
+.dsh-prompts-switch[data-size="sm"] {
+  width: 28px;
+  height: 16px;
+}
+.dsh-prompts-switch[data-size="sm"] .dsh-prompts-switch-thumb {
+  width: 12px;
+  height: 12px;
+}
+.dsh-prompts-switch[data-size="sm"][aria-checked="true"] .dsh-prompts-switch-thumb {
+  transform: translateX(12px);
+}
+.dsh-prompts-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dsh-prompts-inline-switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.dsh-prompts-field-subhint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
 
 /* Top Navigation Bar: Capsule Segmented Control (matches Official Plugin Page "已安装 | 插件市场 | 发现") */
 .dsh-prompts-nav-bar {
@@ -738,13 +771,14 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function Switch({ checked, disabled, onChange, label }) {
+    function Switch({ checked, disabled, onChange, label, size }) {
       return h(
         "button",
         {
           type: "button",
           role: "switch",
           className: "dsh-prompts-switch",
+          "data-size": size || undefined,
           "aria-checked": checked ? "true" : "false",
           "aria-label": label,
           disabled: Boolean(disabled),
@@ -1045,6 +1079,7 @@ window.__ModuleLoader__.load({
             id: item?.id || "",
             title: item?.title || config?.defaultTitle || "",
             content: item?.content || config?.defaultContent || "",
+            includeTitle: item ? item.includeTitle !== false : true,
             position: item?.position || config?.defaultPosition || "suffix",
             enabled: item ? item.enabled !== false : true,
             validationError: "",
@@ -1145,6 +1180,7 @@ window.__ModuleLoader__.load({
             ...(editorDraft.id ? { id: editorDraft.id } : {}),
             title,
             content,
+            includeTitle: editorDraft.includeTitle !== false,
             position: editorDraft.position,
             enabled: editorDraft.enabled !== false,
           };
@@ -1242,7 +1278,36 @@ window.__ModuleLoader__.load({
           h(
             "div",
             { className: "dsh-prompts-field" },
-            h("label", { className: "dsh-prompts-field-label" }, t("itemTitleLabel")),
+            h(
+              "div",
+              { className: "dsh-prompts-field-label-row" },
+              h(
+                "label",
+                { className: "dsh-prompts-field-label" },
+                t("itemTitleLabel"),
+                " ",
+                h(
+                  "span",
+                  { className: "dsh-prompts-field-subhint" },
+                  `(${draft.includeTitle !== false ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
+                )
+              ),
+              h(
+                "span",
+                {
+                  className: "dsh-prompts-inline-switch-label",
+                  onClick: () =>
+                    controller.updateEditor({ includeTitle: !(draft.includeTitle !== false) }),
+                },
+                h("span", null, t("includeTitleToggle")),
+                h(Switch, {
+                  size: "sm",
+                  checked: draft.includeTitle !== false,
+                  label: t("includeTitleToggle"),
+                  onChange: (next) => controller.updateEditor({ includeTitle: next }),
+                })
+              )
+            ),
             h("input", {
               type: "text",
               className: "dsh-prompts-input",
@@ -1424,6 +1489,9 @@ window.__ModuleLoader__.load({
                   { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
                   isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
                 ),
+                item.includeTitle === false
+                  ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleOffBadge"))
+                  : null,
                 h(ChevronIcon, { open: isExpanded })
               ),
               h("p", { className: "dsh-prompts-row-desc" }, singleLinePreview)
@@ -1538,6 +1606,7 @@ window.__ModuleLoader__.load({
                     id: item.id,
                     title: item.title,
                     content: item.content,
+                    includeTitle: item.includeTitle !== false,
                     position: item.position,
                     enabled: item.enabled !== false,
                     validationError: "",

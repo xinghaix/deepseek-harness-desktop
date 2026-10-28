@@ -82,6 +82,7 @@ function normalizeItem(raw, now = Date.now()) {
     id,
     title,
     content,
+    includeTitle: raw.includeTitle !== false,
     enabled: raw.enabled !== false,
     position: normalizePosition(raw.position),
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : Number(now),
@@ -255,11 +256,18 @@ function mutateItemList(items, op, payload, now) {
       const existingIndex = typeof payload?.id === "string" && payload.id.trim()
         ? list.findIndex((item) => item.id === payload.id.trim())
         : -1;
+      const includeTitle =
+        payload?.includeTitle !== undefined
+          ? payload.includeTitle !== false
+          : existingIndex >= 0
+            ? list[existingIndex].includeTitle !== false
+            : true;
       if (existingIndex >= 0) {
         list[existingIndex] = {
           ...list[existingIndex],
           title,
           content,
+          includeTitle,
           position,
           enabled,
           updatedAt: now,
@@ -270,6 +278,7 @@ function mutateItemList(items, op, payload, now) {
           id: typeof payload?.id === "string" && payload.id.trim() ? payload.id.trim() : generateId(now),
           title,
           content,
+          includeTitle,
           position,
           enabled,
           updatedAt: now,
@@ -485,7 +494,11 @@ function renderPriorityEnvelope(resolved, options = {}) {
   if (resolved.globalItems.length > 0) {
     lines.push("", "<global-instructions>");
     resolved.globalItems.forEach((item, index) => {
-      lines.push(`### [Global #${index + 1}] ${item.title}`);
+      lines.push(
+        item.includeTitle === false
+          ? `### [Global #${index + 1}]`
+          : `### [Global #${index + 1}] ${item.title}`
+      );
       lines.push(item.content);
       if (index < resolved.globalItems.length - 1) lines.push("");
     });
@@ -501,7 +514,11 @@ function renderPriorityEnvelope(resolved, options = {}) {
       `<workspace-instructions workspace="${wsTitle}" path="${wsPath}" mode="${mode}">`
     );
     resolved.workspaceItems.forEach((item, index) => {
-      lines.push(`### [Workspace #${index + 1}] ${item.title}`);
+      lines.push(
+        item.includeTitle === false
+          ? `### [Workspace #${index + 1}]`
+          : `### [Workspace #${index + 1}] ${item.title}`
+      );
       lines.push(item.content);
       if (index < resolved.workspaceItems.length - 1) lines.push("");
     });
