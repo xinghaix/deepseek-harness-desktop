@@ -599,6 +599,26 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     const treeConfirm = expand(registeredPage({ t: (k) => k }));
     const confirmProj = findAll(treeConfirm, (n) => n.props?.["data-confirm-project"] === "my-app");
     assert.equal(confirmProj.length, 1);
+
+    // 4) Official-style floating TemplateDropdown opens listbox and fills template draft
+    const tplDropdown = findAll(treeConfirm, (n) => n.props?.["data-template-dropdown"] === "toolbar")[0];
+    assert.ok(tplDropdown, "toolbar TemplateDropdown must be rendered");
+    const tplTrigger = findAll(tplDropdown, (n) => n.props?.["aria-haspopup"] === "listbox")[0];
+    assert.ok(tplTrigger);
+    assert.equal(tplTrigger.props["aria-expanded"], "false");
+    tplTrigger.props.onClick();
+    cursor = 0;
+    const treeDropdownOpen = expand(registeredPage({ t: (k) => k }));
+    const listbox = findAll(treeDropdownOpen, (n) => n.props?.role === "listbox")[0];
+    assert.ok(listbox, "clicking TemplateDropdown trigger must open floating listbox menu");
+    const fsOpt = findAll(listbox, (n) => n.props?.["data-template-option"] === "filesystem")[0];
+    assert.ok(fsOpt);
+    fsOpt.props.onClick();
+    cursor = 0;
+    const treeDraftFromTpl = expand(registeredPage({ t: (k) => k }));
+    const nameInput = findAll(treeDraftFromTpl, (n) => n.props?.["data-field"] === "name")[0];
+    assert.ok(nameInput);
+    assert.equal(nameInput.props.value, "filesystem");
   } finally {
     globalThis.window = prevWindow;
   }

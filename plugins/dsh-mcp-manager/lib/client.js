@@ -1448,6 +1448,9 @@ module.exports = {
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 	color: var(--dsw-alias-label-primary, #0f1115);
 	font-size: 13px;
 	line-height: 20px;
@@ -1522,6 +1525,7 @@ module.exports = {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	flex: 1 1 200px;
 	min-width: 0;
 }
 .dsh-mcp-title-row {
@@ -1555,6 +1559,8 @@ module.exports = {
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
+	min-width: 0;
+	max-width: 100%;
 }
 .dsh-mcp-btn {
 	box-sizing: border-box;
@@ -1632,6 +1638,8 @@ module.exports = {
 }
 .dsh-mcp-btn:focus-visible,
 .dsh-mcp-select:focus-visible,
+.dsh-mcp-dropdown-trigger:focus-visible,
+.dsh-mcp-dropdown-option:focus-visible,
 .dsh-mcp-input:focus-visible,
 .dsh-mcp-textarea:focus-visible,
 .dsh-mcp-row-summary:focus-visible,
@@ -1639,6 +1647,139 @@ module.exports = {
 .dsh-mcp-switch:focus-visible {
 	outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
 	outline-offset: 1px;
+}
+.dsh-mcp-dropdown {
+	position: relative;
+	display: inline-flex;
+	flex: none;
+	min-width: 0;
+	max-width: 100%;
+}
+.dsh-mcp-dropdown-trigger {
+	box-sizing: border-box;
+	appearance: none;
+	-webkit-appearance: none;
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 18px;
+	height: 30px;
+	padding: 0 10px 0 12px;
+	border-radius: var(--dsw-radius-md, 8px);
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.28));
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.06)));
+	color: var(--dsw-alias-label-primary, inherit);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	white-space: nowrap;
+	min-width: 0;
+	max-width: 100%;
+	transition: background 0.12s ease, border-color 0.12s ease;
+}
+.dsh-mcp-dropdown[data-size="sm"] .dsh-mcp-dropdown-trigger {
+	height: 26px;
+	padding: 0 8px 0 10px;
+	border-radius: var(--dsw-radius-sm, 6px);
+	font-size: 12px;
+}
+.dsh-mcp-dropdown-trigger:hover:not(:disabled) {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.12));
+}
+.dsh-mcp-dropdown-trigger:disabled {
+	opacity: 0.42;
+	cursor: default;
+}
+.dsh-mcp-dropdown-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.dsh-mcp-dropdown-chevron {
+	flex: none;
+	display: block;
+	width: 13px;
+	height: 13px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+	transition: transform 0.15s ease;
+}
+.dsh-mcp-dropdown-chevron[data-open="true"] {
+	transform: rotate(180deg);
+}
+.dsh-mcp-dropdown-menu {
+	box-sizing: border-box;
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 90;
+	width: max-content;
+	min-width: max(100%, 188px);
+	max-width: min(268px, calc(100vw - 24px));
+	max-height: min(216px, 50vh);
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 5px;
+	border-radius: 12px;
+	background: var(--dsw-alias-bg-layer-3, #25262b);
+	border: 0.5px solid var(--dsw-alias-border-l4, rgba(255, 255, 255, 0.12));
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.14);
+}
+.dsh-mcp-dropdown-option {
+	box-sizing: border-box;
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--dsw-alias-label-primary, inherit);
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 18px;
+	cursor: pointer;
+	text-align: left;
+	transition: background 0.1s ease;
+}
+.dsh-mcp-dropdown-option:hover {
+	background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.14));
+}
+.dsh-mcp-dropdown-option-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+.dsh-mcp-dropdown-option-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.dsh-mcp-dropdown-option-meta {
+	flex: none;
+	font-size: 11px;
+	line-height: 15px;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+	font-family: var(--ds-font-family-code, var(--dsw-font-mono, ui-monospace, monospace));
+}
+.dsh-mcp-dropdown-check {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--dsw-alias-label-primary, inherit);
 }
 .dsh-mcp-select {
 	box-sizing: border-box;
@@ -1757,7 +1898,7 @@ module.exports = {
 	border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2, rgba(128,128,128,0.22)));
 	background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1, transparent));
 	border-radius: var(--dsw-radius-xl, 12px);
-	overflow: hidden;
+	overflow: visible;
 	transition: border-color 0.12s ease, background 0.12s ease;
 }
 .dsh-mcp-card[data-expanded="true"] {
@@ -1773,13 +1914,17 @@ module.exports = {
 	padding: 10px 14px;
 	min-height: 48px;
 	flex-wrap: wrap;
+	border-radius: var(--dsw-radius-xl, 12px);
+}
+.dsh-mcp-card[data-expanded="true"] .dsh-mcp-row-head {
+	border-radius: var(--dsw-radius-xl, 12px) var(--dsw-radius-xl, 12px) 0 0;
 }
 .dsh-mcp-row-head:hover {
 	background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.05));
 }
 .dsh-mcp-row-summary {
-	flex: 1;
-	min-width: 180px;
+	flex: 1 1 180px;
+	min-width: 0;
 	display: flex;
 	align-items: center;
 	gap: 10px;
@@ -1860,8 +2005,8 @@ module.exports = {
 	background: var(--dsw-alias-state-business-primary, #4d6bfe);
 }
 .dsh-mcp-inline-tools {
-	flex: 1;
-	min-width: 100px;
+	flex: 1 1 100px;
+	min-width: 0;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -1883,6 +2028,8 @@ module.exports = {
 	gap: 8px;
 	margin-left: auto;
 	flex: none;
+	max-width: 100%;
+	flex-wrap: wrap;
 }
 .dsh-mcp-chevron {
 	display: inline-flex;
@@ -1895,6 +2042,7 @@ module.exports = {
 .dsh-mcp-row-body {
 	border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.18));
 	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.05)));
+	border-radius: 0 0 var(--dsw-radius-xl, 12px) var(--dsw-radius-xl, 12px);
 	padding: 12px 14px 14px;
 	display: flex;
 	flex-direction: column;
@@ -1919,7 +2067,7 @@ module.exports = {
 	overflow-wrap: anywhere;
 	margin: 0;
 	flex: 1;
-	min-width: 160px;
+	min-width: 0;
 }
 .dsh-mcp-tools-box {
 	display: flex;
@@ -1930,6 +2078,10 @@ module.exports = {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
+	max-height: 168px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 .dsh-mcp-tool-chip {
 	font: inherit;
@@ -1961,7 +2113,7 @@ module.exports = {
 }
 .dsh-mcp-grid-2 {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 	gap: 10px 12px;
 }
 .dsh-mcp-field {
@@ -2023,7 +2175,7 @@ module.exports = {
 .dsh-mcp-pwd-wrap {
 	position: relative;
 	flex: 1;
-	min-width: 140px;
+	min-width: min(140px, 100%);
 	display: flex;
 	align-items: center;
 }
@@ -2374,6 +2526,167 @@ module.exports = {
 			return jsx("span", { className: "dsh-mcp-dot", "data-state": dotState, "aria-hidden": "true" });
 		}
 
+		// 对齐官方 DSH 胶囊下拉与浮动滚动菜单（支持最大高度滚动，并在窄宽度设置页内自动校正左右边界防溢出）
+		function TemplateDropdown(props) {
+			const { tr, activeTemplateId = "", size, dropdownKey = "toolbar", onSelect } = props;
+			const [open, setOpen] = React.useState(false);
+			const [menuStyle, setMenuStyle] = React.useState(null);
+			const rootRef = React.useRef(null);
+
+			const updatePlacement = React.useCallback(() => {
+				const el = rootRef.current;
+				if (!el || typeof el.getBoundingClientRect !== "function") return;
+				const triggerRect = el.getBoundingClientRect();
+				const container = typeof el.closest === "function" ? el.closest(".dsh-mcp-root") : null;
+				const containerRect = container && typeof container.getBoundingClientRect === "function"
+					? container.getBoundingClientRect()
+					: null;
+				const vw = typeof window !== "undefined" && window.innerWidth ? window.innerWidth : 1024;
+				const vh = typeof window !== "undefined" && window.innerHeight ? window.innerHeight : 768;
+				const boundLeft = Math.max(8, containerRect ? containerRect.left : 8);
+				const boundRight = Math.min(vw - 8, containerRect ? containerRect.right : vw - 8);
+				const availWidth = Math.max(150, boundRight - boundLeft);
+				const desiredWidth = Math.min(248, availWidth);
+
+				let posStyle;
+				if (triggerRect.left + desiredWidth <= boundRight) {
+					posStyle = { left: 0, right: "auto", maxWidth: availWidth + "px" };
+				} else if (triggerRect.right - desiredWidth >= boundLeft) {
+					posStyle = { left: "auto", right: 0, maxWidth: availWidth + "px" };
+				} else {
+					const offsetLeft = Math.max(
+						boundLeft - triggerRect.left,
+						Math.min(0, boundRight - triggerRect.left - desiredWidth)
+					);
+					posStyle = { left: Math.round(offsetLeft) + "px", right: "auto", maxWidth: availWidth + "px" };
+				}
+
+				const spaceBelow = vh - triggerRect.bottom - 12;
+				const spaceAbove = triggerRect.top - 12;
+				const flipUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+				const maxH = Math.min(216, Math.max(120, flipUp ? spaceAbove : spaceBelow));
+				setMenuStyle({
+					...posStyle,
+					top: flipUp ? "auto" : "calc(100% + 6px)",
+					bottom: flipUp ? "calc(100% + 6px)" : "auto",
+					maxHeight: Math.round(maxH) + "px",
+				});
+			}, []);
+
+			React.useEffect(() => {
+				if (!open || typeof document === "undefined") return undefined;
+				updatePlacement();
+				const onPointerDown = (event) => {
+					const rootEl = rootRef.current;
+					if (rootEl && typeof rootEl.contains === "function" && !rootEl.contains(event.target)) {
+						setOpen(false);
+					}
+				};
+				const onKeyDown = (event) => {
+					if (event.key === "Escape") setOpen(false);
+				};
+				const onResize = () => updatePlacement();
+				document.addEventListener("mousedown", onPointerDown);
+				document.addEventListener("keydown", onKeyDown);
+				if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+					window.addEventListener("resize", onResize);
+				}
+				return () => {
+					document.removeEventListener("mousedown", onPointerDown);
+					document.removeEventListener("keydown", onKeyDown);
+					if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+						window.removeEventListener("resize", onResize);
+					}
+				};
+			}, [open, updatePlacement]);
+
+			const displayLabel = dropdownKey === "editor" && activeTemplateId
+				? activeTemplateId
+				: tr("template");
+
+			return jsxs("div", {
+				ref: rootRef,
+				className: "dsh-mcp-dropdown",
+				"data-template-dropdown": dropdownKey,
+				"data-size": size || undefined,
+				children: [
+					jsxs("button", {
+						type: "button",
+						className: "dsh-mcp-dropdown-trigger",
+						"aria-label": tr("template"),
+						"aria-haspopup": "listbox",
+						"aria-expanded": open ? "true" : "false",
+						onClick: () => {
+							const next = !open;
+							if (next) updatePlacement();
+							setOpen(next);
+						},
+						children: [
+							jsx("span", { className: "dsh-mcp-dropdown-label", children: displayLabel }),
+							jsx("svg", {
+								className: "dsh-mcp-dropdown-chevron",
+								"data-open": open ? "true" : "false",
+								viewBox: "0 0 16 16",
+								fill: "none",
+								"aria-hidden": "true",
+								children: jsx("path", {
+									d: "M4 6.5L8 10.5L12 6.5",
+									stroke: "currentColor",
+									strokeWidth: "1.5",
+									strokeLinecap: "round",
+									strokeLinejoin: "round",
+								}),
+							}),
+						],
+					}),
+					open ? jsx("div", {
+						className: "dsh-mcp-dropdown-menu",
+						role: "listbox",
+						"aria-label": tr("template"),
+						style: menuStyle || undefined,
+						children: model.TEMPLATES.map((item) => {
+							const selected = activeTemplateId === item.id;
+							return jsxs("button", {
+								type: "button",
+								role: "option",
+								className: "dsh-mcp-dropdown-option",
+								"data-template-option": item.id,
+								"aria-selected": selected ? "true" : "false",
+								onClick: () => {
+									setOpen(false);
+									if (typeof onSelect === "function") onSelect(item.id);
+								},
+								children: [
+									jsxs("span", {
+										className: "dsh-mcp-dropdown-option-main",
+										children: [
+											jsx("span", { className: "dsh-mcp-dropdown-option-name", children: item.id }),
+											jsx("span", { className: "dsh-mcp-dropdown-option-meta", children: item.transport }),
+										],
+									}),
+									jsx("span", {
+										className: "dsh-mcp-dropdown-check",
+										"aria-hidden": "true",
+										children: selected ? jsx("svg", {
+											width: 13,
+											height: 13,
+											viewBox: "0 0 16 16",
+											fill: "none",
+											stroke: "currentColor",
+											strokeWidth: 1.5,
+											strokeLinecap: "round",
+											strokeLinejoin: "round",
+											children: jsx("path", { d: "M3.5 8.2L6.6 11.3L12.6 4.8" }),
+										}) : null,
+									}),
+								],
+							}, item.id);
+						}),
+					}) : null,
+				],
+			});
+		}
+
 		function Switch(props) {
 			return jsx("button", {
 				type: "button",
@@ -2568,6 +2881,7 @@ module.exports = {
 				const source = server || base;
 				setDraft({
 					patchId: server?.patchId || "",
+					templateId: server ? "" : (template || ""),
 					serverName: source?.serverName || "",
 					transport: source?.transport || "stdio",
 					command: source?.command || "",
@@ -2704,15 +3018,11 @@ module.exports = {
 										onClick: manualRefresh,
 										children: jsx(IconRefresh, { className: refreshing ? "dsh-mcp-spin" : "" }),
 									}),
-									jsxs("select", {
-										"aria-label": tr("template"),
-										value: "",
-										className: "dsh-mcp-select",
-										onChange: (event) => { if (event.target.value) startDraft(null, event.target.value); },
-										children: [
-											jsx("option", { value: "", children: tr("template") }),
-											...model.TEMPLATES.map((item) => jsx("option", { value: item.id, children: item.id + " · " + item.transport }, item.id)),
-										],
+									jsx(TemplateDropdown, {
+										tr,
+										dropdownKey: "toolbar",
+										activeTemplateId: draft && !draft.patchId ? (draft.templateId || "") : "",
+										onSelect: (templateId) => startDraft(null, templateId),
 									}),
 									jsxs("button", {
 										type: "button",
@@ -2912,7 +3222,7 @@ module.exports = {
 			const { tr, server } = props;
 			const tools = Array.isArray(server.tools) ? server.tools : [];
 			const detailsMap = new Map((server.toolDetails || []).map((item) => [item.name, item]));
-			const shown = props.expanded ? tools : tools.slice(0, 3);
+			const shown = tools.slice(0, 3);
 			const rest = tools.length - shown.length;
 			const status = server.status || "unknown";
 			const secrets = server.transport === "stdio" ? (server.env || []) : (server.headers || []);
@@ -3267,16 +3577,16 @@ module.exports = {
 				className: "dsh-mcp-editor",
 				children: [
 					!draft.patchId && props.onApplyTemplate ? jsxs("div", {
-						style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" },
+						style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
 						children: [
 							jsx("span", { style: muted, children: tr("template") }),
-							...model.TEMPLATES.map((tpl) => jsx("button", {
-								type: "button",
-								className: "dsh-mcp-btn",
-								"data-size": "sm",
-								onClick: () => props.onApplyTemplate(tpl.id),
-								children: tpl.id,
-							}, tpl.id)),
+							jsx(TemplateDropdown, {
+								tr,
+								dropdownKey: "editor",
+								size: "sm",
+								activeTemplateId: draft.templateId || "",
+								onSelect: (tplId) => props.onApplyTemplate(tplId),
+							}),
 						],
 					}) : null,
 					jsxs("div", {
