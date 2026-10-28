@@ -62,10 +62,13 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
   assert.equal(appendResolved.active, true);
   assert.equal(appendResolved.globalItems.length, 1);
   assert.equal(appendResolved.workspaceItems.length, 1);
+  assert.equal(appendResolved.globalItems[0].includeTitle, false);
   const appendEnvelope = model.renderPriorityEnvelope(appendResolved);
   assert.match(appendEnvelope, /<user-custom-instructions slot="suffix" status="active" revision="3">/);
-  assert.match(appendEnvelope, /<global-instructions>/);
-  assert.match(appendEnvelope, /<workspace-instructions workspace="App" path="\/work\/app" mode="append">/);
+  assert.match(appendEnvelope, /<workspace-instructions> > <global-instructions>/);
+  assert.match(appendEnvelope, /<global-instructions>\nAlways reply in Simplified Chinese/);
+  assert.doesNotMatch(appendEnvelope, /Global Chinese/);
+  assert.match(appendEnvelope, /<workspace-instructions workspace="App" mode="append">/);
   assert.match(appendEnvelope, /Literal \{\{var\}\} is preserved\./);
 
   // Switch workspace to override mode
@@ -79,26 +82,25 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
   assert.equal(overrideResolved.workspaceItems.length, 1);
   const overrideEnvelope = model.renderPriorityEnvelope(overrideResolved);
   assert.doesNotMatch(overrideEnvelope, /\n<global-instructions>\n/);
-  assert.doesNotMatch(overrideEnvelope, /Global Chinese/);
+  assert.doesNotMatch(overrideEnvelope, /<global-instructions>/);
   assert.match(overrideEnvelope, /mode="override"/);
 
-  // Verify includeTitle: false omits the rule title from the rendered prompt heading
+  // Verify includeTitle: true injects the rule title as a ### heading when explicitly enabled
   state = model.applyMutation(state, {
     type: "upsertWorkspaceItem",
     workspacePath: "/work/app",
     workspaceTitle: "App",
     item: {
       id: "w1",
-      title: "UI Only Memo Title",
+      title: "Explicit Injected Title",
       content: "Always run unit tests after editing.",
-      includeTitle: false,
+      includeTitle: true,
       position: "suffix",
     },
   });
-  const noTitleResolved = model.resolveEffectiveItems(state, "/work/app/src", "suffix");
-  const noTitleEnvelope = model.renderPriorityEnvelope(noTitleResolved);
-  assert.doesNotMatch(noTitleEnvelope, /UI Only Memo Title/);
-  assert.match(noTitleEnvelope, /### \[Workspace #1\]\nAlways run unit tests after editing\./);
+  const withTitleResolved = model.resolveEffectiveItems(state, "/work/app/src", "suffix");
+  const withTitleEnvelope = model.renderPriorityEnvelope(withTitleResolved);
+  assert.match(withTitleEnvelope, /### Explicit Injected Title\nAlways run unit tests after editing\./);
 });
 
 test("createSessionPromptTracker emits status=cleared for existing sessions after clearing prompts, and empty string for clean sessions", () => {

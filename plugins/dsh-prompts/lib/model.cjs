@@ -82,7 +82,7 @@ function normalizeItem(raw, now = Date.now()) {
     id,
     title,
     content,
-    includeTitle: raw.includeTitle !== false,
+    includeTitle: raw.includeTitle === true,
     enabled: raw.enabled !== false,
     position: normalizePosition(raw.position),
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : Number(now),
@@ -258,10 +258,10 @@ function mutateItemList(items, op, payload, now) {
         : -1;
       const includeTitle =
         payload?.includeTitle !== undefined
-          ? payload.includeTitle !== false
+          ? payload.includeTitle === true
           : existingIndex >= 0
-            ? list[existingIndex].includeTitle !== false
-            : true;
+            ? list[existingIndex].includeTitle === true
+            : false;
       if (existingIndex >= 0) {
         list[existingIndex] = {
           ...list[existingIndex],
@@ -474,54 +474,45 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   };
 }
 
+function formatItemBlock(item) {
+  if (item.includeTitle === true && item.title) {
+    return `### ${item.title}\n${item.content}`;
+  }
+  return item.content;
+}
+
 function renderPriorityEnvelope(resolved, options = {}) {
   if (!resolved || !resolved.active) return "";
   const slot = normalizePosition(options.slot || resolved.slot);
   const revision = Number.isInteger(options.revision ?? resolved.revision) ? (options.revision ?? resolved.revision) : 1;
+  const hasGlobal = resolved.globalItems.length > 0;
+  const hasWorkspace = Boolean(resolved.workspaceItems.length > 0 && resolved.workspaceProfile);
+
+  const precedenceChain =
+    hasGlobal && hasWorkspace
+      ? "Precedence: Direct user request in latest turn > <workspace-instructions> > <global-instructions> > earlier conversation habits."
+      : hasWorkspace
+        ? "Precedence: Direct user request in latest turn > <workspace-instructions> > earlier conversation habits."
+        : "Precedence: Direct user request in latest turn > <global-instructions> > earlier conversation habits.";
+
   const lines = [
     `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="active" revision="${revision}">`,
-    slot === "prefix"
-      ? "## User-Configured Persona & Foundational Instructions (High Priority)"
-      : "## User-Configured Custom Instructions (High Priority)",
-    "",
-    "The following instructions are explicitly configured by the user in DSH Settings and apply to the current step.",
-    "**Instruction Precedence & Conflict Resolution:**",
-    "1. **Direct User Intent First:** An explicit request in the user's latest message takes precedence for that turn if it directly contradicts a default preference below.",
-    "2. **Workspace Overrides Global:** Rules inside `<workspace-instructions>` are tailored for the active workspace and strictly override any conflicting defaults in `<global-instructions>`.",
-    "3. **Supersedes Earlier Conversation Habits:** If earlier assistant responses or earlier system messages in this session followed different formatting, language, or behavioral habits, disregard those earlier habits and strictly follow the active rules below.",
+    precedenceChain,
   ];
 
-  if (resolved.globalItems.length > 0) {
-    lines.push("", "<global-instructions>");
-    resolved.globalItems.forEach((item, index) => {
-      lines.push(
-        item.includeTitle === false
-          ? `### [Global #${index + 1}]`
-          : `### [Global #${index + 1}] ${item.title}`
-      );
-      lines.push(item.content);
-      if (index < resolved.globalItems.length - 1) lines.push("");
-    });
+  if (hasGlobal) {
+    lines.push("<global-instructions>");
+    lines.push(resolved.globalItems.map(formatItemBlock).join("\n\n"));
     lines.push("</global-instructions>");
   }
 
-  if (resolved.workspaceItems.length > 0 && resolved.workspaceProfile) {
-    const wsTitle = escapeXmlAttr(resolved.workspaceProfile.workspaceTitle || pathBaseName(resolved.workspaceProfile.workspacePath));
-    const wsPath = escapeXmlAttr(resolved.workspaceProfile.workspacePath);
-    const mode = escapeXmlAttr(resolved.mergeMode || "append");
-    lines.push(
-      "",
-      `<workspace-instructions workspace="${wsTitle}" path="${wsPath}" mode="${mode}">`
+  if (hasWorkspace) {
+    const wsTitle = escapeXmlAttr(
+      resolved.workspaceProfile.workspaceTitle || pathBaseName(resolved.workspaceProfile.workspacePath)
     );
-    resolved.workspaceItems.forEach((item, index) => {
-      lines.push(
-        item.includeTitle === false
-          ? `### [Workspace #${index + 1}]`
-          : `### [Workspace #${index + 1}] ${item.title}`
-      );
-      lines.push(item.content);
-      if (index < resolved.workspaceItems.length - 1) lines.push("");
-    });
+    const mode = escapeXmlAttr(resolved.mergeMode || "append");
+    lines.push(`<workspace-instructions workspace="${wsTitle}" mode="${mode}">`);
+    lines.push(resolved.workspaceItems.map(formatItemBlock).join("\n\n"));
     lines.push("</workspace-instructions>");
   }
 
@@ -534,7 +525,7 @@ function renderClearedEnvelope(options = {}) {
   const revision = Number.isInteger(options.revision) ? options.revision : 1;
   return [
     `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="cleared" revision="${revision}">`,
-    "All previously active `<user-custom-instructions>` in this slot (both global and workspace-level) have been cleared or disabled by the user and no longer apply. Do not continue custom formatting, persona, language, or behavioral rules from earlier turns unless explicitly requested in the user's latest message.",
+    "Previously active custom instructions in this slot were cleared; stop applying custom rules from earlier turns unless requested in the latest user message.",
     "</user-custom-instructions>",
   ].join("\n");
 }

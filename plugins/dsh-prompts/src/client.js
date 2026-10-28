@@ -1079,7 +1079,7 @@ window.__ModuleLoader__.load({
             id: item?.id || "",
             title: item?.title || config?.defaultTitle || "",
             content: item?.content || config?.defaultContent || "",
-            includeTitle: item ? item.includeTitle !== false : true,
+            includeTitle: item ? item.includeTitle === true : false,
             position: item?.position || config?.defaultPosition || "suffix",
             enabled: item ? item.enabled !== false : true,
             validationError: "",
@@ -1180,7 +1180,7 @@ window.__ModuleLoader__.load({
             ...(editorDraft.id ? { id: editorDraft.id } : {}),
             title,
             content,
-            includeTitle: editorDraft.includeTitle !== false,
+            includeTitle: editorDraft.includeTitle === true,
             position: editorDraft.position,
             enabled: editorDraft.enabled !== false,
           };
@@ -1289,7 +1289,7 @@ window.__ModuleLoader__.load({
                 h(
                   "span",
                   { className: "dsh-prompts-field-subhint" },
-                  `(${draft.includeTitle !== false ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
+                  `(${draft.includeTitle === true ? t("includeTitleHintOn") : t("includeTitleHintOff")})`
                 )
               ),
               h(
@@ -1297,12 +1297,12 @@ window.__ModuleLoader__.load({
                 {
                   className: "dsh-prompts-inline-switch-label",
                   onClick: () =>
-                    controller.updateEditor({ includeTitle: !(draft.includeTitle !== false) }),
+                    controller.updateEditor({ includeTitle: !(draft.includeTitle === true) }),
                 },
                 h("span", null, t("includeTitleToggle")),
                 h(Switch, {
                   size: "sm",
-                  checked: draft.includeTitle !== false,
+                  checked: draft.includeTitle === true,
                   label: t("includeTitleToggle"),
                   onChange: (next) => controller.updateEditor({ includeTitle: next }),
                 })
@@ -1489,8 +1489,8 @@ window.__ModuleLoader__.load({
                   { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
                   isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
                 ),
-                item.includeTitle === false
-                  ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleOffBadge"))
+                item.includeTitle === true
+                  ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleToggle"))
                   : null,
                 h(ChevronIcon, { open: isExpanded })
               ),
@@ -1606,7 +1606,7 @@ window.__ModuleLoader__.load({
                     id: item.id,
                     title: item.title,
                     content: item.content,
-                    includeTitle: item.includeTitle !== false,
+                    includeTitle: item.includeTitle === true,
                     position: item.position,
                     enabled: item.enabled !== false,
                     validationError: "",
