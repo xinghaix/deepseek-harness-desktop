@@ -210,7 +210,7 @@ static void dshSetWebViewZoomLiveResize(WKWebView *webView, BOOL active) {
 }
 
 // 消除 Wails v3 -zoom: 在探测 targetFrame 时用 display:YES 先跳到目标尺寸再跳回 startFrame 造成的首帧闪跳与双重重排，
-// 并在 CADisplayLink 缩放动画期间开启 WKWebView 原生 liveResize 模式、将动画时长收敛至自然的 0.18s。
+// 并在 CADisplayLink 缩放动画期间开启 WKWebView 原生 liveResize 模式；动画时长保持 Wails 从 AppKit 获取的原值。
 static void dshSwizzledSetFrameDisplay(id self, SEL _cmd, NSRect frameRect, BOOL displayFlag) {
 	NSWindow *window = (NSWindow *)self;
 	WKWebView *webView = dshFindWebViewInView([window contentView]);
@@ -250,16 +250,8 @@ static void dshSwizzledStartZoomAnimationDriver(id self, SEL _cmd) {
 		dshSetWebViewFrameUpdatesDisabled(webView, NO);
 		dshSetWebViewZoomLiveResize(webView, YES);
 	}
-	@try {
-		id durVal = [self valueForKey:@"zoomAnimationDuration"];
-		if ([durVal respondsToSelector:@selector(doubleValue)]) {
-			double d = [durVal doubleValue];
-			if (d > 0.18) {
-				[self setValue:@(0.18) forKey:@"zoomAnimationDuration"];
-			}
-		}
-	} @catch (NSException *ex) {
-	}
+	// Do not override zoomAnimationDuration: Wails uses AppKit animationResizeTime:
+	// for the native zoom/restore cadence. Rendering fixes must not shorten it.
 	((void (*)(id, SEL))dshOrigStartZoomAnimationDriverIMP)(self, _cmd);
 }
 
@@ -451,4 +443,3 @@ func applyNativeWindowBackground(window application.Window, colour application.R
 func isPlatformDarkMode() bool {
 	return C.dshIsSystemDarkMode() != 0
 }
-
