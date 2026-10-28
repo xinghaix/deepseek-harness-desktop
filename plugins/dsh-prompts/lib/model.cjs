@@ -474,9 +474,13 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   };
 }
 
-function formatItemBlock(item) {
-  if (item.includeTitle === true && item.title) {
-    return `### ${item.title}\n${item.content}`;
+function formatItemBlock(item, index, total, prefix) {
+  const showTitle = Boolean(item.includeTitle === true && item.title);
+  if (showTitle) {
+    return `### ${prefix}#${index + 1} ${item.title}\n${item.content}`;
+  }
+  if (total > 1) {
+    return `### ${prefix}#${index + 1}\n${item.content}`;
   }
   return item.content;
 }
@@ -501,18 +505,28 @@ function renderPriorityEnvelope(resolved, options = {}) {
   ];
 
   if (hasGlobal) {
+    const total = resolved.globalItems.length;
     lines.push("<global-instructions>");
-    lines.push(resolved.globalItems.map(formatItemBlock).join("\n\n"));
+    lines.push(
+      resolved.globalItems
+        .map((item, idx) => formatItemBlock(item, idx, total, "Global"))
+        .join("\n\n")
+    );
     lines.push("</global-instructions>");
   }
 
   if (hasWorkspace) {
+    const total = resolved.workspaceItems.length;
     const wsTitle = escapeXmlAttr(
       resolved.workspaceProfile.workspaceTitle || pathBaseName(resolved.workspaceProfile.workspacePath)
     );
     const mode = escapeXmlAttr(resolved.mergeMode || "append");
     lines.push(`<workspace-instructions workspace="${wsTitle}" mode="${mode}">`);
-    lines.push(resolved.workspaceItems.map(formatItemBlock).join("\n\n"));
+    lines.push(
+      resolved.workspaceItems
+        .map((item, idx) => formatItemBlock(item, idx, total, "Workspace"))
+        .join("\n\n")
+    );
     lines.push("</workspace-instructions>");
   }
 
