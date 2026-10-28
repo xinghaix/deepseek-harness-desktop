@@ -1,0 +1,10 @@
+- insert:
+    - id: mattpocock-skills
+      name: dsh-mattpocock-skills
+      config:
+        enableEngineering: true
+        enableProductivity: true
+        enableInProgress: false
+        enableMisc: false
+        linkToDshSkills: true
+        disabledSkills: []

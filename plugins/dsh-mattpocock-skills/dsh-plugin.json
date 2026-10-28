@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "icon": "./icon.svg",
+  "locales": {
+    "zh-CN": {
+      "title": "Matt Pocock 工程与生产力技能集",
+      "description": "完整移植 Matt Pocock 的 27 个核心工程与生产力技能（极限采访、领域建模、深模块架构、接缝 TDD、双轴审查、分诊等）及 11 个可选扩展技能，支持自动软链至 ~/.dsh/skills。"
+    },
+    "en-US": {
+      "title": "Matt Pocock Engineering & Productivity Skills",
+      "description": "Complete port of Matt Pocock's 27 core engineering & productivity skills plus 11 optional extensions, with automatic ~/.dsh/skills symlink synchronization."
+    }
+  }
+}

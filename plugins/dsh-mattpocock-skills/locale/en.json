@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Matt Pocock Engineering & Productivity Skills",
+    "description": "Port of Matt Pocock's 27 core engineering & productivity skills and 11 optional extensions, with automatic ~/.dsh/skills symlink sync."
+  }
+}

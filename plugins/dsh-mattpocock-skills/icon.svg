@@ -1,0 +1,23 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Back stacked skill card (tilted 8 deg to represent the 38-skill deck) -->
+  <rect x="9.5" y="5.5" width="20" height="20" rx="4.5" transform="rotate(8 19.5 15.5)" fill="url(#mp_back)"/>
+  <!-- Front primary skill prism card -->
+  <rect x="5.5" y="9.5" width="21" height="21" rx="5" fill="url(#mp_front)"/>
+  <!-- Crisp "> /" skill command glyph inside front card (Pure White) -->
+  <path d="M10.2 17.2L13.4 20.0L10.2 22.8" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16.2 23.4L19.6 16.6" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- Bottom narrow interface seam line inside card -->
+  <rect x="10.2" y="26.2" width="11.6" height="1.6" rx="0.8" fill="#FFFFFF" fill-opacity="0.45"/>
+  <!-- Top-Right Wayfinder 4-Point Compass Star (Amber #F2AF63) -->
+  <path d="M27.5 4.2L28.85 8.15L32.8 9.5L28.85 10.85L27.5 14.8L26.15 10.85L22.2 9.5L26.15 8.15L27.5 4.2Z" fill="#F2AF63"/>
+  <defs>
+    <linearGradient id="mp_back" x1="9.5" y1="5.5" x2="29.5" y2="25.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#145AF3" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="mp_front" x1="5.5" y1="9.5" x2="26.5" y2="30.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CB7FF"/>
+      <stop offset="1" stop-color="#145AF3"/>
+    </linearGradient>
+  </defs>
+</svg>
