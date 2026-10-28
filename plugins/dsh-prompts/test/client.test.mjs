@@ -243,6 +243,15 @@ test("Client plugin registers all 8 locales, settings.section, plugins.bundle.co
   assert.match(textWorkspace, /deepseek-harness-desktop/);
   assert.match(textWorkspace, /当前会话/);
 
+  // Verify custom floating DropdownSelect opens and closes cleanly
+  controller.toggleDropdown("workspace-merge-mode");
+  assert.equal(controller.getSnapshot().openDropdownId, "workspace-merge-mode");
+  const textWorkspaceOpenMenu = renderVNodeToText(React.createElement(settingsSlot.Component, {}));
+  assert.match(textWorkspaceOpenMenu, /覆盖模式（仅使用本工作区提示词，忽略全局提示词）/);
+  assert.match(textWorkspaceOpenMenu, /✓/);
+  controller.closeDropdown();
+  assert.equal(controller.getSnapshot().openDropdownId, "");
+
   // Switch to preview tab and verify priority envelope preview renders
   controller.setTab("preview");
   const textPreview = renderVNodeToText(React.createElement(settingsSlot.Component, {}));

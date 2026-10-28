@@ -323,8 +323,7 @@ window.__ModuleLoader__.load({
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
 }
-.dsh-prompts-input,
-.dsh-prompts-select {
+.dsh-prompts-input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -340,26 +339,154 @@ window.__ModuleLoader__.load({
   outline: none;
   transition: border-color 0.12s ease;
 }
-.dsh-prompts-select {
-  padding-right: 30px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-position: right 10px center;
-  background-repeat: no-repeat;
-  background-size: 12px 12px;
-  cursor: pointer;
-}
-.dsh-prompts-select-pill {
-  width: auto;
-  height: 32px;
-  border-radius: 999px;
-  padding: 0 28px 0 12px;
-  font-size: 12.5px;
-}
 .dsh-prompts-input:focus,
-.dsh-prompts-select:focus,
 .dsh-prompts-textarea:focus {
   border-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary, #3b82f6));
+}
+
+/* Official DSH Pill Trigger & Floating Scrollable Dropdown Menu */
+.dsh-prompts-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+}
+.dsh-prompts-dropdown[data-full="true"] {
+  display: flex;
+  width: 100%;
+  flex: 1;
+}
+.dsh-prompts-dropdown-trigger {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 14px;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.08));
+  border-radius: 18px;
+  background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.06)));
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 22px;
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.dsh-prompts-dropdown[data-full="true"] .dsh-prompts-dropdown-trigger {
+  width: 100%;
+}
+.dsh-prompts-dropdown[data-size="sm"] .dsh-prompts-dropdown-trigger {
+  height: 32px;
+  padding: 0 11px 0 13px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.dsh-prompts-dropdown-trigger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.1)));
+}
+.dsh-prompts-dropdown-trigger:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.dsh-prompts-dropdown-trigger:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #3b82f6);
+  outline-offset: 1px;
+}
+.dsh-prompts-dropdown-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-prompts-dropdown-chevron {
+  flex: none;
+  display: block;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-secondary);
+  transition: transform 0.15s ease;
+}
+.dsh-prompts-dropdown-chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+.dsh-prompts-dropdown-menu {
+  box-sizing: border-box;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  min-width: max(100%, 184px);
+  max-width: min(520px, 90vw);
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-3, #25262b);
+  border: 0.5px solid var(--dsw-alias-border-l4, rgba(255, 255, 255, 0.14));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+.dsh-prompts-dropdown-menu[data-align="right"] {
+  left: auto;
+  right: 0;
+}
+.dsh-prompts-dropdown-option {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+.dsh-prompts-dropdown-option:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+.dsh-prompts-dropdown-option-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dsh-prompts-dropdown-option-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-prompts-dropdown-option-sub {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-prompts-dropdown-check {
+  flex: none;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--dsw-alias-label-primary);
 }
 .dsh-prompts-textarea {
   box-sizing: border-box;
@@ -438,7 +565,7 @@ window.__ModuleLoader__.load({
   border-radius: var(--dsw-radius-xl, 12px);
   border: 0.5px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08)));
   background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.02)));
-  overflow: hidden;
+  overflow: visible;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 .dsh-prompts-row-card[data-expanded="true"] {
@@ -911,6 +1038,8 @@ window.__ModuleLoader__.load({
       let expandedItemId = null;
       // Inline pending confirmation key (e.g. "clear:global", "clear:workspace", "delete:<id>")
       let pendingConfirmKey = "";
+      // Currently open floating dropdown ID (or "")
+      let openDropdownId = "";
       const listeners = new Set();
 
       const getClientWorkspaces = () => {
@@ -976,12 +1105,48 @@ window.__ModuleLoader__.load({
           editorModal: editorDraft,
           expandedItemId,
           pendingConfirmKey,
+          openDropdownId,
         };
       };
 
       const store = createSnapshotStore(buildSnapshot());
 
+      let docListenersAttached = false;
+      const onDocMouseDown = (event) => {
+        if (!openDropdownId) return;
+        const target = event?.target;
+        if (target && typeof target.closest === "function") {
+          const host = target.closest("[data-dsh-prompts-dropdown]");
+          if (host && host.getAttribute("data-dsh-prompts-dropdown") === openDropdownId) {
+            return;
+          }
+        }
+        openDropdownId = "";
+        publish();
+      };
+      const onDocKeyDown = (event) => {
+        if (openDropdownId && event?.key === "Escape") {
+          openDropdownId = "";
+          publish();
+        }
+      };
+      const syncDocListeners = () => {
+        if (typeof document === "undefined" || typeof document.addEventListener !== "function") {
+          return;
+        }
+        if (openDropdownId && !docListenersAttached) {
+          docListenersAttached = true;
+          document.addEventListener("mousedown", onDocMouseDown);
+          document.addEventListener("keydown", onDocKeyDown);
+        } else if (!openDropdownId && docListenersAttached) {
+          docListenersAttached = false;
+          document.removeEventListener("mousedown", onDocMouseDown);
+          document.removeEventListener("keydown", onDocKeyDown);
+        }
+      };
+
       const publish = () => {
+        syncDocListeners();
         const next = buildSnapshot();
         store.set(next);
         for (const fn of [...listeners]) {
@@ -1019,12 +1184,14 @@ window.__ModuleLoader__.load({
           activeTab = tab;
           error = "";
           pendingConfirmKey = "";
+          openDropdownId = "";
           publish();
         },
         selectWorkspace(wsPath) {
           selectedWorkspacePath = model.normalizePath(wsPath);
           error = "";
           pendingConfirmKey = "";
+          openDropdownId = "";
           if (editorDraft && editorDraft.scope === "workspace" && !editorDraft.id) {
             const snap = buildSnapshot();
             editorDraft = {
@@ -1037,6 +1204,17 @@ window.__ModuleLoader__.load({
         },
         setPreviewWorkspace(wsPath) {
           previewWorkspacePath = wsPath;
+          openDropdownId = "";
+          publish();
+        },
+        toggleDropdown(id) {
+          const targetId = String(id || "");
+          openDropdownId = openDropdownId === targetId ? "" : targetId;
+          publish();
+        },
+        closeDropdown() {
+          if (!openDropdownId) return;
+          openDropdownId = "";
           publish();
         },
         toggleExpandItem(id) {
@@ -1048,6 +1226,7 @@ window.__ModuleLoader__.load({
             expandedItemId = targetId;
           }
           pendingConfirmKey = "";
+          openDropdownId = "";
           publish();
         },
         openEditor(config) {
@@ -1085,6 +1264,7 @@ window.__ModuleLoader__.load({
             validationError: "",
           };
           pendingConfirmKey = "";
+          openDropdownId = "";
           publish();
         },
         updateEditor(patch) {
@@ -1101,6 +1281,7 @@ window.__ModuleLoader__.load({
             position: template.position || "suffix",
             validationError: "",
           };
+          openDropdownId = "";
           publish();
         },
         closeEditor() {
@@ -1108,6 +1289,7 @@ window.__ModuleLoader__.load({
             expandedItemId = null;
           }
           editorDraft = null;
+          openDropdownId = "";
           publish();
         },
         requestConfirm(key) {
@@ -1242,6 +1424,119 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function DropdownSelect({
+      dropdownId,
+      value,
+      placeholder,
+      options,
+      disabled,
+      fullWidth = false,
+      size,
+      align = "left",
+      showCheck = true,
+      ariaLabel,
+      extraProps = {},
+      snap,
+      controller,
+      onChange,
+    }) {
+      const activeSnap = snap || controller.getSnapshot();
+      const open = Boolean(dropdownId && activeSnap.openDropdownId === dropdownId);
+      const selected = options.find((opt) => opt.value === value);
+      const displayLabel = selected ? selected.triggerLabel || selected.label : placeholder || "";
+
+      return h(
+        "div",
+        {
+          className: "dsh-prompts-dropdown",
+          "data-dsh-prompts-dropdown": dropdownId,
+          "data-full": fullWidth ? "true" : undefined,
+          "data-size": size || undefined,
+          ...extraProps,
+        },
+        h(
+          "button",
+          {
+            type: "button",
+            className: "dsh-prompts-dropdown-trigger",
+            disabled: Boolean(disabled),
+            "aria-haspopup": "listbox",
+            "aria-expanded": open ? "true" : "false",
+            "aria-label": ariaLabel || displayLabel,
+            onClick: (event) => {
+              event.stopPropagation();
+              if (!disabled) {
+                controller.toggleDropdown(dropdownId);
+              }
+            },
+          },
+          h("span", { className: "dsh-prompts-dropdown-label" }, displayLabel),
+          h(
+            "svg",
+            {
+              className: "dsh-prompts-dropdown-chevron",
+              "data-open": open ? "true" : "false",
+              viewBox: "0 0 16 16",
+              fill: "none",
+              "aria-hidden": "true",
+            },
+            h("path", {
+              d: "M4 6.5L8 10.5L12 6.5",
+              stroke: "currentColor",
+              strokeWidth: "1.5",
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+            })
+          )
+        ),
+        open
+          ? h(
+              "div",
+              {
+                className: "dsh-prompts-dropdown-menu",
+                "data-align": align,
+                role: "listbox",
+              },
+              options.map((opt) => {
+                const isSelected = showCheck && opt.value === value;
+                return h(
+                  "button",
+                  {
+                    key: opt.value === "" ? "__empty__" : opt.value,
+                    type: "button",
+                    className: "dsh-prompts-dropdown-option",
+                    role: "option",
+                    "aria-selected": isSelected ? "true" : "false",
+                    onClick: (event) => {
+                      event.stopPropagation();
+                      controller.closeDropdown();
+                      if (typeof onChange === "function") {
+                        onChange(opt.value);
+                      }
+                    },
+                  },
+                  h(
+                    "span",
+                    { className: "dsh-prompts-dropdown-option-text" },
+                    h("span", { className: "dsh-prompts-dropdown-option-title" }, opt.label),
+                    opt.subLabel
+                      ? h("span", { className: "dsh-prompts-dropdown-option-sub" }, opt.subLabel)
+                      : null
+                  ),
+                  isSelected
+                    ? h(
+                        "span",
+                        { className: "dsh-prompts-dropdown-check", "aria-hidden": "true" },
+                        "✓"
+                      )
+                    : null
+                );
+              })
+            )
+          : null
+      );
+    }
+
     function InlinePromptEditor({ draft, saving, controller, t, embedded = false }) {
       if (!draft) return null;
       const templates = model.getTemplates(t);
@@ -1320,20 +1615,19 @@ window.__ModuleLoader__.load({
             "div",
             { className: "dsh-prompts-field" },
             h("label", { className: "dsh-prompts-field-label" }, t("templatePickerLabel")),
-            h(
-              "select",
-              {
-                className: "dsh-prompts-select",
-                value: "",
-                onChange: (event) => {
-                  const found = templates.find((tpl) => tpl.id === event.target.value);
-                  event.target.value = "";
-                  if (found) controller.applyTemplateToEditor(found);
-                },
+            h(DropdownSelect, {
+              dropdownId: `tpl-editor-${draft.id || "new"}`,
+              value: "",
+              placeholder: t("templatePickerHint"),
+              fullWidth: true,
+              showCheck: false,
+              options: templates.map((tpl) => ({ value: tpl.id, label: tpl.label })),
+              controller,
+              onChange: (tplId) => {
+                const found = templates.find((tpl) => tpl.id === tplId);
+                if (found) controller.applyTemplateToEditor(found);
               },
-              h("option", { value: "" }, t("templatePickerHint")),
-              templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
-            )
+            })
           )
         ),
         h(
@@ -1638,9 +1932,7 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const onTemplateSelect = (event) => {
-        const tplId = event.target.value;
-        event.target.value = "";
+      const onTemplateSelect = (tplId) => {
         const found = templates.find((tpl) => tpl.id === tplId);
         if (!found) return;
         controller.openEditor({
@@ -1668,18 +1960,20 @@ window.__ModuleLoader__.load({
           },
           isAddOpen ? t("cancel") : "+ " + t("addPrompt")
         ),
-        h(
-          "select",
-          {
-            className: "dsh-prompts-select dsh-prompts-select-pill",
-            "aria-label": t("insertTemplate"),
-            value: "",
-            disabled: snap.saving || (scope === "workspace" && !workspacePath),
-            onChange: onTemplateSelect,
-          },
-          h("option", { value: "" }, t("insertTemplate")),
-          templates.map((tpl) => h("option", { key: tpl.id, value: tpl.id }, tpl.label))
-        ),
+        h(DropdownSelect, {
+          dropdownId: `tpl-toolbar-${scope}`,
+          value: "",
+          placeholder: t("insertTemplate"),
+          size: "sm",
+          align: "right",
+          showCheck: false,
+          ariaLabel: t("insertTemplate"),
+          disabled: snap.saving || (scope === "workspace" && !workspacePath),
+          options: templates.map((tpl) => ({ value: tpl.id, label: tpl.label })),
+          snap,
+          controller,
+          onChange: onTemplateSelect,
+        }),
         itemCount > 0
           ? isConfirmingClear
             ? h(
@@ -1814,14 +2108,14 @@ window.__ModuleLoader__.load({
         });
       };
 
-      const onChangeMergeMode = (event) => {
+      const onChangeMergeMode = (nextMode) => {
         if (!selected) return;
         void controller.mutate({
           type: "setWorkspacePolicy",
           workspacePath: selected.path,
           workspaceId: selected.workspaceId,
           workspaceTitle: selected.title,
-          mergeMode: event.target.value,
+          mergeMode: nextMode,
         });
       };
 
@@ -1848,23 +2142,21 @@ window.__ModuleLoader__.load({
               h(
                 "div",
                 { style: { display: "flex", alignItems: "center", gap: 8 } },
-                h(
-                  "select",
-                  {
-                    className: "dsh-prompts-select",
-                    "data-workspace-select": "",
-                    style: { flex: 1 },
-                    value: selected?.path || "",
-                    onChange: (event) => controller.selectWorkspace(event.target.value),
-                  },
-                  catalog.map((ws) =>
-                    h(
-                      "option",
-                      { key: ws.path, value: ws.path },
-                      `${ws.isCurrent ? "★ " : ""}${ws.title} (${ws.activeCount}/${ws.configuredCount}) — ${ws.path}`
-                    )
-                  )
-                ),
+                h(DropdownSelect, {
+                  dropdownId: "workspace-select",
+                  value: selected?.path || "",
+                  fullWidth: true,
+                  extraProps: { "data-workspace-select": "" },
+                  options: catalog.map((ws) => ({
+                    value: ws.path,
+                    triggerLabel: `${ws.isCurrent ? "★ " : ""}${ws.title} (${ws.activeCount}/${ws.configuredCount}) — ${ws.path}`,
+                    label: `${ws.isCurrent ? "★ " : ""}${ws.title} (${ws.activeCount}/${ws.configuredCount})`,
+                    subLabel: ws.path,
+                  })),
+                  snap,
+                  controller,
+                  onChange: (nextPath) => controller.selectWorkspace(nextPath),
+                }),
                 canPickDir
                   ? h(
                       "button",
@@ -1883,18 +2175,20 @@ window.__ModuleLoader__.load({
                   "div",
                   { className: "dsh-prompts-field" },
                   h("label", { className: "dsh-prompts-field-label" }, t("mergeModeLabel")),
-                  h(
-                    "select",
-                    {
-                      className: "dsh-prompts-select",
-                      "data-merge-mode": "",
-                      value: selected.mergeMode || "append",
-                      disabled: snap.saving,
-                      onChange: onChangeMergeMode,
-                    },
-                    h("option", { value: "append" }, t("mergeAppend")),
-                    h("option", { value: "override" }, t("mergeOverride"))
-                  )
+                  h(DropdownSelect, {
+                    dropdownId: "workspace-merge-mode",
+                    value: selected.mergeMode || "append",
+                    fullWidth: true,
+                    disabled: snap.saving,
+                    extraProps: { "data-merge-mode": "" },
+                    options: [
+                      { value: "append", label: t("mergeAppend") },
+                      { value: "override", label: t("mergeOverride") },
+                    ],
+                    snap,
+                    controller,
+                    onChange: onChangeMergeMode,
+                  })
                 )
               : null
           ),
@@ -1995,26 +2289,36 @@ window.__ModuleLoader__.load({
             "div",
             { className: "dsh-prompts-toolbar" },
             h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
-            h(
-              "select",
-              {
-                className: "dsh-prompts-select",
-                style: { maxWidth: 360 },
-                value: snap.previewWorkspacePath,
-                onChange: (event) => controller.setPreviewWorkspace(event.target.value),
-              },
-              h(
-                "option",
-                { value: "__current__" },
-                snap.selectedWorkspace
-                  ? `${snap.selectedWorkspace.title} (${snap.selectedWorkspace.path})`
-                  : t("previewGlobalOnly")
-              ),
-              h("option", { value: "__global__" }, t("previewGlobalOnly")),
-              catalog.map((ws) =>
-                h("option", { key: ws.path, value: ws.path }, `${ws.title} — ${ws.path}`)
-              )
-            )
+            h(DropdownSelect, {
+              dropdownId: "preview-workspace",
+              value: snap.previewWorkspacePath,
+              align: "right",
+              options: [
+                {
+                  value: "__current__",
+                  triggerLabel: snap.selectedWorkspace
+                    ? `${snap.selectedWorkspace.title} (${snap.selectedWorkspace.path})`
+                    : t("previewGlobalOnly"),
+                  label: snap.selectedWorkspace
+                    ? snap.selectedWorkspace.title
+                    : t("previewGlobalOnly"),
+                  subLabel: snap.selectedWorkspace ? snap.selectedWorkspace.path : "",
+                },
+                {
+                  value: "__global__",
+                  label: t("previewGlobalOnly"),
+                },
+                ...catalog.map((ws) => ({
+                  value: ws.path,
+                  triggerLabel: `${ws.title} — ${ws.path}`,
+                  label: ws.title,
+                  subLabel: ws.path,
+                })),
+              ],
+              snap,
+              controller,
+              onChange: (nextVal) => controller.setPreviewWorkspace(nextVal),
+            })
           ),
           h("p", { className: "dsh-prompts-toggle-hint" }, t("previewHint")),
           preview.hasActive
