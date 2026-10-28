@@ -44,6 +44,14 @@ export async function isManagedSymlink(entryPath, rawAssetsDir, realAssetsDir) {
   }
 
   const resolvedTarget = resolve(dirname(entryPath), rawTarget);
+  const normalizedTarget = resolvedTarget.replace(/\\/g, "/");
+  if (
+    /\/dsh-mattpocock-skills\/assets\/(engineering|productivity|in-progress|misc)\/[^/]+$/.test(
+      normalizedTarget
+    )
+  ) {
+    return true;
+  }
   if (isSubpathOf(resolvedTarget, rawAssetsDir) || isSubpathOf(resolvedTarget, realAssetsDir)) {
     return true;
   }
