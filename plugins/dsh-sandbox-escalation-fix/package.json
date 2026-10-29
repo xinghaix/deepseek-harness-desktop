@@ -25,11 +25,14 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "icon.svg",
+    "locale/",
     "lib",
     "assets/teaser.png",
     "assets/teaser_add.png",

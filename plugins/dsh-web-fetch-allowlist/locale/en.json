@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web Fetch Allowlist",
+    "description": "Allowlisted native web_fetch through Surge/Clash Fake-IP (198.18.0.0/15) without replacing the http fetch provider."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Lista blanca de obtención web",
+    "description": "Permite que web_fetch nativo acceda a hosts autorizados mediante Fake-IP de Surge/Clash (198.18.0.0/15) sin reemplazar el proveedor HTTP."
+  }
+}

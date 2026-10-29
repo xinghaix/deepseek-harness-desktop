@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web取得許可リスト",
+    "description": "HTTP取得プロバイダーを置き換えることなく、Surge/Clash Fake-IP（198.18.0.0/15）経由で許可ホストへのネイティブ web_fetch を可能にします。"
+  }
+}

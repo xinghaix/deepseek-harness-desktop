@@ -5,12 +5,17 @@
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
+  "icon": "./icon.svg",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
+    "icon.svg",
+    "locale/",
     "lib/",
     "cordis.patch.yml"
   ],

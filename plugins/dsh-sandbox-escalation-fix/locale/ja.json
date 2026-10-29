@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "サンドボックス権限昇格修正",
+    "description": "DSH サンドボックス権限昇格引数の互換性シム：すでに権限を満たしている場合の冗長な sandbox_permissions を除去し、不足している justification を自動補完します。"
+  }
+}

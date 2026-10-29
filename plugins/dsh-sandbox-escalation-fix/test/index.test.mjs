@@ -474,3 +474,15 @@ test("package.json declares engines.dsh and peerDependencies for DSH 0.2.0-rc.1+
   assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-sandbox-policy"], "^0.2.0-rc.1");
   assert.equal(manifest.peerDependencies["@deepseek-ai/dsh-tools"], "^0.2.0-rc.1");
 });
+
+test("package.json exports 8 static locale/*.json metadata files and icon", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(manifest.exports["./locale/*.json"], "./locale/*.json");
+  assert.equal(manifest.exports["./icon"], "./icon.svg");
+  assert.ok(manifest.files.includes("locale/"));
+  for (const lang of ["en", "zh", "de", "es", "fr", "ja", "ko", "pt"]) {
+    const meta = JSON.parse(readFileSync(new URL(`../locale/${lang}.json`, import.meta.url), "utf8"));
+    assert.ok(typeof meta?.meta?.title === "string" && meta.meta.title.trim().length > 0, `missing meta.title for ${lang}`);
+    assert.ok(typeof meta?.meta?.description === "string" && meta.meta.description.trim().length > 0, `missing meta.description for ${lang}`);
+  }
+});

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Correção de escalonamento de sandbox",
+    "description": "Camada de compatibilidade para argumentos de escalonamento de sandbox do DSH: remove sandbox_permissions redundantes quando a permissão já é atendida e preenche justification ausente."
+  }
+}

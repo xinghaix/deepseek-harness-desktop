@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sandbox-Eskalations-Fix",
+    "description": "Kompatibilitäts-Shim für DSH-Sandbox-Eskalationsparameter: entfernt redundante sandbox_permissions bei bereits erfüllter Berechtigung und ergänzt fehlende justification."
+  }
+}

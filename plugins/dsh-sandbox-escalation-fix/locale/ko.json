@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "샌드박스 권한 승격 수정",
+    "description": "DSH 샌드박스 권한 승격 인자 호환성 패치: 이미 권한이 충족된 경우 불필요한 sandbox_permissions를 제거하고 누락된 justification을 자동으로 채웁니다."
+  }
+}

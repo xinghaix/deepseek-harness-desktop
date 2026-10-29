@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "网页抓取白名单",
+    "description": "支持原生 web_fetch 经 Surge/Clash Fake-IP（198.18.0.0/15）访问白名单主机，无需替换底层 HTTP 抓取提供方。"
+  }
+}

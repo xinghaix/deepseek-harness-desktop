@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "沙盒提权参数修复",
+    "description": "DSH 沙盒提权参数兼容修复：当工具已满足目标权限时自动剥离冗余的 sandbox_permissions，并在缺失非空 justification 时自动补全。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Lista de permissões de busca web",
+    "description": "Permite que o web_fetch nativo acesse hosts autorizados via Fake-IP do Surge/Clash (198.18.0.0/15) sem substituir o provedor HTTP."
+  }
+}

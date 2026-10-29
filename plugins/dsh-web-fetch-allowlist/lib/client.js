@@ -40,6 +40,90 @@ window.__ModuleLoader__.load({
 			overridden: "已覆盖",
 			reset: "重置",
 		};
+		const de = {
+			title: "Web-Fetch-Zulassungsliste",
+			description: "Ermöglicht nativem web_fetch den Zugriff auf freigegebene Hosts über lokales Fake-IP / TUN-DNS.",
+			hosts: "Zugelassene Hosts",
+			hostsHint: "Eine Domain oder URL pro Zeile. Subdomains werden eingeschlossen. Leerzeile am Ende zum Weiterhinzufügen belassen.",
+			save: "Speichern",
+			saving: "Wird gespeichert…",
+			discard: "Verwerfen",
+			unsaved: "Ungespeichert",
+			saveFailed: "Diese Bereitstellung hat die Werte nicht akzeptiert. Sie bleiben zur Bearbeitung erhalten.",
+			readOnly: "Einstellungen sind in dieser Bereitstellung schreibgeschützt.",
+			overridden: "Überschrieben",
+			reset: "Zurücksetzen",
+		};
+		const es = {
+			title: "Lista blanca de obtención web",
+			description: "Permite que web_fetch nativo acceda a hosts autorizados mediante DNS local Fake-IP / TUN.",
+			hosts: "Hosts permitidos",
+			hostsHint: "Un dominio o URL por línea. Incluye subdominios. Deje una línea en blanco al final para añadir otro.",
+			save: "Guardar",
+			saving: "Guardando…",
+			discard: "Descartar",
+			unsaved: "Sin guardar",
+			saveFailed: "Este despliegue no aceptó estos valores. Se conservan para que pueda editarlos.",
+			readOnly: "Los ajustes son de solo lectura en este despliegue.",
+			overridden: "Sobrescrito",
+			reset: "Restablecer",
+		};
+		const fr = {
+			title: "Liste blanche de récupération web",
+			description: "Permet à web_fetch natif de joindre les hôtes autorisés via DNS local Fake-IP / TUN.",
+			hosts: "Hôtes autorisés",
+			hostsHint: "Un domaine ou URL par ligne. Les sous-domaines correspondent. Laissez une ligne vide à la fin pour en ajouter.",
+			save: "Enregistrer",
+			saving: "Enregistrement…",
+			discard: "Annuler",
+			unsaved: "Non enregistré",
+			saveFailed: "Ce déploiement n’a pas accepté ces valeurs. Elles sont conservées pour modification.",
+			readOnly: "Les paramètres sont en lecture seule dans ce déploiement.",
+			overridden: "Remplacé",
+			reset: "Réinitialiser",
+		};
+		const ja = {
+			title: "Web取得許可リスト",
+			description: "ローカル Fake-IP / TUN DNS 経由で許可されたホストへのネイティブ web_fetch アクセスを許可します。",
+			hosts: "許可するホスト",
+			hostsHint: "1行に1つのドメインまたはURLを入力します（サブドメインも一致）。末尾の空行から追加できます。",
+			save: "保存",
+			saving: "保存中…",
+			discard: "破棄",
+			unsaved: "未保存",
+			saveFailed: "この環境では値が受け入れられませんでした。編集できるよう入力内容は保持されています。",
+			readOnly: "この環境では設定は読み取り専用です。",
+			overridden: "上書き済み",
+			reset: "リセット",
+		};
+		const ko = {
+			title: "웹 가져오기 허용 목록",
+			description: "로컬 Fake-IP / TUN DNS를 통해 허용된 호스트에 기본 web_fetch가 접근할 수 있도록 합니다.",
+			hosts: "허용된 호스트",
+			hostsHint: "한 줄에 하나의 도메인 또는 URL을 입력하세요. 하위 도메인도 일치합니다. 추가하려면 마지막 빈 줄을 남겨두세요.",
+			save: "저장",
+			saving: "저장 중…",
+			discard: "취소",
+			unsaved: "저장되지 않음",
+			saveFailed: "이 배포 환경에서 값을 수락하지 않았습니다. 수정할 수 있도록 입력값이 유지됩니다.",
+			readOnly: "이 배포 환경에서는 설정이 읽기 전용입니다.",
+			overridden: "재정의됨",
+			reset: "초기화",
+		};
+		const pt = {
+			title: "Lista de permissões de busca web",
+			description: "Permite que o web_fetch nativo acesse hosts autorizados via DNS local Fake-IP / TUN.",
+			hosts: "Hosts permitidos",
+			hostsHint: "Um domínio ou URL por linha. Subdomínios correspondem. Deixe uma linha em branco no final para adicionar outro.",
+			save: "Salvar",
+			saving: "Salvando…",
+			discard: "Descartar",
+			unsaved: "Não salvo",
+			saveFailed: "Esta implantação não aceitou esses valores. Eles foram mantidos para edição.",
+			readOnly: "As configurações são somente leitura nesta implantação.",
+			overridden: "Substituído",
+			reset: "Redefinir",
+		};
 
 		function storedHosts(scope) {
 			const value = scope.getSnapshot().value?.hosts;
@@ -225,7 +309,7 @@ window.__ModuleLoader__.load({
 
 		function apply(ctx) {
 			ctx.effect(
-				() => ctx.locale.register(LOCALE_NS, { zh, en }),
+				() => ctx.locale.register(LOCALE_NS, { zh, en, de, es, fr, ja, ko, pt }),
 				"web-fetch-allowlist: copy dictionaries",
 			);
 			const controller = new AllowlistCardController(ctx.configForms.get(SETTINGS_NS));

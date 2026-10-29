@@ -137,6 +137,16 @@ test("bundle is standard, exact-runtime gated and independent of desktop control
   assert.equal(manifest.dsh.engines, undefined);
   assert.equal(manifest.dsh.client.platform, "web");
   assert.ok(manifest.dsh.bundle.patch);
+  assert.equal(manifest.icon, "./icon.svg");
+  assert.equal(manifest.exports["./icon"], "./icon.svg");
+  assert.equal(manifest.exports["./locale/*.json"], "./locale/*.json");
+  assert.ok(manifest.files.includes("icon.svg"));
+  assert.ok(manifest.files.includes("locale/"));
+  for (const lang of ["en", "zh", "de", "es", "fr", "ja", "ko", "pt"]) {
+    const meta = JSON.parse(readFileSync(new URL(`../locale/${lang}.json`, import.meta.url), "utf8"));
+    assert.ok(typeof meta?.meta?.title === "string" && meta.meta.title.trim().length > 0);
+    assert.ok(typeof meta?.meta?.description === "string" && meta.meta.description.trim().length > 0);
+  }
   assert.ok(manifest.dependencies["@deepseek-ai/schemastery"]);
   assert.doesNotMatch(source, /desktop-bridge|__DSH_DESKTOP|Wails|fetch\(|MutationObserver|__reactFiber|localStorage|rmSync|unlink/);
   assert.equal(harness().calls, 1);

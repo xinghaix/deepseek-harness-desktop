@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Correctif d’escalade du bac à sable",
+    "description": "Couche de compatibilité pour l’escalade de bac à sable DSH : retire sandbox_permissions redondant lorsque la permission est déjà acquise et complète justification manquant."
+  }
+}

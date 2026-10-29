@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sandbox Escalation Fix",
+    "description": "Compatibility shim for DSH sandbox escalation tool arguments: strips redundant sandbox_permissions when already satisfied and fills missing justification."
+  }
+}

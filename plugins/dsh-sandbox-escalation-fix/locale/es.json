@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Corrección de escalada de sandbox",
+    "description": "Capa de compatibilidad para parámetros de escalada de sandbox en DSH: elimina sandbox_permissions redundantes cuando el permiso ya se cumple y completa justification vacío."
+  }
+}

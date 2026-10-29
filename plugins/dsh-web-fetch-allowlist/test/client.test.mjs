@@ -35,9 +35,10 @@ function harness() {
       throw new Error("Unexpected import: " + name);
     }); } } },
   });
+  let registeredLocales;
   const ctx = {
     effect(fn) { const off = fn(); if (typeof off === "function") disposers.push(off); },
-    locale: { register: () => () => {} },
+    locale: { register: (_ns, dicts) => { registeredLocales = dicts; return () => {}; } },
     configForms: { get(ns) { assert.equal(ns, "web-fetch-allowlist"); return scope; } },
     slots: {
       inject(name, fn) { waiting.push({ name, fn }); },
@@ -47,6 +48,7 @@ function harness() {
   plugin.apply(ctx);
   return {
     entries, writes, effects, listeners,
+    locales: () => registeredLocales,
     declareSlot() { for (const { name, fn } of waiting) if (name === SLOT) { const result = fn(); if (typeof result === "function") disposers.push(result); else if (result?.next) for (const off of result) disposers.push(off); } },
     disable() { disposers.reverse().forEach(off => off()); },
     setReadOnly() { snapshot = { ...snapshot, writable: false }; listeners.forEach(fn => fn()); },
@@ -159,4 +161,20 @@ test("leaving the page discards unsaved changes without writing", () => {
   props.editRow(0, "example.org"); cleanups.forEach(fn => fn());
   assert.equal(props.hooks.allowlistCard.getSnapshot().hosts.text, "example.com");
   assert.deepEqual(h.writes, []);
+});
+
+test("exports 8 static locale/*.json metadata files and registers 8 runtime UI locales", () => {
+  assert.equal(manifest.exports["./locale/*.json"], "./locale/*.json");
+  assert.equal(manifest.exports["./icon"], "./icon.svg");
+  assert.ok(manifest.files.includes("locale/"));
+  const langs = ["en", "zh", "de", "es", "fr", "ja", "ko", "pt"];
+  const runtime = harness().locales();
+  const enKeys = Object.keys(runtime.en).sort();
+  for (const lang of langs) {
+    const meta = JSON.parse(readFileSync(new URL(`../locale/${lang}.json`, import.meta.url), "utf8"));
+    assert.ok(typeof meta?.meta?.title === "string" && meta.meta.title.trim().length > 0, `missing meta.title for ${lang}`);
+    assert.ok(typeof meta?.meta?.description === "string" && meta.meta.description.trim().length > 0, `missing meta.description for ${lang}`);
+    assert.ok(runtime[lang], `missing runtime dictionary for ${lang}`);
+    assert.deepEqual(Object.keys(runtime[lang]).sort(), enKeys, `runtime key mismatch for ${lang}`);
+  }
 });

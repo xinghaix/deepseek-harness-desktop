@@ -9,6 +9,7 @@
     ".": "./lib/index.js",
     "./model": "./lib/model.cjs",
     "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },

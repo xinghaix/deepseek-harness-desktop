@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Liste blanche de récupération web",
+    "description": "Permet à web_fetch natif d’accéder aux hôtes autorisés via Surge/Clash Fake-IP (198.18.0.0/15) sans remplacer le fournisseur HTTP."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web-Fetch-Zulassungsliste",
+    "description": "Ermöglicht nativem web_fetch den Zugriff auf freigegebene Hosts über Surge/Clash Fake-IP (198.18.0.0/15), ohne den HTTP-Fetch-Provider zu ersetzen."
+  }
+}

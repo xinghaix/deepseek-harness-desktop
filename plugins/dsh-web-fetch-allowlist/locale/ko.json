@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "웹 가져오기 허용 목록",
+    "description": "HTTP 가져오기 공급자를 교체하지 않고 Surge/Clash Fake-IP(198.18.0.0/15)를 통해 허용된 호스트에 기본 web_fetch가 접근하도록 합니다."
+  }
+}
