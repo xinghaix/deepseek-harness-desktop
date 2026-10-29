@@ -1,6 +1,6 @@
 {
   "name": "dsh-prompts",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Manage global and workspace-scoped system prompts with real-time injection, priority envelopes, and unified Settings and Plugin Manager UI.",
   "type": "module",
   "private": true,
