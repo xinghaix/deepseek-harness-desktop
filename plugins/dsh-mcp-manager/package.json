@@ -1,6 +1,6 @@
 {
   "name": "dsh-mcp-manager",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Manage MCP connections with persistent records and dynamically owned official dsh-mcp-client instances.",
   "type": "module",
   "private": true,
