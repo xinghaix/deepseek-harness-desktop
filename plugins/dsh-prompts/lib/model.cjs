@@ -520,7 +520,6 @@ function formatItemBlock(item, index, total, prefix) {
 function renderPriorityEnvelope(resolved, options = {}) {
   if (!resolved || !resolved.active) return "";
   const slot = normalizePosition(options.slot || resolved.slot);
-  const revision = Number.isInteger(options.revision ?? resolved.revision) ? (options.revision ?? resolved.revision) : 1;
   const hasGlobal = resolved.globalItems.length > 0;
   const hasWorkspace = Boolean(resolved.workspaceItems.length > 0 && resolved.workspaceProfile);
 
@@ -531,8 +530,10 @@ function renderPriorityEnvelope(resolved, options = {}) {
         ? "Precedence: Direct user request in latest turn > <workspace-instructions> > earlier conversation habits."
         : "Precedence: Direct user request in latest turn > <global-instructions> > earlier conversation habits.";
 
+  // Omit state.revision from the XML tag so unrelated edits (other workspaces, UI toggles,
+  // disabled rules, or UI-only titles) never mutate the rendered prompt or bust LLM prefix cache.
   const lines = [
-    `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="active" revision="${revision}">`,
+    `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="active">`,
     precedenceChain,
   ];
 
@@ -568,9 +569,8 @@ function renderPriorityEnvelope(resolved, options = {}) {
 
 function renderClearedEnvelope(options = {}) {
   const slot = normalizePosition(options.slot);
-  const revision = Number.isInteger(options.revision) ? options.revision : 1;
   return [
-    `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="cleared" revision="${revision}">`,
+    `<user-custom-instructions slot="${escapeXmlAttr(slot)}" status="cleared">`,
     "Previously active custom instructions in this slot were cleared; stop applying custom rules from earlier turns unless requested in the latest user message.",
     "</user-custom-instructions>",
   ].join("\n");
@@ -656,6 +656,30 @@ function createSessionPromptTracker() {
   };
 }
 
+function effectivePromptSignature(state) {
+  const normalized = normalizeState(state);
+  if (!normalized.enabled) return "disabled";
+  const globalSig = normalized.globalItems
+    .filter((item) => item.enabled !== false)
+    .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+    .join("|");
+  const wsEntries = Object.keys(normalized.workspaces)
+    .sort()
+    .map((wsKey) => {
+      const ws = normalized.workspaces[wsKey];
+      if (!ws || ws.enabled === false) return "";
+      const itemsSig = (ws.items || [])
+        .filter((item) => item.enabled !== false)
+        .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+        .join("|");
+      if (!itemsSig) return "";
+      return `${ws.workspacePath}#${ws.mergeMode}#${ws.workspaceTitle || ""}#${itemsSig}`;
+    })
+    .filter(Boolean)
+    .join("||");
+  return `enabled::${globalSig}::${wsEntries}`;
+}
+
 function summaryCounts(state) {
   const normalized = normalizeState(state);
   const globalCount = normalized.globalItems.filter((item) => item.enabled !== false).length;
@@ -716,6 +740,7 @@ module.exports = {
   renderEffectivePreview,
   sessionHasPriorPromptMarker,
   createSessionPromptTracker,
+  effectivePromptSignature,
   summaryCounts,
   getTemplates,
 };

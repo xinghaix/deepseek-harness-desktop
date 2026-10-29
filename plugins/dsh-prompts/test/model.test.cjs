@@ -64,7 +64,8 @@ test("resolveEffectiveItems and renderPriorityEnvelope support append and overri
   assert.equal(appendResolved.workspaceItems.length, 1);
   assert.equal(appendResolved.globalItems[0].includeTitle, false);
   const appendEnvelope = model.renderPriorityEnvelope(appendResolved);
-  assert.match(appendEnvelope, /<user-custom-instructions slot="suffix" status="active" revision="3">/);
+  assert.match(appendEnvelope, /<user-custom-instructions slot="suffix" status="active">/);
+  assert.doesNotMatch(appendEnvelope, /revision=/);
   assert.match(appendEnvelope, /<workspace-instructions> > <global-instructions>/);
   assert.match(appendEnvelope, /<global-instructions>\nAlways reply in Simplified Chinese/);
   assert.doesNotMatch(appendEnvelope, /Global Chinese/);
@@ -159,7 +160,8 @@ test("createSessionPromptTracker emits status=cleared for existing sessions afte
     cwd: "/work/app",
     slot: "suffix",
   });
-  assert.match(clearedText, /<user-custom-instructions slot="suffix" status="cleared" revision="3">/);
+  assert.match(clearedText, /<user-custom-instructions slot="suffix" status="cleared">/);
+  assert.doesNotMatch(clearedText, /revision=/);
   assert.equal(
     tracker.resolveSlotText(state, { sessionId: "s-brand-new", cwd: "/work/app", slot: "suffix" }),
     ""

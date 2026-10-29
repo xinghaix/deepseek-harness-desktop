@@ -181,14 +181,18 @@ export async function apply(ctx) {
   }
 
   const persistState = async (nextState) => {
+    const prevSig = model.effectivePromptSignature(currentState);
     currentState = model.normalizeState(nextState);
+    const nextSig = model.effectivePromptSignature(currentState);
     if (table && typeof table.put === "function") {
       await table.put(RECORD_ID, currentState);
     }
-    try {
-      ctx.emit?.("system-prompt/change");
-    } catch {
-      // Ignore if event bus does not declare system-prompt/change in isolated tests.
+    if (prevSig !== nextSig) {
+      try {
+        ctx.emit?.("system-prompt/change");
+      } catch {
+        // Ignore if event bus does not declare system-prompt/change in isolated tests.
+      }
     }
     return currentState;
   };
