@@ -102,18 +102,20 @@ function isFilesystemProviderRegistered(skillsService) {
 export function apply(ctx, config = {}, options = {}) {
   const assetsDir = options.assetsDir ?? DEFAULT_ASSETS_DIR;
   const dshSkillsDir = options.dshSkillsDir;
-  const catalog = loadSkillCatalog(assetsDir);
+  let cachedCatalog;
+  const getCatalog = () => (cachedCatalog ??= loadSkillCatalog(assetsDir));
 
   let currentLinkedNames = new Set();
   let syncPromise = Promise.resolve();
   let providerControl = undefined;
 
   const runSync = () => {
-    const resolved = resolveConfigValue(config);
-    const enabledSkills = filterEnabledSkills(catalog, resolved);
     syncPromise = syncPromise
       .catch(() => {})
       .then(async () => {
+        const catalog = getCatalog();
+        const resolved = resolveConfigValue(config);
+        const enabledSkills = filterEnabledSkills(catalog, resolved);
         const res = await syncDshSkillLinks({
           enabledSkills,
           linkToDshSkills: resolved.linkToDshSkills,
@@ -128,7 +130,7 @@ export function apply(ctx, config = {}, options = {}) {
     return syncPromise;
   };
 
-  // Trigger initial symlink synchronization
+  // Trigger initial symlink synchronization asynchronously off the synchronous apply() path
   runSync();
 
   const skillsService = ctx.skills ?? ctx.skillRegistry;
@@ -139,6 +141,7 @@ export function apply(ctx, config = {}, options = {}) {
         name: BUNDLED_PROVIDER_NAME,
         async list(_lookupOptions = {}) {
           await syncPromise;
+          const catalog = getCatalog();
           const resolved = resolveConfigValue(config);
           const enabledSkills = filterEnabledSkills(catalog, resolved);
           const fsActive =
@@ -168,6 +171,7 @@ export function apply(ctx, config = {}, options = {}) {
           return candidates;
         },
         async get(candidate) {
+          const catalog = getCatalog();
           const skill =
             candidate?.locator ??
             catalog.find((entry) => entry.name === (candidate?.name ?? candidate));
@@ -225,7 +229,9 @@ export function apply(ctx, config = {}, options = {}) {
   }
 
   return {
-    catalog,
+    get catalog() {
+      return getCatalog();
+    },
     getSyncPromise: () => syncPromise,
     runSync,
   };

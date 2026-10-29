@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -98,11 +99,59 @@ func resolveCLIExecutable(name string) (string, error) {
 func cliSearchDirectories() []string {
 	searchDirsOnce.Do(func() {
 		searchDirsCache = computeCLISearchDirectories()
+		searchDirsReady.Store(true)
 	})
 	return searchDirsCache
 }
 
+// fastCLISearchDirectories 在已明确知晓 dsh 可执行路径时，优先复用已完成预热的缓存；
+// 若交互式 shell PATH 仍在后台探测但静态目录（或 executable 同目录）已具备 node，
+// 则立即返回静态目录而不阻塞主启动路径。
+func fastCLISearchDirectories(executable string) []string {
+	if searchDirsReady.Load() {
+		return cliSearchDirectories()
+	}
+	staticDirs := computeCLISearchDirectoriesWithShell(false)
+	if hasNodeExecutable(filepath.Dir(executable), staticDirs) {
+		warmCLISearchCache()
+		return staticDirs
+	}
+	return cliSearchDirectories()
+}
+
+func hasNodeExecutable(primaryDir string, dirs []string) bool {
+	nodeNames := []string{"node"}
+	if runtime.GOOS == "windows" {
+		nodeNames = []string{"node.exe", "node.cmd", "node"}
+	}
+	checkDir := func(dir string) bool {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return false
+		}
+		for _, name := range nodeNames {
+			if info, err := os.Stat(filepath.Join(dir, name)); err == nil && !info.IsDir() {
+				return true
+			}
+		}
+		return false
+	}
+	if checkDir(primaryDir) {
+		return true
+	}
+	for _, dir := range dirs {
+		if checkDir(dir) {
+			return true
+		}
+	}
+	return false
+}
+
 func computeCLISearchDirectories() []string {
+	return computeCLISearchDirectoriesWithShell(true)
+}
+
+func computeCLISearchDirectoriesWithShell(includeShell bool) []string {
 	home, _ := os.UserHomeDir()
 	homeDirs := make([]string, 0, 20)
 	addHome := func(dir string) {
@@ -143,7 +192,10 @@ func computeCLISearchDirectories() []string {
 		}
 	}
 
-	pathDirs := append(pathEntries(os.Getenv("PATH")), shellPathEntries()...)
+	pathDirs := pathEntries(os.Getenv("PATH"))
+	if includeShell {
+		pathDirs = append(pathDirs, shellPathEntries()...)
+	}
 	userPathDirs := make([]string, 0, len(pathDirs))
 	otherPathDirs := make([]string, 0, len(pathDirs))
 	for _, dir := range pathDirs {
@@ -186,6 +238,7 @@ var (
 	shellPathCache  []string
 	searchDirsOnce  sync.Once
 	searchDirsCache []string
+	searchDirsReady atomic.Bool
 )
 
 // warmCLISearchCache precomputes login-shell PATH and candidate dirs so the
@@ -209,26 +262,36 @@ func loadShellPathEntries() []string {
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	// Merge -lc and -ilc PATH. A fast non-empty -lc (common after cold-start
-	// tuning) is often incomplete for GUI apps and must NOT skip -ilc — that
-	// regression dropped first-install auto-detect for Homebrew Cellar dsh.
-	var merged []string
-	for _, attempt := range []struct {
+	// 并发采集 -lc 与 -ilc 的 PATH 并保持合并顺序：兼顾首次安装自动探测（Cellar/nvm 等）
+	// 与冷启动耗时（总等待由两阶段串行降为单次最大耗时）。
+	attempts := []struct {
 		args    []string
 		timeout time.Duration
 	}{
 		{[]string{"-lc", `printf %s "$PATH"`}, 800 * time.Millisecond},
 		{[]string{"-ilc", `printf %s "$PATH"`}, 1500 * time.Millisecond},
-	} {
-		ctx, cancel := context.WithTimeout(context.Background(), attempt.timeout)
-		command := exec.CommandContext(ctx, shell, attempt.args...)
-		command.Stderr = io.Discard
-		output, err := command.Output()
-		cancel()
-		if err != nil || strings.TrimSpace(string(output)) == "" {
-			continue
-		}
-		merged = append(merged, pathEntries(string(output))...)
+	}
+	results := make([][]string, len(attempts))
+	var wg sync.WaitGroup
+	for idx, attempt := range attempts {
+		wg.Add(1)
+		go func(i int, args []string, timeout time.Duration) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+			command := exec.CommandContext(ctx, shell, args...)
+			command.Stderr = io.Discard
+			output, err := command.Output()
+			if err != nil || strings.TrimSpace(string(output)) == "" {
+				return
+			}
+			results[i] = pathEntries(string(output))
+		}(idx, attempt.args, attempt.timeout)
+	}
+	wg.Wait()
+	var merged []string
+	for _, entries := range results {
+		merged = append(merged, entries...)
 	}
 	return uniqueDirectories(merged)
 }

@@ -87,6 +87,7 @@ func main() {
 
 	management := app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 	service.StartTrayIfEnabled()
+	service.PrestartPersistedLaunch()
 	desktop.TuneNativeWebView(management)
 	if management != nil {
 		management.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {

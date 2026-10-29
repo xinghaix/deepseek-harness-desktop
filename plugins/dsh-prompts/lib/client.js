@@ -2374,7 +2374,9 @@ return module.exports; })();
       if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
         return () => {};
       }
+      let scheduled = false;
       const paint = () => {
+        scheduled = false;
         const accepted = new Set(
           [
             ...(typeof getLabels === "function" ? getLabels() : []),
@@ -2383,6 +2385,7 @@ return module.exports; })();
         );
         const candidates = document.querySelectorAll("button, [role='button'], span, div");
         for (const el of candidates) {
+          if (el.children && el.children.length > 4) continue;
           const txt = (el.textContent || "").trim();
           if (!accepted.has(txt)) continue;
           const row = el.closest("button") || el.parentElement;
@@ -2394,7 +2397,13 @@ return module.exports; })();
         }
       };
       paint();
-      const obs = new MutationObserver(() => paint());
+      const schedule = () => {
+        if (scheduled) return;
+        scheduled = true;
+        if (typeof queueMicrotask === "function") queueMicrotask(paint);
+        else paint();
+      };
+      const obs = new MutationObserver(schedule);
       obs.observe(document.body || document.documentElement, {
         childList: true,
         subtree: true,

@@ -8,6 +8,7 @@ export const inject = ["webServer"];
 // expand to per-package ?? URLs with bounded concurrency.
 const LOAD_BUNDLE = `(function () {
   var CONCURRENCY = 8;
+  var xhrCache = Object.create(null);
 
   function parseCombo(url) {
     var text = String(url == null ? "" : url);
@@ -31,28 +32,49 @@ const LOAD_BUNDLE = `(function () {
     });
   }
 
-  function loadViaXHR(url) {
-    return new Promise(function (resolve, reject) {
+  function cacheKey(url) {
+    var text = String(url == null ? "" : url);
+    var at = text.indexOf("plugins/??");
+    return at === -1 ? text : text.slice(at);
+  }
+
+  function requestURL(url) {
+    var text = String(url == null ? "" : url);
+    return text.indexOf("plugins/??") === 0 ? "/" + text : text;
+  }
+
+  function fetchViaXHR(url) {
+    var key = cacheKey(url);
+    var reqUrl = requestURL(url);
+    if (xhrCache[key]) return xhrCache[key];
+    var pending = new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
-      xhr.open("GET", url);
+      xhr.open("GET", reqUrl);
       xhr.onload = function () {
         if (xhr.status !== 200) {
-          var err = new Error("desktop-webview-boot: xhr " + xhr.status + " for " + url);
+          delete xhrCache[key];
+          var err = new Error("desktop-webview-boot: xhr " + xhr.status + " for " + reqUrl);
           err.status = xhr.status;
           reject(err);
           return;
         }
-        try {
-          (0, eval)(xhr.responseText);
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
+        resolve(xhr.responseText);
       };
       xhr.onerror = function () {
-        reject(new Error("desktop-webview-boot: xhr network error for " + url));
+        delete xhrCache[key];
+        reject(new Error("desktop-webview-boot: xhr network error for " + reqUrl));
       };
       xhr.send();
+    });
+    xhrCache[key] = pending;
+    return pending;
+  }
+
+  function loadViaXHR(url) {
+    var key = cacheKey(url);
+    return fetchViaXHR(url).then(function (source) {
+      delete xhrCache[key];
+      (0, eval)(source);
     });
   }
 
@@ -95,6 +117,25 @@ const LOAD_BUNDLE = `(function () {
       if (!err || err.status !== 431) throw err;
       return loadParallel(url);
     });
+  }
+
+  // 在 <head> 注入的 __DSH_BOOT__.batches 就绪后立即并发启动 XHR 预取，
+  // 使 application 批次与 vendor.js / index.js 下载、解析完全并行。
+  function prefetchBootBatches() {
+    var boot = globalThis.__DSH_BOOT__;
+    var batches = boot && Array.isArray(boot.batches) ? boot.batches : null;
+    if (!batches) return;
+    for (var i = 0; i < batches.length; i++) {
+      var batch = batches[i];
+      if (batch && typeof batch.url === "string" && batch.url) {
+        fetchViaXHR(batch.url).catch(function () {});
+      }
+    }
+  }
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(prefetchBootBatches);
+  } else {
+    setTimeout(prefetchBootBatches, 0);
   }
 
   var transport = globalThis.__DSH_TRANSPORT__ = globalThis.__DSH_TRANSPORT__ || {};
@@ -167,4 +208,44 @@ export function injectLoadBundle(table) {
 export function apply(ctx) {
   ctx.webServer.tapIndex(stripComboPreloads);
   ctx.on("webserver/index-inject", injectLoadBundle);
+
+  // 本机回环接口（127.0.0.1 / ::1）传输 13MB+ 客户端插件 combo 包时，
+  // 实时 gzip 压缩与浏览器解压开销高达 ~220ms，而回环内存直传仅需 ~22ms。
+  if (ctx.webServer && "gzip" in ctx.webServer && typeof ctx.effect === "function") {
+    ctx.effect(() => {
+      const prevGzip = ctx.webServer.gzip;
+      ctx.webServer.gzip = undefined;
+      return () => {
+        ctx.webServer.gzip = prevGzip;
+      };
+    }, "desktop-webview-boot:disable-loopback-gzip");
+  }
+
+  // 启动就绪后在空闲刻预热 clientModules combo Buffer 并刷新 V8 字节码编译缓存落盘。
+  if (typeof ctx.effect === "function") {
+    ctx.effect(() => {
+      const timer = setTimeout(() => {
+        try {
+          const cm = typeof ctx.get === "function" ? ctx.get("clientModules") : ctx.clientModules;
+          const scripts = typeof cm?.scripts === "function" ? cm.scripts() : null;
+          if (scripts && typeof scripts.values === "function") {
+            for (const build of scripts.values()) {
+              if (typeof build === "function") build();
+            }
+          }
+        } catch {
+          // 忽略不同 DSH 版本的内部结构差异
+        }
+        import("node:module")
+          .then((mod) => {
+            if (typeof mod.flushCompileCache === "function") {
+              mod.flushCompileCache();
+            }
+          })
+          .catch(() => {});
+      }, 20);
+      if (typeof timer?.unref === "function") timer.unref();
+      return () => clearTimeout(timer);
+    }, "desktop-webview-boot:warm-caches");
+  }
 }

@@ -16,6 +16,7 @@ assert.match(table[0].text, /loadBundle/);
 assert.match(table[0].text, /\(0, eval\)/);
 assert.match(table[0].text, /loadParallel/);
 assert.match(table[0].text, /err\.status !== 431/);
+assert.match(table[0].text, /prefetchBootBatches/);
 assert.equal(table.some((row) => row.kind === "script-preload"), false);
 
 const loaderAt = table.findIndex((row) => row.text && row.text.includes("__ModuleLoader__"));

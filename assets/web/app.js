@@ -248,9 +248,17 @@ async function openReadyDSH() {
 }
 async function startAutomatically(fastPath = false) {
   showLoading(fastPath ? t("loading.starting_saved") : t("loading.starting_found"));
-  saveOptions(false);
+  if (state === "starting" || state === "running") return true;
+  if (!fastPath) saveOptions(false);
   try { await api("Start", options()); return true; }
   catch (error) {
+    try {
+      const current = await api("Status");
+      if (current && (current.state === "starting" || current.state === "running")) {
+        renderStatus(current);
+        return true;
+      }
+    } catch (_) {}
     if (fastPath) {
       markStartupConfigStale();
       const result = await discover();

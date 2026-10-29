@@ -2460,7 +2460,9 @@ module.exports = {
 			if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
 				return () => {};
 			}
+			let scheduled = false;
 			const paint = () => {
+				scheduled = false;
 				const accepted = new Set(
 					[
 						...(typeof getLabels === "function" ? getLabels() : []),
@@ -2469,6 +2471,7 @@ module.exports = {
 				);
 				const candidates = document.querySelectorAll("button, [role='button'], span, div");
 				for (const el of candidates) {
+					if (el.children && el.children.length > 4) continue;
 					const txt = (el.textContent || "").trim();
 					if (!accepted.has(txt)) continue;
 					const row = el.closest("button") || el.parentElement;
@@ -2480,7 +2483,13 @@ module.exports = {
 				}
 			};
 			paint();
-			const obs = new MutationObserver(() => paint());
+			const schedule = () => {
+				if (scheduled) return;
+				scheduled = true;
+				if (typeof queueMicrotask === "function") queueMicrotask(paint);
+				else paint();
+			};
+			const obs = new MutationObserver(schedule);
 			obs.observe(document.body || document.documentElement, {
 				childList: true,
 				subtree: true,
@@ -4139,16 +4148,23 @@ module.exports = {
 
 			const offNavIcon = installMcpNavIcon(() => [resolveSidebarLabel()]);
 
-			// 启动时从 Host 同步一次持久化偏好与初始状态（防止新回环端口下 localStorage 为空时与磁盘状态不一致）
+			// 启动时在浏览器空闲阶段从 Host 同步一次持久化偏好与初始状态（避开 Chat 首屏渲染高峰）
 			if (typeof fetch === "function") {
-				void call("state").then((data) => {
-					if (data && !data.error) {
-						publishServerState(data);
-					}
-					if (typeof data?.prefs?.showSidebarEntry === "boolean") {
-						publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
-					}
-				}).catch(() => {});
+				const syncInitialState = () => {
+					void call("state").then((data) => {
+						if (data && !data.error) {
+							publishServerState(data);
+						}
+						if (typeof data?.prefs?.showSidebarEntry === "boolean") {
+							publishSidebarPref(data.prefs.showSidebarEntry, { persistRemote: false });
+						}
+					}).catch(() => {});
+				};
+				if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+					window.requestIdleCallback(syncInitialState, { timeout: 1500 });
+				} else {
+					syncInitialState();
+				}
 			}
 
 			if (typeof ctx.effect === "function") {

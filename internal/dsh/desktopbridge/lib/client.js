@@ -3598,6 +3598,7 @@ window.__ModuleLoader__.load({
 				const labels = document.querySelectorAll("button, [role='button'], div, span");
 				const accepted = desktopNavLabels();
 				for (const el of labels) {
+					if (el.children && el.children.length > 4) continue;
 					if (!accepted.includes((el.textContent || "").trim())) continue;
 					const row = el.closest("button") || el.parentElement;
 					if (!row) continue;
@@ -3986,9 +3987,11 @@ window.__ModuleLoader__.load({
 			}
 			return rows;
 		}
-		function archivedBatchList() {
+		function archivedBatchList(precomputedRows) {
+			const rows = Array.isArray(precomputedRows) ? precomputedRows : archivedBatchRows();
+			if (!rows.length) return null;
 			for (const list of document.querySelectorAll("ul")) {
-				if (archivedBatchRows().some((entry) => entry.row.parentElement === list)) return list;
+				if (rows.some((entry) => entry.row.parentElement === list)) return list;
 			}
 			return null;
 		}
@@ -4158,7 +4161,8 @@ window.__ModuleLoader__.load({
 				return checkbox;
 			};
 			const decorate = () => {
-				const list = archivedBatchList();
+				const allRows = archivedBatchRows();
+				const list = archivedBatchList(allRows);
 				if (!list) {
 					// First-class Archived Sessions page owns its own React batch UI; never strip it.
 					for (const toolbar of document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")) {
@@ -4171,7 +4175,7 @@ window.__ModuleLoader__.load({
 					}
 					return;
 				}
-				const rows = archivedBatchRows().filter((entry) => entry.row.parentElement === list);
+				const rows = allRows.filter((entry) => entry.row.parentElement === list);
 				knownOrder = rows.map((entry) => entry.id);
 				let toolbar = [...document.querySelectorAll("[" + ARCHIVED_BATCH_ATTRIBUTE + "]")].find((el) => !isFirstClassArchivedPage(el));
 				if (!toolbar) toolbar = createToolbar();

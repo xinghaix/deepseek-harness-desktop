@@ -86,6 +86,23 @@ func New(icon []byte) *Service {
 	return s
 }
 
+// PrestartPersistedLaunch 在桌面进程初始化阶段异步预启动上次已验证成功的 DSH 配置，
+// 使 dsh web 子进程启动与管理页 WebView 自身加载并行执行。
+func (d *Service) PrestartPersistedLaunch() {
+	persisted, err := d.PersistedLaunch()
+	if err != nil || !persisted.Present || !persisted.LastStartSucceeded {
+		return
+	}
+	if strings.TrimSpace(persisted.Options.Executable) == "" {
+		return
+	}
+	opts := persisted.Options
+	opts.Port = 0
+	go func() {
+		_ = d.Start(opts)
+	}()
+}
+
 func (d *Service) ReportChatBusy(busy bool) {
 	d.chatBusy.Store(busy)
 	d.chatBusyKnown.Store(true)

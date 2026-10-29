@@ -421,11 +421,16 @@ func cliEnv(home, executable string) []string {
 	env := childEnv(home)
 	pathValue := envValue(env, "PATH")
 	dirs := []string{filepath.Dir(executable)}
-	dirs = append(dirs, cliSearchDirectories()...)
+	dirs = append(dirs, fastCLISearchDirectories(executable)...)
 	if pathValue != "" {
 		dirs = append(dirs, strings.Split(pathValue, string(os.PathListSeparator))...)
 	}
 	env = withEnvValue(env, "PATH", joinPathDirectories(dirs))
+	// 启用 Node.js V8 字节码编译缓存（Node 22.8+），将 DSH 320+ ESM 模块的编译结果持久化到桌面目录，
+	// 降低每次冷启动的模块编译耗时；若用户已显式配置 NODE_COMPILE_CACHE 则保留原值。
+	if strings.TrimSpace(home) != "" && strings.TrimSpace(envValue(env, "NODE_COMPILE_CACHE")) == "" {
+		env = withEnvValue(env, "NODE_COMPILE_CACHE", filepath.Join(desktopDataDirPath(home), "node-compile-cache"))
+	}
 	// DSH client-modules combo URLs grow with installed plugins; Node's default
 	// 16KiB max header size returns HTTP 431 once Cookie + Request-Line overflow.
 	return withNodeMaxHTTPHeaderSize(env, 128<<10)
@@ -654,14 +659,26 @@ func (d *Manager) start(o Options) error {
 		return i18n.ErrorfActive("err.dsh_already_running")
 	}
 	d.mu.Unlock()
-	if version, probeErr := checkCLI(o); probeErr == nil && strings.TrimSpace(version) != "" {
+	var versionReady <-chan struct{}
+	if fastVer := fastReadCLIVersion(o.Executable); fastVer != "" {
 		d.mu.Lock()
-		d.dshVersion = version
+		d.dshVersion = fastVer
 		d.mu.Unlock()
-	} else if probeErr != nil {
-		d.mu.Lock()
-		d.dshVersion = UnknownVersion
-		d.mu.Unlock()
+	} else {
+		ch := make(chan struct{})
+		versionReady = ch
+		go func(opts Options) {
+			defer close(ch)
+			if version, probeErr := checkCLI(opts); probeErr == nil && strings.TrimSpace(version) != "" {
+				d.mu.Lock()
+				d.dshVersion = version
+				d.mu.Unlock()
+			} else if probeErr != nil {
+				d.mu.Lock()
+				d.dshVersion = UnknownVersion
+				d.mu.Unlock()
+			}
+		}(o)
 	}
 	if o.DesktopDir, err = ensureDesktopDataDir(o.Home); err != nil {
 		return err
@@ -765,7 +782,9 @@ func (d *Manager) start(o Options) error {
 	if d.transport != nil {
 		_ = d.transport.Cleanup()
 	}
-	_ = savePersistedLaunchOptions(o, false)
+	if prevSucceeded, prevOpts, ok, _ := loadPersistedLaunchOptions(); !ok || !prevSucceeded || prevOpts.Executable != o.Executable || prevOpts.Home != o.Home || prevOpts.Workspace != o.Workspace {
+		_ = savePersistedLaunchOptions(o, false)
+	}
 	d.browserTokenUsed = false
 	d.chatWindowURL = ""
 	d.userStop = false
@@ -782,7 +801,7 @@ func (d *Manager) start(o Options) error {
 		output.finish()
 		d.finishProcess(cmd, owner, processLock, done, cancel, err, cleanupErr)
 	}()
-	go d.awaitReady(ctx, cmd, output.urls, o.Port)
+	go d.awaitReady(ctx, cmd, output.urls, o.Port, versionReady)
 	d.notifyStatusLocked()
 	return nil
 }
@@ -825,6 +844,7 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	if d.cmd != cmd {
 		return
 	}
+	wasStarting := d.state == "starting"
 	cancel()
 	markerErr := removeOwnedProcessMarker(d.options.Home, cmd.Process.Pid)
 	if d.state != "stopping" && d.lastError == "" {
@@ -847,6 +867,9 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	d.state = "stopped"
 	if d.lastError != "" {
 		d.state = "failed"
+		if wasStarting {
+			_ = savePersistedLaunchOptions(d.launchOptions, false)
+		}
 	}
 	if d.transport != nil {
 		_ = d.transport.Cleanup()
@@ -862,7 +885,7 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 	d.notifyStatusLocked()
 }
 
-func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int) {
+func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan string, requestedPort int, versionReady <-chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -894,6 +917,13 @@ func (d *Manager) awaitReady(ctx context.Context, cmd *exec.Cmd, urls <-chan str
 					d.failStartup(cmd, i18n.TActive("err.cli_url_mismatch"))
 				}
 				return
+			}
+			if versionReady != nil {
+				select {
+				case <-versionReady:
+				case <-ctx.Done():
+					return
+				}
 			}
 			d.mu.Lock()
 			if d.cmd == cmd && d.state == "starting" {
@@ -1135,6 +1165,48 @@ func (d *Manager) MarkBrowserOpened() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.browserTokenUsed = true
+}
+
+// fastReadCLIVersion 尝试直接从已安装的 @deepseek-ai/dsh package.json 中零进程开销读取版本号；
+// 若可执行文件不是标准 npm 全局包结构（如单测二进制或自定义包装脚本），返回空字符串以回退到并行 checkCLI。
+func fastReadCLIVersion(executable string) string {
+	resolved := strings.TrimSpace(executable)
+	if resolved == "" {
+		return ""
+	}
+	if r, err := resolveCLIExecutable(resolved); err == nil {
+		resolved = r
+	}
+	candidates := make([]string, 0, 4)
+	if realPath, err := filepath.EvalSymlinks(resolved); err == nil && realPath != "" {
+		realDir := filepath.Dir(realPath)
+		candidates = append(candidates,
+			filepath.Join(realDir, "..", "package.json"),
+			filepath.Join(realDir, "package.json"),
+		)
+	}
+	execDir := filepath.Dir(resolved)
+	candidates = append(candidates,
+		filepath.Join(execDir, "node_modules", "@deepseek-ai", "dsh", "package.json"),
+		filepath.Join(execDir, "..", "lib", "node_modules", "@deepseek-ai", "dsh", "package.json"),
+	)
+	for _, pkgPath := range candidates {
+		raw, err := os.ReadFile(pkgPath)
+		if err != nil {
+			continue
+		}
+		var pkg struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(raw, &pkg); err != nil {
+			continue
+		}
+		if pkg.Name == "@deepseek-ai/dsh" && strings.TrimSpace(pkg.Version) != "" {
+			return strings.TrimSpace(pkg.Version)
+		}
+	}
+	return ""
 }
 
 func checkCLI(o Options) (string, error) {
