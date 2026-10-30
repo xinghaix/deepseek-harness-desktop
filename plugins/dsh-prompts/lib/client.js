@@ -79,6 +79,30 @@ function normalizeMergeMode(mode) {
   return mode === "override" ? "override" : "append";
 }
 
+function normalizeAgentScope(scope) {
+  if (scope === "main" || scope === "subagent") return scope;
+  return "all";
+}
+
+function isSubagentContext(assembleCtx, session = null) {
+  if (assembleCtx?.isSubagent === true) return true;
+  if (assembleCtx?.isSubagent === false) return false;
+  const targetSession = session ?? assembleCtx?.agent?.session ?? assembleCtx?.session ?? null;
+  const header = targetSession?.header;
+  if (header?.origin === "subagent") return true;
+  if (Number.isInteger(header?.delegationDepth) && header.delegationDepth > 0) return true;
+  const runtimeDepth = assembleCtx?.agent?.options?.subagentDepth;
+  if (Number.isInteger(runtimeDepth) && runtimeDepth > 0) return true;
+  return false;
+}
+
+function matchesAgentScope(item, isSubagent = false) {
+  const scope = normalizeAgentScope(item?.agentScope);
+  if (scope === "main") return !isSubagent;
+  if (scope === "subagent") return Boolean(isSubagent);
+  return true;
+}
+
 function normalizeItem(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const title = String(raw.title ?? "").trim().slice(0, MAX_TITLE_LENGTH);
@@ -92,6 +116,7 @@ function normalizeItem(raw, now = Date.now()) {
     includeTitle: raw.includeTitle === true,
     enabled: raw.enabled !== false,
     position: normalizePosition(raw.position),
+    agentScope: normalizeAgentScope(raw.agentScope),
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : Number(now),
   };
 }
@@ -281,6 +306,12 @@ function mutateItemList(items, op, payload, now) {
           : existingIndex >= 0
             ? list[existingIndex].includeTitle === true
             : false;
+      const agentScope =
+        payload?.agentScope !== undefined
+          ? normalizeAgentScope(payload.agentScope)
+          : existingIndex >= 0
+            ? normalizeAgentScope(list[existingIndex].agentScope)
+            : "all";
       if (existingIndex >= 0) {
         list[existingIndex] = {
           ...list[existingIndex],
@@ -288,6 +319,7 @@ function mutateItemList(items, op, payload, now) {
           content,
           includeTitle,
           position,
+          agentScope,
           enabled,
           updatedAt: now,
         };
@@ -299,6 +331,7 @@ function mutateItemList(items, op, payload, now) {
           content,
           includeTitle,
           position,
+          agentScope,
           enabled,
           updatedAt: now,
         });
@@ -459,11 +492,13 @@ function applyMutation(currentState, action, now = Date.now()) {
   }
 }
 
-function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
+function resolveEffectiveItems(state, cwd = "", slot = "suffix", options = {}) {
   const targetSlot = normalizePosition(slot);
+  const isSubagent = Boolean(options?.isSubagent);
   if (!state || state.enabled === false) {
     return {
       slot: targetSlot,
+      isSubagent,
       active: false,
       revision: state?.revision || 1,
       mergeMode: "append",
@@ -476,14 +511,25 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   const wsEnabled = Boolean(matchedProfile && matchedProfile.enabled !== false);
   const mergeMode = wsEnabled ? normalizeMergeMode(matchedProfile.mergeMode) : "append";
   const workspaceItems = wsEnabled
-    ? (matchedProfile.items || []).filter((item) => item.enabled !== false && normalizePosition(item.position) === targetSlot)
+    ? (matchedProfile.items || []).filter(
+        (item) =>
+          item.enabled !== false &&
+          normalizePosition(item.position) === targetSlot &&
+          matchesAgentScope(item, isSubagent)
+      )
     : [];
   const globalItems = mergeMode === "override"
     ? []
-    : (state.globalItems || []).filter((item) => item.enabled !== false && normalizePosition(item.position) === targetSlot);
+    : (state.globalItems || []).filter(
+        (item) =>
+          item.enabled !== false &&
+          normalizePosition(item.position) === targetSlot &&
+          matchesAgentScope(item, isSubagent)
+      );
 
   return {
     slot: targetSlot,
+    isSubagent,
     active: globalItems.length > 0 || workspaceItems.length > 0,
     revision: state.revision || 1,
     mergeMode,
@@ -583,14 +629,16 @@ function renderClearedEnvelope(options = {}) {
   ].join("\n");
 }
 
-function renderEffectivePreview(state, cwd = "") {
-  const prefixResolved = resolveEffectiveItems(state, cwd, "prefix");
-  const suffixResolved = resolveEffectiveItems(state, cwd, "suffix");
+function renderEffectivePreview(state, cwd = "", options = {}) {
+  const isSubagent = Boolean(options?.isSubagent);
+  const prefixResolved = resolveEffectiveItems(state, cwd, "prefix", { isSubagent });
+  const suffixResolved = resolveEffectiveItems(state, cwd, "suffix", { isSubagent });
   const prefixText = renderPriorityEnvelope(prefixResolved);
   const suffixText = renderPriorityEnvelope(suffixResolved);
   const blocks = [prefixText, suffixText].filter(Boolean);
   return {
     hasActive: blocks.length > 0,
+    isSubagent,
     matchedWorkspace: suffixResolved.workspaceProfile || prefixResolved.workspaceProfile || null,
     mergeMode: suffixResolved.mergeMode,
     globalActiveCount: prefixResolved.globalItems.length + suffixResolved.globalItems.length,
@@ -627,18 +675,32 @@ function sessionHasPriorPromptMarker(session, slot = "suffix") {
   return false;
 }
 
-function createSessionPromptTracker() {
+const MAX_TRACKED_SESSIONS = 512;
+
+function createSessionPromptTracker(maxEntries = MAX_TRACKED_SESSIONS) {
   const memory = new Map();
+  const touchEntry = (key, entry) => {
+    if (memory.has(key)) memory.delete(key);
+    memory.set(key, entry);
+    if (memory.size > maxEntries) {
+      const oldestKey = memory.keys().next().value;
+      if (oldestKey !== undefined) memory.delete(oldestKey);
+    }
+  };
   return {
-    resolveSlotText(state, { sessionId = "", session = null, cwd = "", slot = "suffix" } = {}) {
+    resolveSlotText(
+      state,
+      { sessionId = "", session = null, cwd = "", slot = "suffix", isSubagent = false } = {}
+    ) {
       const targetSlot = normalizePosition(slot);
-      const resolved = resolveEffectiveItems(state, cwd, targetSlot);
+      const subFlag = Boolean(isSubagent || isSubagentContext(null, session));
+      const resolved = resolveEffectiveItems(state, cwd, targetSlot, { isSubagent: subFlag });
       const key = String(sessionId || session?.id || "");
       if (resolved.active) {
         if (key) {
           const entry = memory.get(key) || { prefix: false, suffix: false };
           entry[targetSlot] = true;
-          memory.set(key, entry);
+          touchEntry(key, entry);
         }
         return renderPriorityEnvelope(resolved);
       }
@@ -648,9 +710,9 @@ function createSessionPromptTracker() {
         if (key && !hadInMemory) {
           const entry = memory.get(key) || { prefix: false, suffix: false };
           entry[targetSlot] = true;
-          memory.set(key, entry);
+          touchEntry(key, entry);
         }
-        return renderClearedEnvelope({ slot: targetSlot, revision: state?.revision || 1 });
+        return renderClearedEnvelope({ slot: targetSlot });
       }
       return "";
     },
@@ -668,7 +730,10 @@ function effectivePromptSignature(state) {
   if (!normalized.enabled) return "disabled";
   const globalSig = normalized.globalItems
     .filter((item) => item.enabled !== false)
-    .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+    .map(
+      (item) =>
+        `${item.position}:${normalizeAgentScope(item.agentScope)}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`
+    )
     .join("|");
   const wsEntries = Object.keys(normalized.workspaces)
     .sort()
@@ -677,7 +742,10 @@ function effectivePromptSignature(state) {
       if (!ws || ws.enabled === false) return "";
       const itemsSig = (ws.items || [])
         .filter((item) => item.enabled !== false)
-        .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+        .map(
+          (item) =>
+            `${item.position}:${normalizeAgentScope(item.agentScope)}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`
+        )
         .join("|");
       if (!itemsSig) return "";
       return `${ws.workspacePath}#${ws.mergeMode}#${ws.workspaceTitle || ""}#${itemsSig}`;
@@ -732,6 +800,9 @@ module.exports = {
   generateId,
   normalizePosition,
   normalizeMergeMode,
+  normalizeAgentScope,
+  isSubagentContext,
+  matchesAgentScope,
   normalizeItem,
   normalizeItemList,
   normalizeWorkspaceProfile,
@@ -838,7 +909,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**Scope / Trigger**: Bei jeder Änderung von Quelldateien in diesem Arbeitsbereich\n**Core Requirements (MUST)**:\n1. Befolgen Sie bestehende Architekturgrenzen und Namenskonventionen.\n2. Führen Sie nach Codeänderungen die zugehörigen Unit-Tests aus.\n**Prohibitions (NEVER)**:\n- Melden Sie eine Änderung NIEMALS als abgeschlossen, ohne den Teststatus zu prüfen.",
     "tpl.readOnlyDesign.label": "Nur-Lese-Analyse / Nur Entwurfsplan (Keine Dateiänderungen)",
     "tpl.readOnlyDesign.title": "Nur-Lese-Entwurfsmodus",
-    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Untersuchen Sie Schnittstellen und Dateien ausschließlich im Lesemodus.\n2. Geben Sie nur einen strukturierten Architekturentwurf aus.\n**Prohibitions (NEVER)**:\n- Erstellen, bearbeiten oder löschen Sie NIEMALS Dateien ohne ausdrückliche Freigabe."
+    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Untersuchen Sie Schnittstellen und Dateien ausschließlich im Lesemodus.\n2. Geben Sie nur einen strukturierten Architekturentwurf aus.\n**Prohibitions (NEVER)**:\n- Erstellen, bearbeiten oder löschen Sie NIEMALS Dateien ohne ausdrückliche Freigabe.",
+    "agentScopeLabel": "Ziel-Agentenbereich",
+    "agentScopeAll": "Alle Agenten (Haupt- + Subagenten, empfohlen · erhält KV-Cache)",
+    "agentScopeMain": "Nur Haupt-Agent (nur oberste Sitzung, nicht in Subagenten)",
+    "agentScopeSubagent": "Nur Subagenten (nur für delegierte Subagenten aktiv)",
+    "agentScopeMainBadge": "Nur Haupt-Agent",
+    "agentScopeSubagentBadge": "Nur Subagent",
+    "previewAgentMain": "Haupt-Agent-Ansicht",
+    "previewAgentSubagent": "Subagent-Ansicht"
   },
   "en": {
     "navTitle": "Prompts",
@@ -925,7 +1004,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**Scope / Trigger**: Whenever modifying source files in this workspace\n**Core Requirements (MUST)**:\n1. Follow the existing architectural boundaries and naming conventions of the repository.\n2. Run the corresponding unit test suite after any code edit and verify all tests pass before finishing.\n**Prohibitions (NEVER)**:\n- NEVER claim a fix is complete without checking test exit codes.",
     "tpl.readOnlyDesign.label": "Read-Only Analysis / Design Proposal Only (No File Edits)",
     "tpl.readOnlyDesign.title": "Read-Only Design Mode Constraint",
-    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspect relevant interfaces and source files in read-only mode.\n2. Output a structured architectural design and implementation plan only.\n**Prohibitions (NEVER)**:\n- NEVER create, edit, or delete workspace files until the user explicitly approves implementation."
+    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspect relevant interfaces and source files in read-only mode.\n2. Output a structured architectural design and implementation plan only.\n**Prohibitions (NEVER)**:\n- NEVER create, edit, or delete workspace files until the user explicitly approves implementation.",
+    "agentScopeLabel": "Target Agent Scope",
+    "agentScopeAll": "All Agents (Main + Subagents, Recommended · Preserves KV Cache)",
+    "agentScopeMain": "Main Agent Only (Top-level session only, skipped in Subagents)",
+    "agentScopeSubagent": "Subagents Only (Injected only into delegated child Subagents)",
+    "agentScopeMainBadge": "Main Only",
+    "agentScopeSubagentBadge": "Subagent Only",
+    "previewAgentMain": "Main Agent View",
+    "previewAgentSubagent": "Subagent View"
   },
   "es": {
     "navTitle": "Prompts",
@@ -1012,7 +1099,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**Scope / Trigger**: Siempre que modifique archivos fuente en este espacio de trabajo\n**Core Requirements (MUST)**:\n1. Respete los límites arquitectónicos y las convenciones de nombres del repositorio.\n2. Ejecute las pruebas unitarias correspondientes tras cualquier cambio.\n**Prohibitions (NEVER)**:\n- NUNCA dé por terminada una corrección sin verificar las pruebas.",
     "tpl.readOnlyDesign.label": "Análisis de solo lectura / Solo plan de diseño (Sin editar archivos)",
     "tpl.readOnlyDesign.title": "Restricción de modo de diseño de solo lectura",
-    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspeccione archivos e interfaces únicamente en modo de solo lectura.\n2. Genere únicamente un plan estructurado de arquitectura y diseño.\n**Prohibitions (NEVER)**:\n- NUNCA cree, edite ni elimine archivos sin aprobación explícita."
+    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspeccione archivos e interfaces únicamente en modo de solo lectura.\n2. Genere únicamente un plan estructurado de arquitectura y diseño.\n**Prohibitions (NEVER)**:\n- NUNCA cree, edite ni elimine archivos sin aprobación explícita.",
+    "agentScopeLabel": "Alcance de agentes objetivo",
+    "agentScopeAll": "Todos los agentes (Principal + Subagentes, recomendado · conserva caché KV)",
+    "agentScopeMain": "Solo agente principal (solo sesión principal, omitido en subagentes)",
+    "agentScopeSubagent": "Solo subagentes (inyectado solo en subagentes delegados)",
+    "agentScopeMainBadge": "Solo principal",
+    "agentScopeSubagentBadge": "Solo subagente",
+    "previewAgentMain": "Vista Agente principal",
+    "previewAgentSubagent": "Vista Subagente"
   },
   "fr": {
     "navTitle": "Prompts",
@@ -1099,7 +1194,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**Scope / Trigger**: À chaque modification de code source dans cet espace de travail\n**Core Requirements (MUST)**:\n1. Respectez l'architecture et les conventions de nommage existantes.\n2. Exécutez la suite de tests unitaires correspondante après toute modification.\n**Prohibitions (NEVER)**:\n- Ne déclarez JAMAIS un correctif terminé sans vérifier les tests.",
     "tpl.readOnlyDesign.label": "Analyse en lecture seule / Plan de conception uniquement",
     "tpl.readOnlyDesign.title": "Contrainte de mode conception en lecture seule",
-    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspectez les fichiers et interfaces uniquement en lecture seule.\n2. Produisez exclusivement un plan d'architecture et de conception structuré.\n**Prohibitions (NEVER)**:\n- Ne créez, ne modifiez et ne supprimez JAMAIS de fichiers avant approbation explicite."
+    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspectez les fichiers et interfaces uniquement en lecture seule.\n2. Produisez exclusivement un plan d'architecture et de conception structuré.\n**Prohibitions (NEVER)**:\n- Ne créez, ne modifiez et ne supprimez JAMAIS de fichiers avant approbation explicite.",
+    "agentScopeLabel": "Portée des agents cibles",
+    "agentScopeAll": "Tous les agents (Principal + Sous-agents, recommandé · préserve le cache KV)",
+    "agentScopeMain": "Agent principal uniquement (session principale uniquement)",
+    "agentScopeSubagent": "Sous-agents uniquement (injecté uniquement dans les sous-agents)",
+    "agentScopeMainBadge": "Principal seul",
+    "agentScopeSubagentBadge": "Sous-agent seul",
+    "previewAgentMain": "Vue Agent principal",
+    "previewAgentSubagent": "Vue Sous-agent"
   },
   "ja": {
     "navTitle": "プロンプト",
@@ -1186,7 +1289,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**適用条件（Scope/Trigger）**：このワークスペース内のソースコードを変更するたび\n**必須要件（MUST）**：\n1. リポジトリの既存のアーキテクチャ境界と命名規則を厳守すること。\n2. コード変更後は必ず対応する単体テストを実行し、全テスト通過を確認してから完了とすること。\n**禁止事項（NEVER）**：\n- テストの終了コードを確認せずに修正完了を宣言しないこと。",
     "tpl.readOnlyDesign.label": "読み取り専用分析 / 設計案のみ出力（ファイル変更禁止）",
     "tpl.readOnlyDesign.title": "読み取り専用設計モード制約",
-    "tpl.readOnlyDesign.content": "**必須要件（MUST）**：\n1. 読み取り専用ツールのみで関連コードとインターフェースを調査すること。\n2. 構造化されたアーキテクチャ設計と実装計画のみを出力すること。\n**禁止事項（NEVER）**：\n- ユーザーが実装を明示的に承認するまで、ファイルの作成・編集・削除を絶対に行わないこと。"
+    "tpl.readOnlyDesign.content": "**必須要件（MUST）**：\n1. 読み取り専用ツールのみで関連コードとインターフェースを調査すること。\n2. 構造化されたアーキテクチャ設計と実装計画のみを出力すること。\n**禁止事項（NEVER）**：\n- ユーザーが実装を明示的に承認するまで、ファイルの作成・編集・削除を絶対に行わないこと。",
+    "agentScopeLabel": "対象エージェント範囲",
+    "agentScopeAll": "すべてのエージェント（メイン + サブエージェント、推奨・KVキャッシュ維持）",
+    "agentScopeMain": "メインエージェントのみ（トップレベルセッションのみ、サブには非注入）",
+    "agentScopeSubagent": "サブエージェントのみ（派生サブエージェントにのみ注入）",
+    "agentScopeMainBadge": "メインのみ",
+    "agentScopeSubagentBadge": "サブのみ",
+    "previewAgentMain": "メインエージェント視点",
+    "previewAgentSubagent": "サブエージェント視点"
   },
   "ko": {
     "navTitle": "프롬프트",
@@ -1273,7 +1384,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**적용 조건 (Scope/Trigger)**: 이 작업 공간의 소스 파일을 수정할 때마다\n**핵심 요구사항 (MUST)**:\n1. 저장소의 기존 아키텍처 경계와 명명 규칙을 엄격히 준수하세요.\n2. 코드 수정 후 반드시 해당 단위 테스트를 실행하고 통과를 확인한 뒤 완료하세요.\n**금지 사항 (NEVER)**:\n- 테스트 종료 코드를 확인하지 않고 수정 완료를 선언하지 마세요.",
     "tpl.readOnlyDesign.label": "읽기 전용 분석 / 설계안만 출력 (파일 수정 금지)",
     "tpl.readOnlyDesign.title": "읽기 전용 설계 모드 제약",
-    "tpl.readOnlyDesign.content": "**핵심 요구사항 (MUST)**:\n1. 읽기 전용 도구만 사용하여 관련 코드와 인터페이스를 조사하세요.\n2. 구조화된 아키텍처 설계 및 구현 계획만 출력하세요.\n**금지 사항 (NEVER)**:\n- 사용자가 구현을 명시적으로 승인하기 전에는 파일을 절대 생성, 수정 또는 삭제하지 마세요."
+    "tpl.readOnlyDesign.content": "**핵심 요구사항 (MUST)**:\n1. 읽기 전용 도구만 사용하여 관련 코드와 인터페이스를 조사하세요.\n2. 구조화된 아키텍처 설계 및 구현 계획만 출력하세요.\n**금지 사항 (NEVER)**:\n- 사용자가 구현을 명시적으로 승인하기 전에는 파일을 절대 생성, 수정 또는 삭제하지 마세요.",
+    "agentScopeLabel": "대상 에이전트 범위",
+    "agentScopeAll": "모든 에이전트 (메인 + 서브 에이전트, 권장 · KV 캐시 유지)",
+    "agentScopeMain": "메인 에이전트만 (최상위 세션에만 적용, 서브 에이전트 제외)",
+    "agentScopeSubagent": "서브 에이전트만 (위임된 서브 에이전트에만 주입)",
+    "agentScopeMainBadge": "메인 전용",
+    "agentScopeSubagentBadge": "서브 전용",
+    "previewAgentMain": "메인 에이전트 뷰",
+    "previewAgentSubagent": "서브 에이전트 뷰"
   },
   "pt": {
     "navTitle": "Prompts",
@@ -1360,7 +1479,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**Scope / Trigger**: Sempre que modificar arquivos-fonte neste espaço de trabalho\n**Core Requirements (MUST)**:\n1. Siga os limites arquiteturais e convenções de nomenclatura existentes.\n2. Execute a suíte de testes unitários correspondente após qualquer alteração.\n**Prohibitions (NEVER)**:\n- NUNCA declare uma correção concluída sem verificar os testes.",
     "tpl.readOnlyDesign.label": "Análise somente leitura / Apenas plano de design (Sem editar arquivos)",
     "tpl.readOnlyDesign.title": "Restrição de modo de design somente leitura",
-    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspecione arquivos e interfaces apenas em modo somente leitura.\n2. Produza exclusivamente um plano estruturado de arquitetura e design.\n**Prohibitions (NEVER)**:\n- NUNCA crie, edite ou exclua arquivos antes da aprovação explícita."
+    "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspecione arquivos e interfaces apenas em modo somente leitura.\n2. Produza exclusivamente um plano estruturado de arquitetura e design.\n**Prohibitions (NEVER)**:\n- NUNCA crie, edite ou exclua arquivos antes da aprovação explícita.",
+    "agentScopeLabel": "Escopo de agentes alvo",
+    "agentScopeAll": "Todos os agentes (Principal + Subagentes, recomendado · preserva cache KV)",
+    "agentScopeMain": "Apenas agente principal (apenas sessão principal, ignorado em subagentes)",
+    "agentScopeSubagent": "Apenas subagentes (injetado apenas em subagentes delegados)",
+    "agentScopeMainBadge": "Só principal",
+    "agentScopeSubagentBadge": "Só subagente",
+    "previewAgentMain": "Visão Agente Principal",
+    "previewAgentSubagent": "Visão Subagente"
   },
   "zh": {
     "navTitle": "提示词",
@@ -1447,7 +1574,15 @@ return module.exports; })();
     "tpl.codeQuality.content": "**适用条件（Scope/Trigger）**：每次在本工作区修改源码文件时\n**核心要求（MUST）**：\n1. 严格遵循仓库既有的模块分层、命名规范与跨平台边界。\n2. 修改代码后必须执行对应模块的单测，确认退出码为 0 后再结束任务。\n**禁止事项（NEVER）**：\n- 禁止在未运行验证或测试失败的情况下宣称修复完成。",
     "tpl.readOnlyDesign.label": "只读分析 / 仅输出设计方案（禁止改文件）安全模板",
     "tpl.readOnlyDesign.title": "只读设计模式安全约束",
-    "tpl.readOnlyDesign.content": "**核心要求（MUST）**：\n1. 仅使用只读工具调研相关源码与接口契约。\n2. 输出结构化、可落地的完整架构与设计方案。\n**禁止事项（NEVER）**：\n- 在用户明确指示开始编码落地前，严禁创建、修改或删除任何项目文件。"
+    "tpl.readOnlyDesign.content": "**核心要求（MUST）**：\n1. 仅使用只读工具调研相关源码与接口契约。\n2. 输出结构化、可落地的完整架构与设计方案。\n**禁止事项（NEVER）**：\n- 在用户明确指示开始编码落地前，严禁创建、修改或删除任何项目文件。",
+    "agentScopeLabel": "生效对象（Agent 范围）",
+    "agentScopeAll": "全部 Agent（主会话 + 子 Agent，推荐 · 保持前缀缓存复用）",
+    "agentScopeMain": "仅主 Agent（顶层会话生效，不注入给子 Agent）",
+    "agentScopeSubagent": "仅子 Agent（仅对 Subagent 派生子代理生效）",
+    "agentScopeMainBadge": "仅主 Agent",
+    "agentScopeSubagentBadge": "仅子 Agent",
+    "previewAgentMain": "主 Agent 视角",
+    "previewAgentSubagent": "子 Agent 视角"
   }
 };
     const h = React.createElement;
@@ -2516,6 +2651,7 @@ return module.exports; })();
       let activeTab = "global";
       let selectedWorkspacePath = "";
       let previewWorkspacePath = "__global__";
+      let previewAgentScope = "main";
       // Inline expandable editor state (replaces secondary Modal dialog)
       let editorDraft = null;
       // Inline expanded item ID (or null)
@@ -2567,7 +2703,9 @@ return module.exports; })();
             ? ""
             : previewWorkspacePath;
 
-        const preview = model.renderEffectivePreview(state, targetPreviewCwd);
+        const preview = model.renderEffectivePreview(state, targetPreviewCwd, {
+          isSubagent: previewAgentScope === "subagent",
+        });
         const summary = model.summaryCounts(state);
 
         return {
@@ -2582,6 +2720,7 @@ return module.exports; })();
           selectedWorkspacePath: effectiveSelectedPath,
           selectedWorkspace,
           previewWorkspacePath,
+          previewAgentScope,
           previewTargetCwd: targetPreviewCwd,
           preview,
           editorModal: editorDraft,
@@ -2689,6 +2828,11 @@ return module.exports; })();
           openDropdownId = "";
           publish();
         },
+        setPreviewAgentScope(scopeVal) {
+          previewAgentScope = scopeVal === "subagent" ? "subagent" : "main";
+          openDropdownId = "";
+          publish();
+        },
         toggleDropdown(id) {
           const targetId = String(id || "");
           openDropdownId = openDropdownId === targetId ? "" : targetId;
@@ -2742,6 +2886,7 @@ return module.exports; })();
             content: item?.content || config?.defaultContent || "",
             includeTitle: item ? item.includeTitle === true : false,
             position: item?.position || config?.defaultPosition || "suffix",
+            agentScope: model.normalizeAgentScope(item?.agentScope || config?.defaultAgentScope || "all"),
             enabled: item ? item.enabled !== false : true,
             validationError: "",
           };
@@ -2846,6 +2991,7 @@ return module.exports; })();
             content,
             includeTitle: editorDraft.includeTitle === true,
             position: editorDraft.position,
+            agentScope: model.normalizeAgentScope(editorDraft.agentScope),
             enabled: editorDraft.enabled !== false,
           };
           const action =
@@ -3112,6 +3258,23 @@ return module.exports; })();
           h(
             "div",
             { className: "dsh-prompts-field" },
+            h("label", { className: "dsh-prompts-field-label" }, t("agentScopeLabel")),
+            h(DropdownSelect, {
+              dropdownId: `scope-editor-${draft.id || "new"}`,
+              value: model.normalizeAgentScope(draft.agentScope),
+              fullWidth: true,
+              options: [
+                { value: "all", label: t("agentScopeAll") },
+                { value: "main", label: t("agentScopeMain") },
+                { value: "subagent", label: t("agentScopeSubagent") },
+              ],
+              controller,
+              onChange: (agentScope) => controller.updateEditor({ agentScope }),
+            })
+          ),
+          h(
+            "div",
+            { className: "dsh-prompts-field" },
             h("label", { className: "dsh-prompts-field-label" }, t("templatePickerLabel")),
             h(DropdownSelect, {
               dropdownId: `tpl-editor-${draft.id || "new"}`,
@@ -3244,6 +3407,11 @@ return module.exports; })();
                   { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
                   isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
                 ),
+                item.agentScope === "main"
+                  ? h("span", { className: "dsh-prompts-tag" }, t("agentScopeMainBadge"))
+                  : item.agentScope === "subagent"
+                    ? h("span", { className: "dsh-prompts-tag", "data-tone": "current" }, t("agentScopeSubagentBadge"))
+                    : null,
                 item.includeTitle === true
                   ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleToggle"))
                   : null,
@@ -3363,6 +3531,7 @@ return module.exports; })();
                     content: item.content,
                     includeTitle: item.includeTitle === true,
                     position: item.position,
+                    agentScope: model.normalizeAgentScope(item.agentScope),
                     enabled: item.enabled !== false,
                     validationError: "",
                   },
@@ -3755,26 +3924,42 @@ return module.exports; })();
             "div",
             { className: "dsh-prompts-toolbar" },
             h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
-            h(DropdownSelect, {
-              dropdownId: "preview-workspace",
-              value: snap.previewWorkspacePath || "__global__",
-              align: "right",
-              options: [
-                {
-                  value: "__global__",
-                  label: t("previewGlobalOnly"),
-                },
-                ...catalog.map((ws) => ({
-                  value: ws.path,
-                  triggerLabel: `${ws.title} — ${ws.path}`,
-                  label: ws.title,
-                  subLabel: ws.path,
-                })),
-              ],
-              snap,
-              controller,
-              onChange: (nextVal) => controller.setPreviewWorkspace(nextVal),
-            })
+            h(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+              h(DropdownSelect, {
+                dropdownId: "preview-agent-scope",
+                value: snap.previewAgentScope || "main",
+                align: "right",
+                options: [
+                  { value: "main", label: t("previewAgentMain") },
+                  { value: "subagent", label: t("previewAgentSubagent") },
+                ],
+                snap,
+                controller,
+                onChange: (nextVal) => controller.setPreviewAgentScope(nextVal),
+              }),
+              h(DropdownSelect, {
+                dropdownId: "preview-workspace",
+                value: snap.previewWorkspacePath || "__global__",
+                align: "right",
+                options: [
+                  {
+                    value: "__global__",
+                    label: t("previewGlobalOnly"),
+                  },
+                  ...catalog.map((ws) => ({
+                    value: ws.path,
+                    triggerLabel: `${ws.title} — ${ws.path}`,
+                    label: ws.title,
+                    subLabel: ws.path,
+                  })),
+                ],
+                snap,
+                controller,
+                onChange: (nextVal) => controller.setPreviewWorkspace(nextVal),
+              })
+            )
           ),
           h("p", { className: "dsh-prompts-toggle-hint" }, t("previewHint")),
           preview.hasActive

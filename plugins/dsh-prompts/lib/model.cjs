@@ -72,6 +72,30 @@ function normalizeMergeMode(mode) {
   return mode === "override" ? "override" : "append";
 }
 
+function normalizeAgentScope(scope) {
+  if (scope === "main" || scope === "subagent") return scope;
+  return "all";
+}
+
+function isSubagentContext(assembleCtx, session = null) {
+  if (assembleCtx?.isSubagent === true) return true;
+  if (assembleCtx?.isSubagent === false) return false;
+  const targetSession = session ?? assembleCtx?.agent?.session ?? assembleCtx?.session ?? null;
+  const header = targetSession?.header;
+  if (header?.origin === "subagent") return true;
+  if (Number.isInteger(header?.delegationDepth) && header.delegationDepth > 0) return true;
+  const runtimeDepth = assembleCtx?.agent?.options?.subagentDepth;
+  if (Number.isInteger(runtimeDepth) && runtimeDepth > 0) return true;
+  return false;
+}
+
+function matchesAgentScope(item, isSubagent = false) {
+  const scope = normalizeAgentScope(item?.agentScope);
+  if (scope === "main") return !isSubagent;
+  if (scope === "subagent") return Boolean(isSubagent);
+  return true;
+}
+
 function normalizeItem(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const title = String(raw.title ?? "").trim().slice(0, MAX_TITLE_LENGTH);
@@ -85,6 +109,7 @@ function normalizeItem(raw, now = Date.now()) {
     includeTitle: raw.includeTitle === true,
     enabled: raw.enabled !== false,
     position: normalizePosition(raw.position),
+    agentScope: normalizeAgentScope(raw.agentScope),
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : Number(now),
   };
 }
@@ -274,6 +299,12 @@ function mutateItemList(items, op, payload, now) {
           : existingIndex >= 0
             ? list[existingIndex].includeTitle === true
             : false;
+      const agentScope =
+        payload?.agentScope !== undefined
+          ? normalizeAgentScope(payload.agentScope)
+          : existingIndex >= 0
+            ? normalizeAgentScope(list[existingIndex].agentScope)
+            : "all";
       if (existingIndex >= 0) {
         list[existingIndex] = {
           ...list[existingIndex],
@@ -281,6 +312,7 @@ function mutateItemList(items, op, payload, now) {
           content,
           includeTitle,
           position,
+          agentScope,
           enabled,
           updatedAt: now,
         };
@@ -292,6 +324,7 @@ function mutateItemList(items, op, payload, now) {
           content,
           includeTitle,
           position,
+          agentScope,
           enabled,
           updatedAt: now,
         });
@@ -452,11 +485,13 @@ function applyMutation(currentState, action, now = Date.now()) {
   }
 }
 
-function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
+function resolveEffectiveItems(state, cwd = "", slot = "suffix", options = {}) {
   const targetSlot = normalizePosition(slot);
+  const isSubagent = Boolean(options?.isSubagent);
   if (!state || state.enabled === false) {
     return {
       slot: targetSlot,
+      isSubagent,
       active: false,
       revision: state?.revision || 1,
       mergeMode: "append",
@@ -469,14 +504,25 @@ function resolveEffectiveItems(state, cwd = "", slot = "suffix") {
   const wsEnabled = Boolean(matchedProfile && matchedProfile.enabled !== false);
   const mergeMode = wsEnabled ? normalizeMergeMode(matchedProfile.mergeMode) : "append";
   const workspaceItems = wsEnabled
-    ? (matchedProfile.items || []).filter((item) => item.enabled !== false && normalizePosition(item.position) === targetSlot)
+    ? (matchedProfile.items || []).filter(
+        (item) =>
+          item.enabled !== false &&
+          normalizePosition(item.position) === targetSlot &&
+          matchesAgentScope(item, isSubagent)
+      )
     : [];
   const globalItems = mergeMode === "override"
     ? []
-    : (state.globalItems || []).filter((item) => item.enabled !== false && normalizePosition(item.position) === targetSlot);
+    : (state.globalItems || []).filter(
+        (item) =>
+          item.enabled !== false &&
+          normalizePosition(item.position) === targetSlot &&
+          matchesAgentScope(item, isSubagent)
+      );
 
   return {
     slot: targetSlot,
+    isSubagent,
     active: globalItems.length > 0 || workspaceItems.length > 0,
     revision: state.revision || 1,
     mergeMode,
@@ -576,14 +622,16 @@ function renderClearedEnvelope(options = {}) {
   ].join("\n");
 }
 
-function renderEffectivePreview(state, cwd = "") {
-  const prefixResolved = resolveEffectiveItems(state, cwd, "prefix");
-  const suffixResolved = resolveEffectiveItems(state, cwd, "suffix");
+function renderEffectivePreview(state, cwd = "", options = {}) {
+  const isSubagent = Boolean(options?.isSubagent);
+  const prefixResolved = resolveEffectiveItems(state, cwd, "prefix", { isSubagent });
+  const suffixResolved = resolveEffectiveItems(state, cwd, "suffix", { isSubagent });
   const prefixText = renderPriorityEnvelope(prefixResolved);
   const suffixText = renderPriorityEnvelope(suffixResolved);
   const blocks = [prefixText, suffixText].filter(Boolean);
   return {
     hasActive: blocks.length > 0,
+    isSubagent,
     matchedWorkspace: suffixResolved.workspaceProfile || prefixResolved.workspaceProfile || null,
     mergeMode: suffixResolved.mergeMode,
     globalActiveCount: prefixResolved.globalItems.length + suffixResolved.globalItems.length,
@@ -620,18 +668,32 @@ function sessionHasPriorPromptMarker(session, slot = "suffix") {
   return false;
 }
 
-function createSessionPromptTracker() {
+const MAX_TRACKED_SESSIONS = 512;
+
+function createSessionPromptTracker(maxEntries = MAX_TRACKED_SESSIONS) {
   const memory = new Map();
+  const touchEntry = (key, entry) => {
+    if (memory.has(key)) memory.delete(key);
+    memory.set(key, entry);
+    if (memory.size > maxEntries) {
+      const oldestKey = memory.keys().next().value;
+      if (oldestKey !== undefined) memory.delete(oldestKey);
+    }
+  };
   return {
-    resolveSlotText(state, { sessionId = "", session = null, cwd = "", slot = "suffix" } = {}) {
+    resolveSlotText(
+      state,
+      { sessionId = "", session = null, cwd = "", slot = "suffix", isSubagent = false } = {}
+    ) {
       const targetSlot = normalizePosition(slot);
-      const resolved = resolveEffectiveItems(state, cwd, targetSlot);
+      const subFlag = Boolean(isSubagent || isSubagentContext(null, session));
+      const resolved = resolveEffectiveItems(state, cwd, targetSlot, { isSubagent: subFlag });
       const key = String(sessionId || session?.id || "");
       if (resolved.active) {
         if (key) {
           const entry = memory.get(key) || { prefix: false, suffix: false };
           entry[targetSlot] = true;
-          memory.set(key, entry);
+          touchEntry(key, entry);
         }
         return renderPriorityEnvelope(resolved);
       }
@@ -641,9 +703,9 @@ function createSessionPromptTracker() {
         if (key && !hadInMemory) {
           const entry = memory.get(key) || { prefix: false, suffix: false };
           entry[targetSlot] = true;
-          memory.set(key, entry);
+          touchEntry(key, entry);
         }
-        return renderClearedEnvelope({ slot: targetSlot, revision: state?.revision || 1 });
+        return renderClearedEnvelope({ slot: targetSlot });
       }
       return "";
     },
@@ -661,7 +723,10 @@ function effectivePromptSignature(state) {
   if (!normalized.enabled) return "disabled";
   const globalSig = normalized.globalItems
     .filter((item) => item.enabled !== false)
-    .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+    .map(
+      (item) =>
+        `${item.position}:${normalizeAgentScope(item.agentScope)}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`
+    )
     .join("|");
   const wsEntries = Object.keys(normalized.workspaces)
     .sort()
@@ -670,7 +735,10 @@ function effectivePromptSignature(state) {
       if (!ws || ws.enabled === false) return "";
       const itemsSig = (ws.items || [])
         .filter((item) => item.enabled !== false)
-        .map((item) => `${item.position}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`)
+        .map(
+          (item) =>
+            `${item.position}:${normalizeAgentScope(item.agentScope)}:${item.includeTitle ? item.title : ""}:${compactPromptContent(item.content)}`
+        )
         .join("|");
       if (!itemsSig) return "";
       return `${ws.workspacePath}#${ws.mergeMode}#${ws.workspaceTitle || ""}#${itemsSig}`;
@@ -725,6 +793,9 @@ module.exports = {
   generateId,
   normalizePosition,
   normalizeMergeMode,
+  normalizeAgentScope,
+  isSubagentContext,
+  matchesAgentScope,
   normalizeItem,
   normalizeItemList,
   normalizeWorkspaceProfile,

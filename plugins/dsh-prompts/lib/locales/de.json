@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**Scope / Trigger**: Bei jeder Änderung von Quelldateien in diesem Arbeitsbereich\n**Core Requirements (MUST)**:\n1. Befolgen Sie bestehende Architekturgrenzen und Namenskonventionen.\n2. Führen Sie nach Codeänderungen die zugehörigen Unit-Tests aus.\n**Prohibitions (NEVER)**:\n- Melden Sie eine Änderung NIEMALS als abgeschlossen, ohne den Teststatus zu prüfen.",
   "tpl.readOnlyDesign.label": "Nur-Lese-Analyse / Nur Entwurfsplan (Keine Dateiänderungen)",
   "tpl.readOnlyDesign.title": "Nur-Lese-Entwurfsmodus",
-  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Untersuchen Sie Schnittstellen und Dateien ausschließlich im Lesemodus.\n2. Geben Sie nur einen strukturierten Architekturentwurf aus.\n**Prohibitions (NEVER)**:\n- Erstellen, bearbeiten oder löschen Sie NIEMALS Dateien ohne ausdrückliche Freigabe."
+  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Untersuchen Sie Schnittstellen und Dateien ausschließlich im Lesemodus.\n2. Geben Sie nur einen strukturierten Architekturentwurf aus.\n**Prohibitions (NEVER)**:\n- Erstellen, bearbeiten oder löschen Sie NIEMALS Dateien ohne ausdrückliche Freigabe.",
+  "agentScopeLabel": "Ziel-Agentenbereich",
+  "agentScopeAll": "Alle Agenten (Haupt- + Subagenten, empfohlen · erhält KV-Cache)",
+  "agentScopeMain": "Nur Haupt-Agent (nur oberste Sitzung, nicht in Subagenten)",
+  "agentScopeSubagent": "Nur Subagenten (nur für delegierte Subagenten aktiv)",
+  "agentScopeMainBadge": "Nur Haupt-Agent",
+  "agentScopeSubagentBadge": "Nur Subagent",
+  "previewAgentMain": "Haupt-Agent-Ansicht",
+  "previewAgentSubagent": "Subagent-Ansicht"
 }

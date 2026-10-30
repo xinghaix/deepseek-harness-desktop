@@ -104,7 +104,7 @@ function workspaceSource(ctx) {
   };
 }
 
-function resolveSessionCwd(workingDirService, session) {
+function resolveDirectSessionCwd(workingDirService, session) {
   if (!session) return "";
   const wd = workingDirService;
   if (wd && typeof wd.get === "function") {
@@ -119,6 +119,31 @@ function resolveSessionCwd(workingDirService, session) {
   }
   const headerCwd = session?.header?.cwd ?? session?.cwd ?? "";
   return typeof headerCwd === "string" ? model.normalizePath(headerCwd) : "";
+}
+
+function resolveSessionCwd(workingDirService, session, agentsService) {
+  const direct = resolveDirectSessionCwd(workingDirService, session);
+  if (direct) return direct;
+  // Subagent lineage fallback: walk parentSession up through live AgentRegistry if child cwd is not yet populated
+  if (!agentsService || typeof agentsService.get !== "function") return "";
+  const visited = new Set();
+  if (session?.id) visited.add(session.id);
+  let parentId = session?.header?.parentSession;
+  while (typeof parentId === "string" && parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    let parentAgent;
+    try {
+      parentAgent = agentsService.get(parentId);
+    } catch {
+      break;
+    }
+    const parentSession = parentAgent?.session;
+    if (!parentSession) break;
+    const parentCwd = resolveDirectSessionCwd(workingDirService, parentSession);
+    if (parentCwd) return parentCwd;
+    parentId = parentSession?.header?.parentSession;
+  }
+  return "";
 }
 
 function jsonResponse(value, status = 200) {
@@ -143,11 +168,18 @@ export async function apply(ctx) {
   }
 
   let workingDirService;
+  let agentsService;
   if (typeof ctx?.inject === "function") {
     ctx.inject(["workingDirectory"], (scope) => {
       workingDirService = scope.workingDirectory;
       return () => {
         workingDirService = undefined;
+      };
+    });
+    ctx.inject(["agents"], (scope) => {
+      agentsService = scope.agents;
+      return () => {
+        agentsService = undefined;
       };
     });
   }
@@ -205,12 +237,16 @@ export async function apply(ctx) {
       interpolate: false,
       text: (assembleCtx) => {
         const session = assembleCtx?.agent?.session ?? assembleCtx?.session ?? null;
-        const cwd = resolveSessionCwd(workingDirService, session) || model.normalizePath(assembleCtx?.cwd || "");
+        const cwd =
+          resolveSessionCwd(workingDirService, session, agentsService) ||
+          model.normalizePath(assembleCtx?.cwd || "");
+        const isSubagent = model.isSubagentContext(assembleCtx, session);
         return tracker.resolveSlotText(currentState, {
           sessionId: session?.id || assembleCtx?.sessionId || "",
           session,
           cwd,
           slot: "prefix",
+          isSubagent,
         });
       },
     });
@@ -220,12 +256,16 @@ export async function apply(ctx) {
       interpolate: false,
       text: (assembleCtx) => {
         const session = assembleCtx?.agent?.session ?? assembleCtx?.session ?? null;
-        const cwd = resolveSessionCwd(workingDirService, session) || model.normalizePath(assembleCtx?.cwd || "");
+        const cwd =
+          resolveSessionCwd(workingDirService, session, agentsService) ||
+          model.normalizePath(assembleCtx?.cwd || "");
+        const isSubagent = model.isSubagentContext(assembleCtx, session);
         return tracker.resolveSlotText(currentState, {
           sessionId: session?.id || assembleCtx?.sessionId || "",
           session,
           cwd,
           slot: "suffix",
+          isSubagent,
         });
       },
     });

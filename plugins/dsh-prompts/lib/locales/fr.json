@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**Scope / Trigger**: À chaque modification de code source dans cet espace de travail\n**Core Requirements (MUST)**:\n1. Respectez l'architecture et les conventions de nommage existantes.\n2. Exécutez la suite de tests unitaires correspondante après toute modification.\n**Prohibitions (NEVER)**:\n- Ne déclarez JAMAIS un correctif terminé sans vérifier les tests.",
   "tpl.readOnlyDesign.label": "Analyse en lecture seule / Plan de conception uniquement",
   "tpl.readOnlyDesign.title": "Contrainte de mode conception en lecture seule",
-  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspectez les fichiers et interfaces uniquement en lecture seule.\n2. Produisez exclusivement un plan d'architecture et de conception structuré.\n**Prohibitions (NEVER)**:\n- Ne créez, ne modifiez et ne supprimez JAMAIS de fichiers avant approbation explicite."
+  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspectez les fichiers et interfaces uniquement en lecture seule.\n2. Produisez exclusivement un plan d'architecture et de conception structuré.\n**Prohibitions (NEVER)**:\n- Ne créez, ne modifiez et ne supprimez JAMAIS de fichiers avant approbation explicite.",
+  "agentScopeLabel": "Portée des agents cibles",
+  "agentScopeAll": "Tous les agents (Principal + Sous-agents, recommandé · préserve le cache KV)",
+  "agentScopeMain": "Agent principal uniquement (session principale uniquement)",
+  "agentScopeSubagent": "Sous-agents uniquement (injecté uniquement dans les sous-agents)",
+  "agentScopeMainBadge": "Principal seul",
+  "agentScopeSubagentBadge": "Sous-agent seul",
+  "previewAgentMain": "Vue Agent principal",
+  "previewAgentSubagent": "Vue Sous-agent"
 }

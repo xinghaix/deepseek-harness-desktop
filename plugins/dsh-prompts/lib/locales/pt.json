@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**Scope / Trigger**: Sempre que modificar arquivos-fonte neste espaço de trabalho\n**Core Requirements (MUST)**:\n1. Siga os limites arquiteturais e convenções de nomenclatura existentes.\n2. Execute a suíte de testes unitários correspondente após qualquer alteração.\n**Prohibitions (NEVER)**:\n- NUNCA declare uma correção concluída sem verificar os testes.",
   "tpl.readOnlyDesign.label": "Análise somente leitura / Apenas plano de design (Sem editar arquivos)",
   "tpl.readOnlyDesign.title": "Restrição de modo de design somente leitura",
-  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspecione arquivos e interfaces apenas em modo somente leitura.\n2. Produza exclusivamente um plano estruturado de arquitetura e design.\n**Prohibitions (NEVER)**:\n- NUNCA crie, edite ou exclua arquivos antes da aprovação explícita."
+  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspecione arquivos e interfaces apenas em modo somente leitura.\n2. Produza exclusivamente um plano estruturado de arquitetura e design.\n**Prohibitions (NEVER)**:\n- NUNCA crie, edite ou exclua arquivos antes da aprovação explícita.",
+  "agentScopeLabel": "Escopo de agentes alvo",
+  "agentScopeAll": "Todos os agentes (Principal + Subagentes, recomendado · preserva cache KV)",
+  "agentScopeMain": "Apenas agente principal (apenas sessão principal, ignorado em subagentes)",
+  "agentScopeSubagent": "Apenas subagentes (injetado apenas em subagentes delegados)",
+  "agentScopeMainBadge": "Só principal",
+  "agentScopeSubagentBadge": "Só subagente",
+  "previewAgentMain": "Visão Agente Principal",
+  "previewAgentSubagent": "Visão Subagente"
 }

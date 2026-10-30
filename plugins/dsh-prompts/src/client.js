@@ -1071,6 +1071,7 @@ window.__ModuleLoader__.load({
       let activeTab = "global";
       let selectedWorkspacePath = "";
       let previewWorkspacePath = "__global__";
+      let previewAgentScope = "main";
       // Inline expandable editor state (replaces secondary Modal dialog)
       let editorDraft = null;
       // Inline expanded item ID (or null)
@@ -1122,7 +1123,9 @@ window.__ModuleLoader__.load({
             ? ""
             : previewWorkspacePath;
 
-        const preview = model.renderEffectivePreview(state, targetPreviewCwd);
+        const preview = model.renderEffectivePreview(state, targetPreviewCwd, {
+          isSubagent: previewAgentScope === "subagent",
+        });
         const summary = model.summaryCounts(state);
 
         return {
@@ -1137,6 +1140,7 @@ window.__ModuleLoader__.load({
           selectedWorkspacePath: effectiveSelectedPath,
           selectedWorkspace,
           previewWorkspacePath,
+          previewAgentScope,
           previewTargetCwd: targetPreviewCwd,
           preview,
           editorModal: editorDraft,
@@ -1244,6 +1248,11 @@ window.__ModuleLoader__.load({
           openDropdownId = "";
           publish();
         },
+        setPreviewAgentScope(scopeVal) {
+          previewAgentScope = scopeVal === "subagent" ? "subagent" : "main";
+          openDropdownId = "";
+          publish();
+        },
         toggleDropdown(id) {
           const targetId = String(id || "");
           openDropdownId = openDropdownId === targetId ? "" : targetId;
@@ -1297,6 +1306,7 @@ window.__ModuleLoader__.load({
             content: item?.content || config?.defaultContent || "",
             includeTitle: item ? item.includeTitle === true : false,
             position: item?.position || config?.defaultPosition || "suffix",
+            agentScope: model.normalizeAgentScope(item?.agentScope || config?.defaultAgentScope || "all"),
             enabled: item ? item.enabled !== false : true,
             validationError: "",
           };
@@ -1401,6 +1411,7 @@ window.__ModuleLoader__.load({
             content,
             includeTitle: editorDraft.includeTitle === true,
             position: editorDraft.position,
+            agentScope: model.normalizeAgentScope(editorDraft.agentScope),
             enabled: editorDraft.enabled !== false,
           };
           const action =
@@ -1667,6 +1678,23 @@ window.__ModuleLoader__.load({
           h(
             "div",
             { className: "dsh-prompts-field" },
+            h("label", { className: "dsh-prompts-field-label" }, t("agentScopeLabel")),
+            h(DropdownSelect, {
+              dropdownId: `scope-editor-${draft.id || "new"}`,
+              value: model.normalizeAgentScope(draft.agentScope),
+              fullWidth: true,
+              options: [
+                { value: "all", label: t("agentScopeAll") },
+                { value: "main", label: t("agentScopeMain") },
+                { value: "subagent", label: t("agentScopeSubagent") },
+              ],
+              controller,
+              onChange: (agentScope) => controller.updateEditor({ agentScope }),
+            })
+          ),
+          h(
+            "div",
+            { className: "dsh-prompts-field" },
             h("label", { className: "dsh-prompts-field-label" }, t("templatePickerLabel")),
             h(DropdownSelect, {
               dropdownId: `tpl-editor-${draft.id || "new"}`,
@@ -1799,6 +1827,11 @@ window.__ModuleLoader__.load({
                   { className: "dsh-prompts-tag", "data-tone": isPrefix ? "default" : "accent" },
                   isPrefix ? t("positionPrefixBadge") : t("positionSuffixBadge")
                 ),
+                item.agentScope === "main"
+                  ? h("span", { className: "dsh-prompts-tag" }, t("agentScopeMainBadge"))
+                  : item.agentScope === "subagent"
+                    ? h("span", { className: "dsh-prompts-tag", "data-tone": "current" }, t("agentScopeSubagentBadge"))
+                    : null,
                 item.includeTitle === true
                   ? h("span", { className: "dsh-prompts-tag" }, t("includeTitleToggle"))
                   : null,
@@ -1918,6 +1951,7 @@ window.__ModuleLoader__.load({
                     content: item.content,
                     includeTitle: item.includeTitle === true,
                     position: item.position,
+                    agentScope: model.normalizeAgentScope(item.agentScope),
                     enabled: item.enabled !== false,
                     validationError: "",
                   },
@@ -2310,26 +2344,42 @@ window.__ModuleLoader__.load({
             "div",
             { className: "dsh-prompts-toolbar" },
             h("h4", { className: "dsh-prompts-section-title" }, t("previewScopeLabel")),
-            h(DropdownSelect, {
-              dropdownId: "preview-workspace",
-              value: snap.previewWorkspacePath || "__global__",
-              align: "right",
-              options: [
-                {
-                  value: "__global__",
-                  label: t("previewGlobalOnly"),
-                },
-                ...catalog.map((ws) => ({
-                  value: ws.path,
-                  triggerLabel: `${ws.title} — ${ws.path}`,
-                  label: ws.title,
-                  subLabel: ws.path,
-                })),
-              ],
-              snap,
-              controller,
-              onChange: (nextVal) => controller.setPreviewWorkspace(nextVal),
-            })
+            h(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+              h(DropdownSelect, {
+                dropdownId: "preview-agent-scope",
+                value: snap.previewAgentScope || "main",
+                align: "right",
+                options: [
+                  { value: "main", label: t("previewAgentMain") },
+                  { value: "subagent", label: t("previewAgentSubagent") },
+                ],
+                snap,
+                controller,
+                onChange: (nextVal) => controller.setPreviewAgentScope(nextVal),
+              }),
+              h(DropdownSelect, {
+                dropdownId: "preview-workspace",
+                value: snap.previewWorkspacePath || "__global__",
+                align: "right",
+                options: [
+                  {
+                    value: "__global__",
+                    label: t("previewGlobalOnly"),
+                  },
+                  ...catalog.map((ws) => ({
+                    value: ws.path,
+                    triggerLabel: `${ws.title} — ${ws.path}`,
+                    label: ws.title,
+                    subLabel: ws.path,
+                  })),
+                ],
+                snap,
+                controller,
+                onChange: (nextVal) => controller.setPreviewWorkspace(nextVal),
+              })
+            )
           ),
           h("p", { className: "dsh-prompts-toggle-hint" }, t("previewHint")),
           preview.hasActive

@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**적용 조건 (Scope/Trigger)**: 이 작업 공간의 소스 파일을 수정할 때마다\n**핵심 요구사항 (MUST)**:\n1. 저장소의 기존 아키텍처 경계와 명명 규칙을 엄격히 준수하세요.\n2. 코드 수정 후 반드시 해당 단위 테스트를 실행하고 통과를 확인한 뒤 완료하세요.\n**금지 사항 (NEVER)**:\n- 테스트 종료 코드를 확인하지 않고 수정 완료를 선언하지 마세요.",
   "tpl.readOnlyDesign.label": "읽기 전용 분석 / 설계안만 출력 (파일 수정 금지)",
   "tpl.readOnlyDesign.title": "읽기 전용 설계 모드 제약",
-  "tpl.readOnlyDesign.content": "**핵심 요구사항 (MUST)**:\n1. 읽기 전용 도구만 사용하여 관련 코드와 인터페이스를 조사하세요.\n2. 구조화된 아키텍처 설계 및 구현 계획만 출력하세요.\n**금지 사항 (NEVER)**:\n- 사용자가 구현을 명시적으로 승인하기 전에는 파일을 절대 생성, 수정 또는 삭제하지 마세요."
+  "tpl.readOnlyDesign.content": "**핵심 요구사항 (MUST)**:\n1. 읽기 전용 도구만 사용하여 관련 코드와 인터페이스를 조사하세요.\n2. 구조화된 아키텍처 설계 및 구현 계획만 출력하세요.\n**금지 사항 (NEVER)**:\n- 사용자가 구현을 명시적으로 승인하기 전에는 파일을 절대 생성, 수정 또는 삭제하지 마세요.",
+  "agentScopeLabel": "대상 에이전트 범위",
+  "agentScopeAll": "모든 에이전트 (메인 + 서브 에이전트, 권장 · KV 캐시 유지)",
+  "agentScopeMain": "메인 에이전트만 (최상위 세션에만 적용, 서브 에이전트 제외)",
+  "agentScopeSubagent": "서브 에이전트만 (위임된 서브 에이전트에만 주입)",
+  "agentScopeMainBadge": "메인 전용",
+  "agentScopeSubagentBadge": "서브 전용",
+  "previewAgentMain": "메인 에이전트 뷰",
+  "previewAgentSubagent": "서브 에이전트 뷰"
 }

@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**Scope / Trigger**: Whenever modifying source files in this workspace\n**Core Requirements (MUST)**:\n1. Follow the existing architectural boundaries and naming conventions of the repository.\n2. Run the corresponding unit test suite after any code edit and verify all tests pass before finishing.\n**Prohibitions (NEVER)**:\n- NEVER claim a fix is complete without checking test exit codes.",
   "tpl.readOnlyDesign.label": "Read-Only Analysis / Design Proposal Only (No File Edits)",
   "tpl.readOnlyDesign.title": "Read-Only Design Mode Constraint",
-  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspect relevant interfaces and source files in read-only mode.\n2. Output a structured architectural design and implementation plan only.\n**Prohibitions (NEVER)**:\n- NEVER create, edit, or delete workspace files until the user explicitly approves implementation."
+  "tpl.readOnlyDesign.content": "**Core Requirements (MUST)**:\n1. Inspect relevant interfaces and source files in read-only mode.\n2. Output a structured architectural design and implementation plan only.\n**Prohibitions (NEVER)**:\n- NEVER create, edit, or delete workspace files until the user explicitly approves implementation.",
+  "agentScopeLabel": "Target Agent Scope",
+  "agentScopeAll": "All Agents (Main + Subagents, Recommended · Preserves KV Cache)",
+  "agentScopeMain": "Main Agent Only (Top-level session only, skipped in Subagents)",
+  "agentScopeSubagent": "Subagents Only (Injected only into delegated child Subagents)",
+  "agentScopeMainBadge": "Main Only",
+  "agentScopeSubagentBadge": "Subagent Only",
+  "previewAgentMain": "Main Agent View",
+  "previewAgentSubagent": "Subagent View"
 }

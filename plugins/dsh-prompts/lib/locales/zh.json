@@ -83,5 +83,13 @@
   "tpl.codeQuality.content": "**适用条件（Scope/Trigger）**：每次在本工作区修改源码文件时\n**核心要求（MUST）**：\n1. 严格遵循仓库既有的模块分层、命名规范与跨平台边界。\n2. 修改代码后必须执行对应模块的单测，确认退出码为 0 后再结束任务。\n**禁止事项（NEVER）**：\n- 禁止在未运行验证或测试失败的情况下宣称修复完成。",
   "tpl.readOnlyDesign.label": "只读分析 / 仅输出设计方案（禁止改文件）安全模板",
   "tpl.readOnlyDesign.title": "只读设计模式安全约束",
-  "tpl.readOnlyDesign.content": "**核心要求（MUST）**：\n1. 仅使用只读工具调研相关源码与接口契约。\n2. 输出结构化、可落地的完整架构与设计方案。\n**禁止事项（NEVER）**：\n- 在用户明确指示开始编码落地前，严禁创建、修改或删除任何项目文件。"
+  "tpl.readOnlyDesign.content": "**核心要求（MUST）**：\n1. 仅使用只读工具调研相关源码与接口契约。\n2. 输出结构化、可落地的完整架构与设计方案。\n**禁止事项（NEVER）**：\n- 在用户明确指示开始编码落地前，严禁创建、修改或删除任何项目文件。",
+  "agentScopeLabel": "生效对象（Agent 范围）",
+  "agentScopeAll": "全部 Agent（主会话 + 子 Agent，推荐 · 保持前缀缓存复用）",
+  "agentScopeMain": "仅主 Agent（顶层会话生效，不注入给子 Agent）",
+  "agentScopeSubagent": "仅子 Agent（仅对 Subagent 派生子代理生效）",
+  "agentScopeMainBadge": "仅主 Agent",
+  "agentScopeSubagentBadge": "仅子 Agent",
+  "previewAgentMain": "主 Agent 视角",
+  "previewAgentSubagent": "子 Agent 视角"
 }
