@@ -233,7 +233,35 @@ func (d *Service) SetShortcuts(shortcuts map[string]string) (DesktopPrefs, error
 }
 
 func (d *Service) effectiveShortcuts() map[string]string {
-	return d.prefs.effectiveShortcuts()
+	return d.prefs.menuEffectiveShortcuts()
+}
+
+// SetShortcutsRecording 在 DSH 原生快捷键录制期间临时挂起宿主菜单加速键，录制结束后恢复。
+func (d *Service) SetShortcutsRecording(active bool) {
+	d.prefs.chatShortcutsReady.Store(true)
+	if d.prefs.shortcutsRecording.Swap(active) != active {
+		d.rebuildApplicationMenu()
+	}
+}
+
+// DispatchMenuCloseWindow 在 Chat 窗口可见且已挂载原生快捷键桥接时，优先交由 DSH page.close 处理分级关闭（先关弹窗/分栏，再关窗口）。
+func (d *Service) DispatchMenuCloseWindow() bool {
+	if !d.prefs.chatShortcutsReady.Load() {
+		return false
+	}
+	app := application.Get()
+	if app == nil {
+		return false
+	}
+	if cfg, ok := app.Window.GetByName(configWindowName); ok && cfg != nil && cfg.IsVisible() {
+		return false
+	}
+	chat, ok := app.Window.GetByName(chatWindowName)
+	if !ok || chat == nil || !chat.IsVisible() {
+		return false
+	}
+	chat.ExecJS(`if (typeof window.__DSH_DESKTOP_MENU_COMMAND__ === "function") { window.__DSH_DESKTOP_MENU_COMMAND__("page.close"); }`)
+	return true
 }
 
 func (d *Service) resolvedLocale() string {

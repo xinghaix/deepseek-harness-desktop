@@ -599,6 +599,9 @@ client.apply({
                 "bridge.enhanced_hover_title": "悬浮我方提示词",
                 "bridge.overlay_max_lines": "文案最大显示行数",
                 "bridge.overlay_max_lines_hint": "悬浮卡片最多显示的文案行数，超出后可上下滑动查看。卡片同时会收窄以适配 Chat 输入框上方的空间，不会遮挡输入框。",
+                "field.confirm_quit_hint_dashboard": "开启后：仅当有任务在跑时，关窗或按 {0} 会二次确认。",
+                "field.tray_enabled_hint_dashboard": "开启系统托盘后，按 {0} 隐藏窗口。",
+                "field.close_to_tray_hint_dashboard": "开启后：点击窗口关闭按钮或按 {0} 时隐藏到托盘。",
               },
             },
           });
@@ -1974,6 +1977,67 @@ assert.match(tabText, /悬浮卡片最多显示的文案行数/, "the line-budge
 // Scoped to this block: the harness catalog is a deliberate subset, so other rows
 // legitimately fall back to their key here (the Go catalog test covers those).
 assert.doesNotMatch(tabText, /bridge\.enhanced_hover_title|bridge\.overlay_max_lines|bridge\.overlay_lines_value|tray\.open_settings/, "no raw catalog key reaches the floating-prompt block");
+assert.doesNotMatch(tabText, /dashboard\.shortcuts_title/, "duplicate standalone shortcuts card is removed from desktop settings tab");
 assert.match(source, /endpoint === "setPromptOverlayMaxLines"/, "setPromptOverlayMaxLines is handled as a quiet pref update so the number input never blurs on change");
 assert.doesNotMatch(source, /markComposerCompact|COMPOSER_COMPACT_ATTR/, "unused per-frame composer compact DOM marker is removed");
+
+// 验证原生快捷键桥接：
+// 1. 包装 @deepseek-ai/dsh-client-shortcuts 时，仅在构造函数内提供 dataset.platform 与 window.dshDesktop，构造完毕立即恢复。
+// 2. 注册 desktop.quit / desktop.hide / desktop.hideOthers 到 ctx.shortcuts。
+// 3. DesktopSettingsTab 实时读取 ctx.shortcuts.catalog 中的快捷键绑定。
+{
+  const wrapFn = window.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY__;
+  assert.equal(typeof wrapFn, "function", "shortcuts wrapper factory must be installed on window");
+  let seenPlatformInCtor = undefined;
+  let seenDesktopBridgeInCtor = null;
+  const registeredCommands = [];
+  const catalogSubscribers = new Set();
+  let fakeCatalogSnapshot = [
+    { id: "desktop.quit", keys: ["⌘", "E"] },
+    { id: "page.close", keys: ["⌘", "D"] },
+    { id: "settings.open", keys: ["⌘", ","] },
+  ];
+  class FakeShortcutsService {
+    constructor(_ctx) {
+      seenPlatformInCtor = document.documentElement.getAttribute("data-platform") || document.documentElement.dataset?.platform;
+      seenDesktopBridgeInCtor = window.dshDesktop;
+      this.registry = {
+        dispatch(_gesture, _context, consume) {
+          consume();
+          return { status: "handled" };
+        },
+        refreshLabels() {}
+      };
+      this.catalog = {
+        getSnapshot() { return fakeCatalogSnapshot; },
+        subscribe(fn) { catalogSubscribers.add(fn); return () => catalogSubscribers.delete(fn); }
+      };
+    }
+    register(cmd) {
+      registeredCommands.push(cmd);
+      return () => {};
+    }
+  }
+  // dsh-client-shortcuts/lib/client.js:2613 直接 module.exports = ShortcutsService（返回构造函数本身）
+  const wrappedMod = wrapFn(() => FakeShortcutsService, () => {});
+  assert.equal(typeof wrappedMod, "function", "wrapShortcuts must return wrapped constructor function when origFactory returns ShortcutsService class");
+  const svc = new wrappedMod({});
+  assert.equal(seenPlatformInCtor, "darwin", "ShortcutsService constructor must see darwin platform on macOS");
+  assert.ok(seenDesktopBridgeInCtor && seenDesktopBridgeInCtor.shortcuts && seenDesktopBridgeInCtor.keyboard, "ShortcutsService constructor must see window.dshDesktop.{shortcuts,keyboard}");
+  assert.equal(document.documentElement.getAttribute("data-platform"), null, "data-platform must be restored after ShortcutsService constructor");
+  assert.equal("dshDesktop" in window, false, "window.dshDesktop must not leak globally after ShortcutsService constructor");
+
+  const controller = window.__DSH_DESKTOP_SHORTCUTS_CONTROLLER__;
+  assert.ok(controller, "desktopShortcutsController must be exposed");
+  const disposeCommands = controller.registerDesktopCommands(svc, { connection: { rpc: { call: () => Promise.resolve({ ok: true }) } } });
+  const registeredIds = registeredCommands.map((c) => c.id);
+  assert.deepEqual(registeredIds, ["desktop.quit", "desktop.hide", "desktop.hideOthers"], "macOS desktop commands must be registered into ctx.shortcuts");
+  const elWithCatalog = lastNavRender();
+  const renderedWithCatalog = elWithCatalog.type(elWithCatalog.props);
+  const textWithCatalog = collectText(renderedWithCatalog).join("\n");
+  assert.match(textWithCatalog, /⌘E/, "DesktopSettingsTab inline hint must read live desktop.quit binding from ctx.shortcuts.catalog");
+  assert.match(textWithCatalog, /⌘D/, "DesktopSettingsTab inline hint must read live page.close binding from ctx.shortcuts.catalog");
+  disposeCommands();
+}
+
 

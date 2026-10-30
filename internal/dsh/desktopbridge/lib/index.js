@@ -48,6 +48,8 @@ const routes = Object.freeze({
 	setRestoreLastSession: Object.freeze({ method: "POST", path: "/v1/set-restore-last-session" }),
 	setRememberWindowSize: Object.freeze({ method: "POST", path: "/v1/set-remember-window-size" }),
 	setShortcuts: Object.freeze({ method: "POST", path: "/v1/set-shortcuts" }),
+	setShortcutsRecording: Object.freeze({ method: "POST", path: "/v1/set-shortcuts-recording" }),
+	shortcutAction: Object.freeze({ method: "POST", path: "/v1/shortcut-action" }),
 	updateStatus: Object.freeze({ method: "GET", path: "/v1/update-status" }),
 	checkUpdate: Object.freeze({ method: "POST", path: "/v1/check-update" }),
 	installUpdate: Object.freeze({ method: "POST", path: "/v1/install-update" }),

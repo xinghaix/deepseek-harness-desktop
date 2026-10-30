@@ -51,6 +51,8 @@ type desktopPrefs struct {
 	themePreference       atomic.Value // string; "" = unset, or "light" | "dark" | "idea-dark" | "system"
 	language              atomic.Value // string; "" / "system" = follow system
 	shortcuts             atomic.Value // map[string]string overrides; nil/empty = all defaults
+	shortcutsRecording    atomic.Bool  // 录制快捷键期间临时挂起菜单加速键
+	chatShortcutsReady    atomic.Bool  // Chat WebView 已挂载原生快捷键菜单命令分发器
 }
 
 func (p *desktopPrefs) load() {
@@ -198,6 +200,16 @@ func (p *desktopPrefs) setShortcutOverrides(overrides map[string]string) {
 
 func (p *desktopPrefs) effectiveShortcuts() map[string]string {
 	return EffectiveShortcuts(p.getShortcutOverrides())
+}
+
+func (p *desktopPrefs) menuEffectiveShortcuts() map[string]string {
+	out := p.effectiveShortcuts()
+	if p.shortcutsRecording.Load() {
+		for id := range out {
+			out[id] = ""
+		}
+	}
+	return out
 }
 
 func (p *desktopPrefs) getRestoreLastSession() bool {

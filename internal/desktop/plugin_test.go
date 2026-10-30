@@ -198,19 +198,23 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if strings.Contains(host, `stop: Object.freeze`) || strings.Contains(host, `path: "/v1/stop"`) {
 		t.Fatal("host Cordis allowlist must not expose stop")
 	}
-	if strings.Contains(client, "全部恢复默认") {
-		t.Fatal("client shortcuts must not expose restore-all; reset is per-row")
+	if strings.Contains(client, "dshDesktopBridgeShortcutRow") || strings.Contains(client, `t("dashboard.shortcuts_title")`) {
+		t.Fatal("client desktop settings must not render a duplicate standalone shortcuts card")
 	}
-	if !strings.Contains(client, `t("shortcut.reset")`) || !strings.Contains(client, `t("shortcut.clear")`) {
-		t.Fatal("client shortcut rows must expose per-row clear and restore default")
+	for _, required := range []string{"@deepseek-ai/dsh-client-shortcuts", "__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY__", "desktop.quit", "desktop.hide", "desktop.hideOthers", "setShortcutsRecording", "shortcutAction"} {
+		if !strings.Contains(client, required) {
+			t.Fatalf("client must bridge native DSH shortcuts (%q missing)", required)
+		}
 	}
-	if !strings.Contains(client, `addEventListener("pointerdown"`) {
-		t.Fatal("client must cancel shortcut recording on pointerdown outside the chip")
+	for _, hostRoute := range []string{"/v1/set-shortcuts-recording", "/v1/shortcut-action"} {
+		if !strings.Contains(host, hostRoute) {
+			t.Fatalf("host must expose native shortcut route %q", hostRoute)
+		}
 	}
 	if strings.Contains(client, `children: "▾"`) || strings.Contains(client, "⌘Q / Ctrl+Q") {
 		t.Fatal("language dropdown must use the stroke chevron; preference hints must follow the configured shortcut")
 	}
-	if !strings.Contains(client, "dshDesktopBridgeInlineKbd") || !strings.Contains(client, "boundShortcutLabel") {
-		t.Fatal("preference hints must render the current shortcut binding")
+	if !strings.Contains(client, "dshDesktopBridgeInlineKbd") || !strings.Contains(client, "boundShortcutLabel") || !strings.Contains(client, "subscribeCatalog") {
+		t.Fatal("preference hints must reactively render the current shortcut binding from the native catalog")
 	}
 }

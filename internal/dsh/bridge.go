@@ -95,6 +95,13 @@ type ThemePreferenceHost interface {
 	SetFullAgentPresets(enabled bool) (BridgePrefs, error)
 }
 
+// ShortcutBridgeHost 为可选能力接口，向 DSH 原生快捷键桥接提供关闭/隐藏 Chat、请求退出及录制态菜单加速键挂起。
+type ShortcutBridgeHost interface {
+	CloseChatToTray() error
+	RequestQuit() error
+	SetShortcutsRecording(active bool)
+}
+
 type PrefsHost interface {
 	BridgePrefs() BridgePrefs
 	SetLanguage(code string) (BridgePrefs, error)
@@ -873,6 +880,74 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, prefs)
+	case "/v1/set-shortcuts-recording":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Active bool `json:"active"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if shortcutHost, ok := host.(ShortcutBridgeHost); ok {
+			shortcutHost.SetShortcutsRecording(body.Active)
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true, "active": body.Active})
+	case "/v1/shortcut-action":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Action string `json:"action"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		host, err := b.owner.getBridgeHost()
+		if err != nil {
+			writeBridgeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		shortcutHost, ok := host.(ShortcutBridgeHost)
+		switch body.Action {
+		case "closeChat":
+			if !ok {
+				writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
+				return
+			}
+			if err := shortcutHost.CloseChatToTray(); err != nil {
+				writeBridgeError(w, http.StatusConflict, err.Error())
+				return
+			}
+		case "quit":
+			if !ok {
+				writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
+				return
+			}
+			if err := shortcutHost.RequestQuit(); err != nil {
+				writeBridgeError(w, http.StatusConflict, err.Error())
+				return
+			}
+		case "openManagement":
+			if err := host.OpenManagement(); err != nil {
+				writeBridgeError(w, http.StatusConflict, err.Error())
+				return
+			}
+		default:
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "/v1/set-restore-last-session":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

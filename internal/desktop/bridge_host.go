@@ -20,6 +20,7 @@ var _ dsh.ChatWindowActionHost = bridgeHostAdapter{}
 var _ dsh.ChatContextMenuHost = bridgeHostAdapter{}
 var _ dsh.ClipboardHost = bridgeHostAdapter{}
 var _ dsh.ThemePreferenceHost = bridgeHostAdapter{}
+var _ dsh.ShortcutBridgeHost = bridgeHostAdapter{}
 
 func (a bridgeHostAdapter) WriteClipboard(text string) error {
 	app, err := desktopApp()
@@ -208,6 +209,18 @@ func (a bridgeHostAdapter) SetShortcuts(shortcuts map[string]string) (dsh.Bridge
 		return a.BridgePrefs(), err
 	}
 	return a.BridgePrefs(), nil
+}
+
+func (a bridgeHostAdapter) CloseChatToTray() error {
+	return a.service.CloseChatToTray()
+}
+
+func (a bridgeHostAdapter) RequestQuit() error {
+	return a.service.RequestQuit()
+}
+
+func (a bridgeHostAdapter) SetShortcutsRecording(active bool) {
+	a.service.SetShortcutsRecording(active)
 }
 
 func (a bridgeHostAdapter) ReportSessions(sessions []dsh.BridgeSession) {

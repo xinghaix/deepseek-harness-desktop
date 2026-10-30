@@ -28,6 +28,10 @@ type shortcutSource interface {
 	effectiveShortcuts() map[string]string
 }
 
+type shortcutMenuDispatcher interface {
+	DispatchMenuCloseWindow() bool
+}
+
 // ApplicationMenu 把桌面端动作放进各平台的宿主菜单，不再单独挂一个「设置」。
 // macOS 的第一个菜单就是应用菜单；Windows / Linux 没有 AppMenu role，改用「文件」。
 func ApplicationMenu(app *application.App, controller menuController) *application.Menu {
@@ -109,6 +113,9 @@ func addDesktopActions(menu *application.Menu, controller menuController, locale
 	closeItem := menu.Add(closeWindow)
 	setMenuAccelerator(closeItem, shortcuts[ShortcutCloseChat])
 	closeItem.OnClick(func(*application.Context) {
+		if dispatcher, ok := controller.(shortcutMenuDispatcher); ok && dispatcher.DispatchMenuCloseWindow() {
+			return
+		}
 		if err := controller.CloseChatToTray(); err != nil {
 			log.Printf("close chat to tray failed: %v", err)
 		}

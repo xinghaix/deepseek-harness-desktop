@@ -1,6 +1,112 @@
-window.__ModuleLoader__.load({
-	id: "@deepseek-ai/deepseek-harness-desktop-bridge",
-	factory: (require) => {
+(() => {
+	const root = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : null);
+	const win = typeof window !== "undefined" ? window : root;
+	let bridgeFactoryFn = null;
+	let prewarmedBridgeModule = null;
+	const ensureBridgeEvaluated = (req) => {
+		if (prewarmedBridgeModule === null && typeof bridgeFactoryFn === "function") {
+			prewarmedBridgeModule = bridgeFactoryFn(req);
+		}
+		return prewarmedBridgeModule;
+	};
+	const wrapShortcuts = (origFactory, req) => {
+		if (typeof root?.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY_IMPL__ !== "function") {
+			try { ensureBridgeEvaluated(req); } catch (_) {}
+		}
+		const impl = root?.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY_IMPL__ || win?.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY_IMPL__;
+		if (typeof impl === "function") {
+			return impl(origFactory, req);
+		}
+		return origFactory(req);
+	};
+	if (root) root.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY__ = wrapShortcuts;
+	if (win && win !== root) win.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY__ = wrapShortcuts;
+	const wrapUiShortcuts = (origFactory, req) => {
+		const OrigMap = globalThis.Map;
+		if (typeof OrigMap === "function" && typeof Proxy === "function") {
+			try {
+				globalThis.Map = new Proxy(OrigMap, {
+					construct(Target, args, newTarget) {
+						const m = Reflect.construct(Target, args, newTarget);
+						try {
+							if (m && typeof m.get === "function" && typeof m.set === "function" && m.get("shortcuts.open") === 0 && m.get("page.close") === 19) {
+								m.set("settings.open", 0.1);
+								m.set("page.close", 0.2);
+								m.set("desktop.quit", 0.3);
+								m.set("desktop.hide", 0.4);
+								m.set("desktop.hideOthers", 0.5);
+							}
+						} catch (_) {}
+						return m;
+					}
+				});
+			} catch (_) {}
+		}
+		try {
+			return origFactory(req);
+		} finally {
+			if (typeof OrigMap === "function") {
+				globalThis.Map = OrigMap;
+			}
+		}
+	};
+	const wrapLoaderSpec = (spec) => {
+		if (!spec || typeof spec.factory !== "function" || spec.factory.__dshDesktopWrapped) {
+			return spec;
+		}
+		if (spec.id === "@deepseek-ai/dsh-client-shortcuts") {
+			const origFactory = spec.factory;
+			const wrappedFactory = function (req) {
+				return wrapShortcuts(origFactory, req);
+			};
+			wrappedFactory.__dshDesktopWrapped = true;
+			return Object.assign({}, spec, { factory: wrappedFactory });
+		}
+		if (spec.id === "@deepseek-ai/dsh-client-ui-shortcuts") {
+			const origUiFactory = spec.factory;
+			const wrappedUiFactory = function (req) {
+				return wrapUiShortcuts(origUiFactory, req);
+			};
+			wrappedUiFactory.__dshDesktopWrapped = true;
+			return Object.assign({}, spec, { factory: wrappedUiFactory });
+		}
+		return spec;
+	};
+	const hookLoader = () => {
+		const loader = win?.__ModuleLoader__ || root?.__ModuleLoader__;
+		if (!loader) return;
+		if (Array.isArray(loader.pendingQueue)) {
+			for (let i = 0; i < loader.pendingQueue.length; i++) {
+				loader.pendingQueue[i] = wrapLoaderSpec(loader.pendingQueue[i]);
+			}
+		}
+		if (typeof loader.load === "function" && !loader.load.__dshDesktopShortcutsHooked) {
+			const origLoad = loader.load;
+			const wrappedLoad = function (spec) {
+				return origLoad.call(this, wrapLoaderSpec(spec));
+			};
+			wrappedLoad.__dshDesktopShortcutsHooked = true;
+			loader.load = wrappedLoad;
+		}
+		if (typeof loader.create === "function" && !loader.create.__dshDesktopShortcutsCreateHooked) {
+			const origCreate = loader.create;
+			const wrappedCreate = function () {
+				const res = origCreate.apply(this, arguments);
+				hookLoader();
+				return res;
+			};
+			wrappedCreate.__dshDesktopShortcutsCreateHooked = true;
+			loader.create = wrappedCreate;
+		}
+	};
+	hookLoader();
+
+	bridgeFactoryFn = (require) => {
+		if (prewarmedBridgeModule !== null) {
+			const mod = prewarmedBridgeModule;
+			prewarmedBridgeModule = null;
+			return mod;
+		}
 		var module = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
@@ -24,6 +130,887 @@ window.__ModuleLoader__.load({
 				compatible: state?.compatible === true,
 				capabilities: state?.capabilities
 			});
+		}
+
+		const DESKTOP_SHORTCUT_STORAGE_KEY = "dsh.keybindings.v1";
+		const DESKTOP_SHORTCUT_MODIFIER_ORDER = ["control", "alt", "shift", "meta"];
+		const DESKTOP_CODE_TO_ACCEL_KEY = Object.freeze({
+			Slash: "/",
+			Comma: ",",
+			Period: ".",
+			Backslash: "\\",
+			Backquote: "`",
+			Minus: "-",
+			Equal: "=",
+			BracketLeft: "[",
+			BracketRight: "]",
+			Semicolon: ";",
+			Quote: "'",
+			Enter: "Return",
+			Escape: "Escape",
+			Space: "Space",
+			Tab: "Tab",
+			Backspace: "Backspace",
+			Delete: "Delete",
+			ArrowUp: "Up",
+			ArrowDown: "Down",
+			ArrowLeft: "Left",
+			ArrowRight: "Right"
+		});
+		const DESKTOP_ACCEL_KEY_TO_CODE = (() => {
+			const map = new Map();
+			for (const [code, key] of Object.entries(DESKTOP_CODE_TO_ACCEL_KEY)) {
+				map.set(key.toLowerCase(), code);
+			}
+			map.set("enter", "Enter");
+			map.set("return", "Enter");
+			map.set("esc", "Escape");
+			map.set("escape", "Escape");
+			map.set("space", "Space");
+			map.set("tab", "Tab");
+			map.set("backspace", "Backspace");
+			map.set("delete", "Delete");
+			map.set("up", "ArrowUp");
+			map.set("down", "ArrowDown");
+			map.set("left", "ArrowLeft");
+			map.set("right", "ArrowRight");
+			for (let c = 97; c <= 122; c++) {
+				const ch = String.fromCharCode(c);
+				map.set(ch, "Key" + ch.toUpperCase());
+			}
+			for (let d = 0; d <= 9; d++) {
+				map.set(String(d), "Digit" + String(d));
+			}
+			for (let f = 1; f <= 24; f++) {
+				map.set("f" + String(f), "F" + String(f));
+			}
+			return map;
+		})();
+
+		const DESKTOP_HOST_SHORTCUT_SPECS = Object.freeze([
+			Object.freeze({
+				prefKey: "openSettings",
+				commandId: "settings.open",
+				builtin: true,
+				macOnly: false,
+				defaultAccel: "CmdOrCtrl+,",
+				defaults: Object.freeze({
+					"desktop:macos": Object.freeze({ code: "Comma", modifiers: Object.freeze(["primary"]) }),
+					"desktop:windows": Object.freeze({ code: "Comma", modifiers: Object.freeze(["primary"]) }),
+					"desktop:linux": Object.freeze({ code: "Comma", modifiers: Object.freeze(["primary"]) })
+				})
+			}),
+			Object.freeze({
+				prefKey: "closeChat",
+				commandId: "page.close",
+				builtin: true,
+				macOnly: false,
+				defaultAccel: "CmdOrCtrl+w",
+				defaults: Object.freeze({
+					"desktop:macos": Object.freeze({ code: "KeyW", modifiers: Object.freeze(["primary"]) }),
+					"desktop:windows": Object.freeze({ code: "KeyW", modifiers: Object.freeze(["primary"]) }),
+					"desktop:linux": Object.freeze({ code: "KeyW", modifiers: Object.freeze(["primary"]) })
+				})
+			}),
+			Object.freeze({
+				prefKey: "quit",
+				commandId: "desktop.quit",
+				builtin: false,
+				macOnly: false,
+				labelKey: "shortcut.quit_label",
+				fallbackZh: "退出",
+				fallbackEn: "Quit",
+				aliases: Object.freeze(["quit", "exit", "desktop", "退出", "关闭应用", "桌面", "桌面端"]),
+				defaultAccel: "CmdOrCtrl+q",
+				defaults: Object.freeze({
+					"desktop:macos": Object.freeze({ code: "KeyQ", modifiers: Object.freeze(["primary"]) }),
+					"desktop:windows": Object.freeze({ code: "KeyQ", modifiers: Object.freeze(["primary"]) }),
+					"desktop:linux": Object.freeze({ code: "KeyQ", modifiers: Object.freeze(["primary"]) })
+				})
+			}),
+			Object.freeze({
+				prefKey: "hide",
+				commandId: "desktop.hide",
+				builtin: false,
+				macOnly: true,
+				labelKey: "shortcut.hide_label",
+				fallbackZh: "隐藏应用",
+				fallbackEn: "Hide Application",
+				aliases: Object.freeze(["hide", "desktop", "隐藏", "隐藏应用", "桌面", "桌面端"]),
+				defaultAccel: "CmdOrCtrl+h",
+				defaults: Object.freeze({
+					"desktop:macos": Object.freeze({ code: "KeyH", modifiers: Object.freeze(["primary"]) })
+				})
+			}),
+			Object.freeze({
+				prefKey: "hideOthers",
+				commandId: "desktop.hideOthers",
+				builtin: false,
+				macOnly: true,
+				labelKey: "shortcut.hide_others_label",
+				fallbackZh: "隐藏其他",
+				fallbackEn: "Hide Others",
+				aliases: Object.freeze(["hide others", "desktop", "隐藏其他", "桌面", "桌面端"]),
+				defaultAccel: "CmdOrCtrl+OptionOrAlt+h",
+				defaults: Object.freeze({
+					"desktop:macos": Object.freeze({ code: "KeyH", modifiers: Object.freeze(["primary", "alt"]) })
+				})
+			})
+		]);
+
+		function detectDesktopShortcutPlatform() {
+			const nav = typeof navigator !== "undefined" ? navigator : null;
+			const device = String(nav?.platform || nav?.userAgent || "");
+			if (/darwin|mac|iphone|ipad|ipod/i.test(device)) {
+				return { platform: "macos", datasetPlatform: "darwin", isMac: true };
+			}
+			if (/win/i.test(device)) {
+				return { platform: "windows", datasetPlatform: "win32", isMac: false };
+			}
+			return { platform: "linux", datasetPlatform: "linux", isMac: false };
+		}
+
+		function normalizeDesktopShortcutBinding(binding, platform) {
+			if (!binding || typeof binding !== "object" || typeof binding.code !== "string") return null;
+			const primary = platform === "macos" ? "meta" : "control";
+			const modSet = new Set(
+				Array.isArray(binding.modifiers)
+					? binding.modifiers.map((m) => (m === "primary" ? primary : m)).filter((m) => DESKTOP_SHORTCUT_MODIFIER_ORDER.includes(m))
+					: []
+			);
+			const modifiers = DESKTOP_SHORTCUT_MODIFIER_ORDER.filter((m) => modSet.has(m));
+			const codes = typeof binding.secondCode === "string" && binding.secondCode && binding.secondCode !== binding.code
+				? [binding.code, binding.secondCode].sort()
+				: [binding.code];
+			return {
+				code: codes[0],
+				...(codes[1] ? { secondCode: codes[1] } : {}),
+				modifiers
+			};
+		}
+
+		function desktopBindingKey(binding, platform) {
+			const norm = normalizeDesktopShortcutBinding(binding, platform);
+			if (!norm) return "";
+			return [...norm.modifiers, norm.code, ...(norm.secondCode ? [norm.secondCode] : [])].join("+");
+		}
+
+		function desktopBindingsOverlap(left, right, platform) {
+			const a = normalizeDesktopShortcutBinding(left, platform);
+			const b = normalizeDesktopShortcutBinding(right, platform);
+			if (!a || !b) return false;
+			if (a.modifiers.join("+") !== b.modifiers.join("+")) return false;
+			if (a.secondCode !== undefined && b.secondCode !== undefined) {
+				return desktopBindingKey(a, platform) === desktopBindingKey(b, platform);
+			}
+			return [a.code, a.secondCode].some((code) => code !== undefined && (code === b.code || code === b.secondCode));
+		}
+
+		function shortcutBindingToWailsAccelerator(binding, platform) {
+			if (binding === null || binding === undefined) return "";
+			const norm = normalizeDesktopShortcutBinding(binding, platform);
+			if (!norm || norm.secondCode !== undefined) return "";
+			let keyToken = "";
+			if (/^Key[A-Z]$/.test(norm.code)) {
+				keyToken = norm.code.slice(3).toLowerCase();
+			} else if (/^Digit[0-9]$/.test(norm.code)) {
+				keyToken = norm.code.slice(5);
+			} else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(norm.code)) {
+				keyToken = norm.code;
+			} else if (Object.prototype.hasOwnProperty.call(DESKTOP_CODE_TO_ACCEL_KEY, norm.code)) {
+				keyToken = DESKTOP_CODE_TO_ACCEL_KEY[norm.code];
+			}
+			if (!keyToken) return "";
+			const parts = [];
+			if (platform === "macos") {
+				if (norm.modifiers.includes("meta")) parts.push("CmdOrCtrl");
+				if (norm.modifiers.includes("control")) parts.push("Control");
+			} else {
+				if (norm.modifiers.includes("meta") && !norm.modifiers.includes("control")) return "";
+				if (norm.modifiers.includes("control")) parts.push("CmdOrCtrl");
+			}
+			if (norm.modifiers.includes("alt")) parts.push("OptionOrAlt");
+			if (norm.modifiers.includes("shift")) parts.push("Shift");
+			parts.push(keyToken);
+			return parts.join("+");
+		}
+
+		function wailsAcceleratorToShortcutBinding(accel, platform) {
+			if (accel === "") return null;
+			if (typeof accel !== "string" || !accel.trim()) return undefined;
+			const rawParts = accel.trim().split("+").map((p) => p.trim()).filter(Boolean);
+			if (rawParts.length === 0) return undefined;
+			const keyRaw = rawParts[rawParts.length - 1];
+			const code = DESKTOP_ACCEL_KEY_TO_CODE.get(keyRaw.toLowerCase());
+			if (!code) return undefined;
+			const mods = [];
+			for (let i = 0; i < rawParts.length - 1; i++) {
+				const tok = rawParts[i].toLowerCase();
+				if (tok === "cmdorctrl" || tok === "commandorcontrol" || tok === "cmd" || tok === "command" || tok === "super" || tok === "meta") {
+					mods.push(platform === "macos" ? "meta" : "control");
+				} else if (tok === "ctrl" || tok === "control") {
+					mods.push("control");
+				} else if (tok === "alt" || tok === "option" || tok === "optionoralt") {
+					mods.push("alt");
+				} else if (tok === "shift") {
+					mods.push("shift");
+				} else {
+					return undefined;
+				}
+			}
+			return normalizeDesktopShortcutBinding({ code, modifiers: mods }, platform);
+		}
+
+		function generateShortcutRevision() {
+			if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+				return crypto.randomUUID();
+			}
+			return "rev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+		}
+
+		const desktopShortcutsController = (() => {
+			const env = detectDesktopShortcutPlatform();
+			const profileKey = "desktop:" + env.platform;
+			let serviceInstance = null;
+			let activeConnection = null;
+			let configListeners = new Set();
+			let catalogListeners = new Set();
+			let serviceListeners = new Set();
+			let catalogUnsubscribe = null;
+			let nativeKeyboardListener = null;
+			let isRecording = false;
+			let currentDOMKeyEvent = null;
+			let definitions = [];
+			let lastHostShortcutsJson = "";
+			let snapshot = {
+				revision: generateShortcutRevision(),
+				sequence: 0,
+				document: { schemaVersion: 2, profiles: {} },
+				status: "ready",
+				error: null,
+				usingDefaults: true
+			};
+
+			const readStoredDocument = () => {
+				try {
+					if (typeof localStorage === "undefined") return { doc: { schemaVersion: 2, profiles: {} }, fromStorage: false };
+					const raw = localStorage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
+					if (!raw) return { doc: { schemaVersion: 2, profiles: {} }, fromStorage: false };
+					const parsed = JSON.parse(raw);
+					if (!parsed || typeof parsed !== "object" || typeof parsed.profiles !== "object" || parsed.profiles === null) {
+						return { doc: { schemaVersion: 2, profiles: {} }, fromStorage: false };
+					}
+					return {
+						doc: {
+							schemaVersion: 2,
+							profiles: { ...parsed.profiles }
+						},
+						fromStorage: true
+					};
+				} catch (_) {
+					return { doc: { schemaVersion: 2, profiles: {} }, fromStorage: false };
+				}
+			};
+
+			const writeStoredDocument = (doc) => {
+				try {
+					if (typeof localStorage !== "undefined") {
+						localStorage.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, JSON.stringify(doc, null, 2) + "\n");
+					}
+				} catch (_) {}
+			};
+
+			const initial = readStoredDocument();
+			snapshot = {
+				revision: generateShortcutRevision(),
+				sequence: 1,
+				document: initial.doc,
+				status: "ready",
+				error: null,
+				usingDefaults: !initial.fromStorage
+			};
+
+			const publishConfigSnapshot = (nextDoc, usingDefaults = false) => {
+				snapshot = {
+					revision: generateShortcutRevision(),
+					sequence: snapshot.sequence + 1,
+					document: nextDoc,
+					status: "ready",
+					error: null,
+					usingDefaults
+				};
+				for (const listener of configListeners) {
+					try { listener(snapshot); } catch (_) {}
+				}
+				return snapshot;
+			};
+
+			const notifyCatalogListeners = () => {
+				for (const listener of catalogListeners) {
+					try { listener(); } catch (_) {}
+				}
+			};
+
+			const resolveEffectiveCommandBinding = (doc, commandId, fallbackDefaults) => {
+				const overrides = doc?.profiles?.[profileKey] || {};
+				if (Object.prototype.hasOwnProperty.call(overrides, commandId)) {
+					return overrides[commandId] === null ? null : normalizeDesktopShortcutBinding(overrides[commandId], env.platform);
+				}
+				const def = (Array.isArray(definitions) ? definitions.find((d) => d.id === commandId) : null) || { defaults: fallbackDefaults || {} };
+				const candidate = def?.defaults?.[profileKey] ?? fallbackDefaults?.[profileKey];
+				return candidate ? normalizeDesktopShortcutBinding(candidate, env.platform) : null;
+			};
+
+			const syncDocumentToHostPrefs = (doc) => {
+				const conn = activeConnection || localeConnection;
+				if (!conn) return;
+				const nextMap = {};
+				for (const spec of DESKTOP_HOST_SHORTCUT_SPECS) {
+					if (spec.macOnly && !env.isMac) {
+						nextMap[spec.prefKey] = spec.defaultAccel;
+						continue;
+					}
+					const effBinding = resolveEffectiveCommandBinding(doc, spec.commandId, spec.defaults);
+					nextMap[spec.prefKey] = shortcutBindingToWailsAccelerator(effBinding, env.platform);
+				}
+				const nextJson = JSON.stringify(nextMap);
+				lastHostShortcutsJson = nextJson;
+				void callDesktopRPC(conn, "setShortcuts", { shortcuts: nextMap }).catch(() => {});
+			};
+
+			const mergeHostPrefsShortcuts = (hostShortcuts) => {
+				if (!hostShortcuts || typeof hostShortcuts !== "object") return;
+				const incomingJson = JSON.stringify(hostShortcuts);
+				if (incomingJson === lastHostShortcutsJson) return;
+				lastHostShortcutsJson = incomingJson;
+				const currentOverrides = { ...(snapshot.document.profiles?.[profileKey] || {}) };
+				let changed = false;
+				for (const spec of DESKTOP_HOST_SHORTCUT_SPECS) {
+					if (spec.macOnly && !env.isMac) continue;
+					if (!Object.prototype.hasOwnProperty.call(hostShortcuts, spec.prefKey)) continue;
+					const accel = hostShortcuts[spec.prefKey];
+					const parsed = wailsAcceleratorToShortcutBinding(accel, env.platform);
+					if (parsed === undefined) continue;
+					const currentEff = resolveEffectiveCommandBinding(snapshot.document, spec.commandId, spec.defaults);
+					const sameAsCurrent = (parsed === null && currentEff === null) ||
+						(parsed !== null && currentEff !== null && desktopBindingKey(parsed, env.platform) === desktopBindingKey(currentEff, env.platform));
+					if (sameAsCurrent) continue;
+					const defaultBinding = normalizeDesktopShortcutBinding(spec.defaults[profileKey], env.platform);
+					const sameAsDefault = parsed !== null && defaultBinding !== null &&
+						desktopBindingKey(parsed, env.platform) === desktopBindingKey(defaultBinding, env.platform);
+					if (sameAsDefault) {
+						if (Object.prototype.hasOwnProperty.call(currentOverrides, spec.commandId)) {
+							delete currentOverrides[spec.commandId];
+							changed = true;
+						}
+					} else {
+						currentOverrides[spec.commandId] = parsed;
+						changed = true;
+					}
+				}
+				if (!changed) return;
+				const nextDoc = {
+					schemaVersion: 2,
+					profiles: {
+						...snapshot.document.profiles,
+						[profileKey]: currentOverrides
+					}
+				};
+				writeStoredDocument(nextDoc);
+				publishConfigSnapshot(nextDoc, false);
+			};
+
+			const computeEffectiveRows = (defs, doc) => {
+				const overrides = doc?.profiles?.[profileKey] || {};
+				const fixed = (defs || []).flatMap((row) =>
+					Array.isArray(row.fixed)
+						? row.fixed.map((b) => ({ id: row.id, binding: normalizeDesktopShortcutBinding(b, env.platform) })).filter((r) => r.binding)
+						: []
+				);
+				const rows = (defs || []).filter((row) => row.fixed === undefined).map((row) => {
+					const modified = Object.prototype.hasOwnProperty.call(overrides, row.id);
+					const candidate = modified ? overrides[row.id] : row.defaults?.[profileKey];
+					const binding = candidate == null ? null : normalizeDesktopShortcutBinding(candidate, env.platform);
+					return {
+						id: row.id,
+						binding,
+						modified,
+						issue: null
+					};
+				});
+				return rows.map((row) => {
+					const binding = row.binding;
+					if (!binding) return { ...row, conflicts: [] };
+					const cmdConflicts = rows
+						.filter((other) => other.id !== row.id && other.binding !== null && desktopBindingsOverlap(other.binding, binding, env.platform) && (!row.modified || other.modified))
+						.map((other) => other.id);
+					const fixedConflicts = fixed
+						.filter((other) => desktopBindingsOverlap(other.binding, binding, env.platform))
+						.map((other) => other.id);
+					return {
+						...row,
+						conflicts: [...new Set([...cmdConflicts, ...fixedConflicts])]
+					};
+				});
+			};
+
+			const desktopShortcutsApi = {
+				get(nextDefinitions) {
+					if (Array.isArray(nextDefinitions)) {
+						definitions = nextDefinitions;
+					}
+					const fresh = readStoredDocument();
+					const nextSnap = publishConfigSnapshot(fresh.doc, !fresh.fromStorage && Object.keys(fresh.doc.profiles || {}).length === 0);
+					return Promise.resolve(nextSnap);
+				},
+				edit(editOp, reviewedRevision) {
+					if (!editOp || typeof editOp !== "object") {
+						return Promise.resolve({ status: "not-ready", snapshot });
+					}
+					if (reviewedRevision !== snapshot.revision) {
+						return Promise.resolve({ status: "stale", snapshot });
+					}
+					let overrides = { ...(snapshot.document.profiles?.[profileKey] || {}) };
+					if (editOp.type === "set") {
+						overrides[editOp.id] = editOp.binding === null ? null : normalizeDesktopShortcutBinding(editOp.binding, env.platform);
+					} else if (editOp.type === "reset") {
+						delete overrides[editOp.id];
+					} else if (editOp.type === "reset-all") {
+						overrides = {};
+					} else {
+						return Promise.resolve({ status: "not-ready", snapshot });
+					}
+					const nextDoc = {
+						schemaVersion: 2,
+						profiles: {
+							...snapshot.document.profiles,
+							[profileKey]: overrides
+						}
+					};
+					const rows = computeEffectiveRows(definitions, nextDoc);
+					const invalid = rows.find((row) => (editOp.type === "reset-all" || row.id === editOp.id) && (row.issue !== null || row.conflicts.length > 0));
+					const displaced = editOp.type === "set" ? rows.find((row) => row.conflicts.includes(editOp.id)) : undefined;
+					if (invalid !== undefined || displaced !== undefined) {
+						return Promise.resolve({
+							status: "conflict",
+							snapshot,
+							...(invalid?.issue ? { issue: invalid.issue } : {}),
+							conflicts: invalid?.conflicts?.length ? invalid.conflicts : displaced === undefined ? [] : [displaced.id]
+						});
+					}
+					writeStoredDocument(nextDoc);
+					const savedSnap = publishConfigSnapshot(nextDoc, false);
+					syncDocumentToHostPrefs(nextDoc);
+					return Promise.resolve({ status: "saved", snapshot: savedSnap });
+				},
+				subscribe(listener) {
+					if (typeof listener !== "function") return () => {};
+					configListeners.add(listener);
+					return () => {
+						configListeners.delete(listener);
+					};
+				},
+				recording(active) {
+					isRecording = Boolean(active);
+					const conn = activeConnection || localeConnection;
+					if (conn) {
+						void callDesktopRPC(conn, "setShortcutsRecording", { active: isRecording }).catch(() => {});
+					}
+					return Promise.resolve();
+				}
+			};
+
+			const desktopKeyboardApi = {
+				closeWindow() {
+					const conn = activeConnection || localeConnection;
+					if (!conn) return Promise.resolve();
+					return callDesktopRPC(conn, "shortcutAction", { action: "closeChat" }).then(() => undefined).catch(() => undefined);
+				},
+				subscribe(listener) {
+					nativeKeyboardListener = typeof listener === "function" ? listener : null;
+					if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+						return () => {
+							if (nativeKeyboardListener === listener) nativeKeyboardListener = null;
+						};
+					}
+					const heldCodes = new Set();
+					const isModifierCode = (code) => /^(Control|Alt|Shift|Meta|OS)(Left|Right)?$/u.test(String(code || ""));
+					const isInsideShortcutRecorder = () => {
+						try {
+							const active = typeof document !== "undefined" ? document.activeElement : null;
+							return Boolean(active && typeof active.closest === "function" && active.closest('[data-shortcut-modal="shortcut-edit"]'));
+						} catch (_) {
+							return false;
+						}
+					};
+					const onKeyDown = (event) => {
+						if (!nativeKeyboardListener) return;
+						if (isRecording || isInsideShortcutRecorder()) {
+							heldCodes.clear();
+							return;
+						}
+						if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key === "Dead" || (typeof event.getModifierState === "function" && event.getModifierState("AltGraph"))) {
+							heldCodes.clear();
+							return;
+						}
+						const code = String(event.code || "");
+						if (!code || isModifierCode(code)) return;
+						const priorCodes = [...heldCodes].filter((c) => c !== code);
+						heldCodes.add(code);
+						const secondCode = priorCodes.length === 1 ? priorCodes[0] : undefined;
+						const prevEvent = currentDOMKeyEvent;
+						currentDOMKeyEvent = event;
+						try {
+							nativeKeyboardListener({
+								revision: snapshot.revision,
+								kind: "keyboard",
+								frameName: "",
+								code,
+								...(secondCode ? { secondCode } : {}),
+								control: Boolean(event.ctrlKey),
+								alt: Boolean(event.altKey),
+								shift: Boolean(event.shiftKey),
+								meta: Boolean(event.metaKey),
+								repeat: Boolean(event.repeat)
+							});
+						} finally {
+							currentDOMKeyEvent = prevEvent;
+						}
+					};
+					const onKeyUp = (event) => {
+						const code = String(event?.code || "");
+						if (code) heldCodes.delete(code);
+						if (env.platform === "macos" && /^Meta(Left|Right)?$/u.test(code)) {
+							heldCodes.clear();
+						}
+					};
+					const onBlur = () => {
+						heldCodes.clear();
+					};
+					window.addEventListener("keydown", onKeyDown, true);
+					window.addEventListener("keyup", onKeyUp, true);
+					window.addEventListener("blur", onBlur);
+					window.__DSH_DESKTOP_MENU_COMMAND__ = (commandId) => {
+						if (!nativeKeyboardListener || typeof commandId !== "string" || !commandId) return false;
+						nativeKeyboardListener({
+							revision: snapshot.revision,
+							kind: "menu",
+							commandId
+						});
+						return true;
+					};
+					return () => {
+						if (nativeKeyboardListener === listener) nativeKeyboardListener = null;
+						window.removeEventListener("keydown", onKeyDown, true);
+						window.removeEventListener("keyup", onKeyUp, true);
+						window.removeEventListener("blur", onBlur);
+						if (window.__DSH_DESKTOP_MENU_COMMAND__) delete window.__DSH_DESKTOP_MENU_COMMAND__;
+					};
+				}
+			};
+
+			const attachServiceInstance = (instance) => {
+				if (!instance || serviceInstance === instance) return;
+				serviceInstance = instance;
+				if (typeof globalThis !== "undefined" && globalThis.__DSH_DESKTOP_SHORTCUTS_PROXY__) {
+					globalThis.__DSH_DESKTOP_SHORTCUTS_PROXY__.service = instance;
+				}
+				if (typeof window !== "undefined" && window.__DSH_DESKTOP_SHORTCUTS_PROXY__) {
+					window.__DSH_DESKTOP_SHORTCUTS_PROXY__.service = instance;
+				}
+				// 包装 registry.dispatch：当快捷键真正消费事件（handled / blocked）时同步阻止 DOM 默认行为，
+				// 返回 pass 或未命中时保持原样放行，确保输入框与终端按键不受干扰。
+				const registry = instance.registry;
+				if (registry && typeof registry.dispatch === "function" && !registry.__dshDesktopDispatchWrapped) {
+					const origDispatch = registry.dispatch.bind(registry);
+					registry.__dshDesktopDispatchWrapped = true;
+					registry.dispatch = (gesture, context, consume) => {
+						const domEvent = currentDOMKeyEvent;
+						const wrappedConsume = () => {
+							if (typeof consume === "function") consume();
+							if (domEvent) {
+								if (typeof domEvent.preventDefault === "function") domEvent.preventDefault();
+								if (typeof domEvent.stopPropagation === "function") domEvent.stopPropagation();
+							}
+						};
+						return origDispatch(gesture, context, wrappedConsume);
+					};
+				}
+				if (typeof catalogUnsubscribe === "function") {
+					try { catalogUnsubscribe(); } catch (_) {}
+					catalogUnsubscribe = null;
+				}
+				if (instance.catalog && typeof instance.catalog.subscribe === "function") {
+					catalogUnsubscribe = instance.catalog.subscribe(() => {
+						notifyCatalogListeners();
+					});
+				}
+				try {
+					registerDesktopCommands(instance, instance.ctx);
+				} catch (_) {}
+				notifyCatalogListeners();
+				for (const listener of serviceListeners) {
+					try { listener(instance); } catch (_) {}
+				}
+			};
+
+			const wrapShortcutsModuleFactory = (origFactory, req) => {
+				const mod = origFactory(req);
+				const OrigService = typeof mod === "function" ? mod : (mod?.ShortcutsService || mod?.default);
+				if (typeof OrigService !== "function") return mod;
+				class DesktopBridgedShortcutsService extends OrigService {
+					constructor(ctx) {
+						const docEl = typeof document !== "undefined" ? document.documentElement : null;
+						const hadPlatformAttr = docEl && typeof docEl.hasAttribute === "function" ? docEl.hasAttribute("data-platform") : false;
+						const prevPlatformAttr = docEl && hadPlatformAttr && typeof docEl.getAttribute === "function" ? docEl.getAttribute("data-platform") : null;
+						const prevDatasetPlatform = docEl?.dataset ? docEl.dataset.platform : undefined;
+						const hadDshDesktop = typeof window !== "undefined" && Object.prototype.hasOwnProperty.call(window, "dshDesktop");
+						const prevDshDesktop = typeof window !== "undefined" ? window.dshDesktop : undefined;
+						if (docEl?.dataset) {
+							docEl.dataset.platform = env.datasetPlatform;
+						} else if (docEl && typeof docEl.setAttribute === "function") {
+							docEl.setAttribute("data-platform", env.datasetPlatform);
+						}
+						if (typeof window !== "undefined") {
+							window.dshDesktop = {
+								...(prevDshDesktop && typeof prevDshDesktop === "object" ? prevDshDesktop : {}),
+								shortcuts: desktopShortcutsApi,
+								keyboard: desktopKeyboardApi
+							};
+						}
+						try {
+							super(ctx);
+						} finally {
+							// 构造完成后立即恢复 document.documentElement.dataset.platform 与 window.dshDesktop，
+							// 严防影响 @deepseek-ai/dsh-client-ui-layout（84px 交通灯宽度）及账号/模型等其它插件。
+							if (docEl?.dataset) {
+								if (hadPlatformAttr && prevPlatformAttr !== null) {
+									docEl.dataset.platform = prevPlatformAttr;
+								} else if (prevDatasetPlatform !== undefined) {
+									docEl.dataset.platform = prevDatasetPlatform;
+								} else {
+									try { delete docEl.dataset.platform; } catch (_) {}
+									if (typeof docEl.removeAttribute === "function") {
+										docEl.removeAttribute("data-platform");
+									}
+								}
+							} else if (docEl && typeof docEl.removeAttribute === "function") {
+								if (hadPlatformAttr && prevPlatformAttr !== null) {
+									docEl.setAttribute("data-platform", prevPlatformAttr);
+								} else {
+									docEl.removeAttribute("data-platform");
+								}
+							}
+							if (typeof window !== "undefined") {
+								if (hadDshDesktop) {
+									window.dshDesktop = prevDshDesktop;
+								} else {
+									delete window.dshDesktop;
+								}
+							}
+						}
+						if (!this.ctx && ctx) {
+							this.ctx = ctx;
+						}
+						attachServiceInstance(this);
+					}
+					register(command) {
+						if (command && typeof command.id === "string" && command.id.startsWith("desktop.") && command.defaults && command.defaults["desktop:linux"]) {
+							const linuxDefault = command.defaults["desktop:linux"];
+							const safeDefaults = { ...command.defaults };
+							delete safeDefaults["desktop:linux"];
+							const patchedCommand = { ...command, defaults: safeDefaults };
+							const dispose = super.register(patchedCommand);
+							patchedCommand.defaults["desktop:linux"] = linuxDefault;
+							if (this.registry && typeof this.registry.refreshLabels === "function") {
+								this.registry.refreshLabels();
+							}
+							if (typeof this.syncDefinitions === "function") {
+								try { this.syncDefinitions(); } catch (_) {}
+							}
+							return dispose;
+						}
+						return super.register(command);
+					}
+				}
+				for (const key of Object.keys(OrigService)) {
+					try {
+						DesktopBridgedShortcutsService[key] = OrigService[key];
+					} catch (_) {}
+				}
+				DesktopBridgedShortcutsService.ShortcutsService = DesktopBridgedShortcutsService;
+				DesktopBridgedShortcutsService.default = DesktopBridgedShortcutsService;
+				if (typeof mod === "function") {
+					return DesktopBridgedShortcutsService;
+				}
+				const wrappedMod = Object.create(null);
+				Object.defineProperty(wrappedMod, Symbol.toStringTag, { value: "Module" });
+				for (const key of Object.keys(mod)) {
+					wrappedMod[key] = mod[key];
+				}
+				wrappedMod.ShortcutsService = DesktopBridgedShortcutsService;
+				wrappedMod.default = DesktopBridgedShortcutsService;
+				return wrappedMod;
+			};
+
+			const registerDesktopCommands = (service, ctx) => {
+				if (!service || typeof service.register !== "function") return () => {};
+				if (typeof service.__dshDesktopCommandsDispose === "function") {
+					return service.__dshDesktopCommandsDispose;
+				}
+				if (typeof service.__dshDesktopBootCommandsDispose === "function") {
+					try { service.__dshDesktopBootCommandsDispose(); } catch (_) {}
+				}
+				const effectiveCtx = ctx || service.ctx;
+				const disposers = [];
+				for (const spec of DESKTOP_HOST_SHORTCUT_SPECS) {
+					if (spec.builtin) continue;
+					if (spec.macOnly && !env.isMac) continue;
+					try {
+						const dispose = service.register({
+							id: spec.commandId,
+							label: () => {
+								const fromCatalog = localeCatalog[spec.labelKey];
+								if (fromCatalog != null && fromCatalog !== "") return String(fromCatalog);
+								const snap = (ctx || service.ctx)?.locale?.getSnapshot?.();
+								const snapLang = typeof snap === "string" ? snap : (typeof snap?.active === "string" ? snap.active : "");
+								const docLang = typeof document !== "undefined" ? (document.documentElement?.lang || "") : "";
+								const activeLang = localeCode || snapLang || docLang || (typeof navigator !== "undefined" ? navigator.language : "") || "";
+								return String(activeLang).toLowerCase().startsWith("zh") ? spec.fallbackZh : spec.fallbackEn;
+							},
+							aliases: [...spec.aliases],
+							defaults: { ...spec.defaults },
+							regions: ["page", "editable", "terminal"],
+							modals: ["settings", "shortcuts", "other"],
+							resolve: () => ({
+								status: "handled",
+								run: () => {
+									const conn = (ctx || service.ctx)?.connection || activeConnection || localeConnection;
+									if (!conn) return;
+									if (spec.prefKey === "quit") {
+										void callDesktopRPC(conn, "shortcutAction", { action: "quit" }).catch(() => {});
+									}
+								}
+							})
+						});
+						if (typeof dispose === "function") disposers.push(dispose);
+					} catch (_) { /* ignore duplicate registration during HMR */ }
+				}
+				const offLocale = onLocaleChange(() => {
+					if (service.registry && typeof service.registry.refreshLabels === "function") {
+						try { service.registry.refreshLabels(); } catch (_) {}
+					}
+				});
+				if (typeof offLocale === "function") disposers.push(offLocale);
+				if (effectiveCtx?.locale && typeof effectiveCtx.locale.subscribe === "function") {
+					try {
+						const offDshLocale = effectiveCtx.locale.subscribe(() => {
+							if (service.registry && typeof service.registry.refreshLabels === "function") {
+								try { service.registry.refreshLabels(); } catch (_) {}
+							}
+						});
+						if (typeof offDshLocale === "function") disposers.push(offDshLocale);
+					} catch (_) {}
+				}
+				const disposeAll = () => {
+					delete service.__dshDesktopCommandsDispose;
+					for (const fn of disposers.splice(0, disposers.length)) {
+						try { fn(); } catch (_) {}
+					}
+				};
+				service.__dshDesktopCommandsDispose = disposeAll;
+				if (serviceInstance !== service) {
+					attachServiceInstance(service);
+				} else {
+					notifyCatalogListeners();
+				}
+				return disposeAll;
+			};
+
+			return {
+				env,
+				profileKey,
+				shortcutsApi: desktopShortcutsApi,
+				keyboardApi: desktopKeyboardApi,
+				wrapShortcutsModuleFactory,
+				attachServiceInstance,
+				registerDesktopCommands,
+				setConnection(conn) {
+					activeConnection = conn;
+					if (conn) {
+						void callDesktopRPC(conn, "setShortcutsRecording", { active: isRecording }).catch(() => {});
+					}
+				},
+				publishHostPrefs(prefs) {
+					if (prefs && prefs.shortcuts && typeof prefs.shortcuts === "object") {
+						mergeHostPrefsShortcuts(prefs.shortcuts);
+					}
+				},
+				getCatalogSnapshot() {
+					try {
+						const rows = serviceInstance?.catalog?.getSnapshot?.();
+						return Array.isArray(rows) ? rows : null;
+					} catch (_) {
+						return null;
+					}
+				},
+				subscribeCatalog(listener) {
+					if (typeof listener !== "function") return () => {};
+					catalogListeners.add(listener);
+					return () => {
+						catalogListeners.delete(listener);
+					};
+				},
+				subscribeService(listener) {
+					if (typeof listener !== "function") return () => {};
+					serviceListeners.add(listener);
+					return () => {
+						serviceListeners.delete(listener);
+					};
+				},
+				getService() {
+					return serviceInstance;
+				}
+			};
+		})();
+
+		const bootShortcutsProxy = (typeof globalThis !== "undefined" && globalThis.__DSH_DESKTOP_SHORTCUTS_PROXY__) ||
+			(typeof window !== "undefined" && window.__DSH_DESKTOP_SHORTCUTS_PROXY__) || null;
+		if (bootShortcutsProxy && typeof bootShortcutsProxy === "object") {
+			bootShortcutsProxy.delegate = {
+				shortcuts: desktopShortcutsController.shortcutsApi,
+				keyboard: desktopShortcutsController.keyboardApi,
+				attachService: desktopShortcutsController.attachServiceInstance
+			};
+			if (Array.isArray(bootShortcutsProxy.configListeners)) {
+				for (const fn of bootShortcutsProxy.configListeners) {
+					if (typeof fn === "function") desktopShortcutsController.shortcutsApi.subscribe(fn);
+				}
+			}
+			if (Array.isArray(bootShortcutsProxy.keyboardListeners)) {
+				for (const fn of bootShortcutsProxy.keyboardListeners) {
+					if (typeof fn === "function") desktopShortcutsController.keyboardApi.subscribe(fn);
+				}
+			}
+			if (Array.isArray(bootShortcutsProxy.pendingGets)) {
+				for (const item of bootShortcutsProxy.pendingGets.splice(0, bootShortcutsProxy.pendingGets.length)) {
+					if (item && typeof item.resolve === "function") {
+						Promise.resolve(desktopShortcutsController.shortcutsApi.get(item.defs)).then(item.resolve);
+					}
+				}
+			}
+			if (bootShortcutsProxy.service) {
+				desktopShortcutsController.attachServiceInstance(bootShortcutsProxy.service);
+			}
+		}
+
+		if (typeof globalThis !== "undefined") {
+			globalThis.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY_IMPL__ = desktopShortcutsController.wrapShortcutsModuleFactory;
+			globalThis.__DSH_DESKTOP_SHORTCUTS_CONTROLLER__ = desktopShortcutsController;
+		}
+		if (typeof window !== "undefined") {
+			window.__DSH_DESKTOP_WRAP_SHORTCUTS_FACTORY_IMPL__ = desktopShortcutsController.wrapShortcutsModuleFactory;
+			window.__DSH_DESKTOP_SHORTCUTS_CONTROLLER__ = desktopShortcutsController;
 		}
 
 		function installClipboardFallback() {
@@ -203,9 +1190,12 @@ window.__ModuleLoader__.load({
 		if (typeof window !== "undefined" && typeof window[DELETE_SESSION_ACTIONS_GLOBAL] !== "boolean") {
 			window[DELETE_SESSION_ACTIONS_GLOBAL] = true;
 		}
+		let deleteSessionActionsPublished = false;
 		function publishDeleteSessionActions(value) {
 			if (typeof value?.deleteSessionActions !== "boolean" || typeof window === "undefined") return;
 			const enabled = value.deleteSessionActions;
+			if (deleteSessionActionsPublished && window[DELETE_SESSION_ACTIONS_GLOBAL] === enabled) return;
+			deleteSessionActionsPublished = true;
 			window[DELETE_SESSION_ACTIONS_GLOBAL] = enabled;
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(DELETE_SESSION_ACTIONS_EVENT, { detail: enabled }));
@@ -217,9 +1207,12 @@ window.__ModuleLoader__.load({
 		if (typeof window !== "undefined" && typeof window[HOVER_MESSAGE_ACTIONS_GLOBAL] !== "boolean") {
 			window[HOVER_MESSAGE_ACTIONS_GLOBAL] = true;
 		}
+		let hoverMessageActionsPublished = false;
 		function publishHoverMessageActions(value) {
 			if (typeof value?.hoverMessageActions !== "boolean" || typeof window === "undefined") return;
 			const enabled = value.hoverMessageActions;
+			if (hoverMessageActionsPublished && window[HOVER_MESSAGE_ACTIONS_GLOBAL] === enabled) return;
+			hoverMessageActionsPublished = true;
 			window[HOVER_MESSAGE_ACTIONS_GLOBAL] = enabled;
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(HOVER_MESSAGE_ACTIONS_EVENT, { detail: enabled }));
@@ -2644,6 +3637,7 @@ window.__ModuleLoader__.load({
 					for (const record of records || []) {
 						const target = record && record.target;
 						if (!target || (state.host && (target === state.host || (state.host.contains && state.host.contains(target))))) continue;
+						if (typeof target.closest === "function" && target.closest("[data-shortcut-modal]")) continue;
 						// Prompt previews are assembled in detached subtrees before the host is mounted.
 						// Browser MutationObserver delivery is asynchronous, but the replay harness and some
 						// WebView shims can invoke callbacks during appendChild; do not schedule a re-entrant
@@ -2714,9 +3708,12 @@ window.__ModuleLoader__.load({
 		if (typeof window !== "undefined" && typeof window[CHAT_CONTENT_VISIBILITY_GLOBAL] !== "boolean") {
 			window[CHAT_CONTENT_VISIBILITY_GLOBAL] = true;
 		}
+		let chatContentVisibilityPublished = false;
 		function publishChatContentVisibility(value) {
 			if (typeof value?.chatContentVisibility !== "boolean" || typeof window === "undefined") return;
 			const enabled = value.chatContentVisibility;
+			if (chatContentVisibilityPublished && window[CHAT_CONTENT_VISIBILITY_GLOBAL] === enabled) return;
+			chatContentVisibilityPublished = true;
 			window[CHAT_CONTENT_VISIBILITY_GLOBAL] = enabled;
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(CHAT_CONTENT_VISIBILITY_EVENT, { detail: enabled }));
@@ -3093,57 +4090,6 @@ window.__ModuleLoader__.load({
 					color: var(--dsw-alias-label-primary-foreground) !important;
 					opacity: 1;
 				}
-				.dshDesktopBridgeShortcutRow {
-					display: flex;
-					align-items: center;
-					justify-content: space-between;
-					gap: 12px;
-					padding: 10px 0;
-					border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,.18));
-				}
-				.dshDesktopBridgeShortcutRow:last-child { border-bottom: none; }
-				.dshDesktopBridgeKbd {
-					font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-					font-size: 12px;
-					padding: 3px 8px;
-					border-radius: 6px;
-					border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,.28));
-					background: var(--dsw-alias-bg-module-platform, rgba(127,127,127,.08));
-					color: var(--dsw-alias-label-primary);
-					white-space: nowrap;
-					min-width: 4.5em;
-					text-align: center;
-					cursor: pointer;
-					user-select: none;
-				}
-				.dshDesktopBridgeKbd:hover {
-					border-color: var(--dsw-alias-brand-primary, #3b82f6);
-				}
-				.dshDesktopBridgeKbd.is-cleared {
-					color: var(--dsw-alias-label-tertiary);
-					font-style: italic;
-					border-style: dashed;
-				}
-				.dshDesktopBridgeKbd.is-recording {
-					color: var(--dsw-alias-brand-primary, #3b82f6);
-					border-color: var(--dsw-alias-brand-primary, #3b82f6);
-					border-style: solid;
-					font-style: normal;
-					box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
-				}
-				.dshDesktopBridgeShortcutActions {
-					display: flex;
-					align-items: center;
-					gap: 8px;
-					flex: none;
-				}
-				.dshDesktopBridgeShortcutActions button {
-					height: 28px;
-					padding: 0 10px;
-					font-size: 12px;
-					border-radius: 14px;
-				}
-
 				.dshDesktopBridgePillSelect {
 					position: relative;
 					flex: none;
@@ -3594,19 +4540,37 @@ window.__ModuleLoader__.load({
 		}
 		function installDesktopNavIcon() {
 			if (typeof document === "undefined") return () => {};
-			const paint = () => {
-				const labels = document.querySelectorAll("button, [role='button'], div, span");
-				const accepted = desktopNavLabels();
+			const paintCandidates = (labels, accepted) => {
+				let painted = false;
 				for (const el of labels) {
 					if (el.children && el.children.length > 4) continue;
 					if (!accepted.includes((el.textContent || "").trim())) continue;
 					const row = el.closest("button") || el.parentElement;
 					if (!row) continue;
 					const existing = row.querySelector("svg.dshDesktopBridgeNavIcon");
-					if (existing) continue;
+					if (existing) {
+						painted = true;
+						continue;
+					}
 					const oldSvg = row.querySelector("svg");
 					if (!oldSvg) continue;
 					oldSvg.replaceWith(desktopNavIconSVG(oldSvg.getAttribute("class") || ""));
+					painted = true;
+				}
+				return painted;
+			};
+			const paint = () => {
+				if (typeof document.querySelector === "function" && document.querySelector("svg.dshDesktopBridgeNavIcon")) {
+					return;
+				}
+				const accepted = desktopNavLabels();
+				const buttons = document.querySelectorAll("nav button, [data-shortcut-modal='settings'] button, button, [role='button']");
+				if (paintCandidates(buttons, accepted)) return;
+				// 仅在小型合成测试 DOM（不含大量会话 div/span）中回退扫描 div, span，
+				// 避免在真实长会话页面对成千上万个节点逐个读取 textContent。
+				const fallback = document.querySelectorAll("div, span");
+				if (fallback && fallback.length <= 240) {
+					paintCandidates(fallback, accepted);
 				}
 			};
 			paint();
@@ -3625,10 +4589,17 @@ window.__ModuleLoader__.load({
 				};
 				const relevant = (records || []).some((record) => {
 					const target = record?.target;
-					// Detached prompt-preview subtrees are assembled before they are mounted. Real
-					// MutationObserver delivery sees them after mounting, while synchronous replay shims
-					// can deliver each append immediately; neither should repaint the nav row.
-					if (!isConnected(target) || target === document.body) return false;
+					if (!isConnected(target)) return false;
+					if (target === document.body) {
+						const added = record?.addedNodes;
+						if (!added || !added.length) return false;
+						for (const node of added) {
+							if (node && node.nodeType === 1 && !node.hasAttribute?.(PROMPT_OVERLAY_ATTR)) {
+								return true;
+							}
+						}
+						return false;
+					}
 					return !(target.hasAttribute?.(PROMPT_OVERLAY_ATTR) || target.closest?.("[" + PROMPT_OVERLAY_ATTR + "]"));
 				});
 				if (relevant) paint();
@@ -4277,54 +5248,6 @@ window.__ModuleLoader__.load({
 			};
 		}
 
-		function keyboardEventToAccelerator(event, isMac) {
-			const code = event.code || "";
-			const key = event.key || "";
-			if (key === "Escape" || code === "Escape") return { cancel: true };
-			const modifierCodes = new Set([
-				"ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
-				"AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight"
-			]);
-			if (modifierCodes.has(code) || key === "Shift" || key === "Control" || key === "Alt" || key === "Meta") {
-				return null;
-			}
-			let keyToken = "";
-			if (/^Key[A-Z]$/.test(code)) keyToken = code.slice(3).toLowerCase();
-			else if (/^Digit[0-9]$/.test(code)) keyToken = code.slice(5);
-			else if (/^Numpad[0-9]$/.test(code)) keyToken = code.slice(6);
-			else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) keyToken = code;
-			else {
-				const codeMap = {
-					Comma: ",", Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]",
-					Semicolon: ";", Quote: "'", Minus: "-", Equal: "=", Backquote: "`",
-					Space: "Space", Tab: "Tab", Enter: "Return", NumpadEnter: "Return",
-					Backspace: "Backspace", Delete: "Delete", Insert: "Insert",
-					ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
-					Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
-					NumpadAdd: "Plus", NumpadSubtract: "-", NumpadMultiply: "*", NumpadDivide: "/",
-					NumpadDecimal: "."
-				};
-				if (Object.prototype.hasOwnProperty.call(codeMap, code)) keyToken = codeMap[code];
-				else if (key.length === 1) {
-					const ch = key.toLowerCase();
-					if (/[a-z0-9]/.test(ch) || "`-=[]\\;',./".includes(ch)) keyToken = ch;
-				}
-			}
-			if (!keyToken) return { invalid: true };
-			const parts = [];
-			if (isMac) {
-				if (event.metaKey) parts.push("CmdOrCtrl");
-				if (event.ctrlKey) parts.push("Control");
-			} else if (event.ctrlKey || event.metaKey) {
-				parts.push("CmdOrCtrl");
-			}
-			if (event.altKey) parts.push("OptionOrAlt");
-			if (event.shiftKey) parts.push("Shift");
-			parts.push(keyToken);
-			return { accel: parts.join("+") };
-		}
-
-
 		function archivedRelativeTime(updatedAt, now) {
 			const MIN = 6e4, HOUR = 36e5, DAY = 864e5;
 			const diff = Math.max(0, now - updatedAt);
@@ -4660,25 +5583,60 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		const desktopSettingsCacheByConnection = typeof WeakMap === "function" ? new WeakMap() : null;
+		const fallbackDesktopSettingsCache = {
+			status: null,
+			prefs: null,
+			update: null,
+			appVersion: "",
+			link: "reconnecting",
+			draft: null,
+			draftSeeded: false
+		};
+		function getDesktopSettingsCache(connection) {
+			if (!desktopSettingsCacheByConnection || !connection || (typeof connection !== "object" && typeof connection !== "function")) {
+				return fallbackDesktopSettingsCache;
+			}
+			let entry = desktopSettingsCacheByConnection.get(connection);
+			if (!entry) {
+				entry = {
+					status: null,
+					prefs: null,
+					update: null,
+					appVersion: "",
+					link: "reconnecting",
+					draft: null,
+					draftSeeded: false
+				};
+				desktopSettingsCacheByConnection.set(connection, entry);
+			}
+			return entry;
+		}
+
 		function DesktopSettingsTab({ connection }) {
 			installStyle();
-			const [status, setStatus] = react.useState(null);
-			const [prefs, setPrefs] = react.useState(null);
-			const [update, setUpdate] = react.useState(null);
-			const [appVersion, setAppVersion] = react.useState("");
-			const [link, setLink] = react.useState("reconnecting");
+			const cache = getDesktopSettingsCache(connection);
+			const [status, setStatus] = react.useState(() => cache.status);
+			const [prefs, setPrefs] = react.useState(() => cache.prefs);
+			const [update, setUpdate] = react.useState(() => cache.update);
+			const [appVersion, setAppVersion] = react.useState(() => cache.appVersion || "");
+			const [link, setLink] = react.useState(() => cache.link || "reconnecting");
 			const [message, setMessage] = react.useState("");
 			const [messageKind, setMessageKind] = react.useState("error");
 			const [pending, setPending] = react.useState(false);
-			const [draft, setDraft] = react.useState({ executable: "", home: "", workspace: "" });
+			const [draft, setDraft] = react.useState(() => cache.draft || { executable: "", home: "", workspace: "" });
 			const [pathsOpen, setPathsOpen] = react.useState(false);
 			const [statusOpen, setStatusOpen] = react.useState(false);
-			const [recordingShortcutId, setRecordingShortcutId] = react.useState(null);
+			const [, setCatalogTick] = react.useState(0);
+			const catalogShortcuts = desktopShortcutsController.getCatalogSnapshot();
 			const [transport, setTransport] = react.useState(typeof window !== "undefined" ? window[TRANSPORT_STATE_GLOBAL] : undefined);
+			react.useEffect(() => desktopShortcutsController.subscribeCatalog(() => {
+				setCatalogTick((tick) => tick + 1);
+			}), []);
 			const backoffRef = react.useRef(1000);
 			const timerRef = react.useRef(null);
 			const linkRef = react.useRef(link);
-			const draftSeededRef = react.useRef(false);
+			const draftSeededRef = react.useRef(Boolean(cache.draftSeeded));
 			const draftDirtyRef = react.useRef(false);
 			linkRef.current = link;
 
@@ -4704,6 +5662,11 @@ window.__ModuleLoader__.load({
 						call("updateStatus", {}, signal),
 						call("appVersion", {}, signal)
 					]);
+					cache.status = nextStatus;
+					cache.prefs = nextPrefs;
+					cache.update = nextUpdate;
+					cache.appVersion = versionPayload?.version || "";
+					cache.link = "connected";
 					setStatus(nextStatus);
 					setPrefs(nextPrefs);
 					publishDeleteSessionActions(nextPrefs);
@@ -4714,15 +5677,19 @@ window.__ModuleLoader__.load({
 					publishEyeCareTheme(nextPrefs);
 					publishFullAgentPresets(nextPrefs);
 					publishThemePreference(nextPrefs);
+					desktopShortcutsController.publishHostPrefs(nextPrefs);
 					setUpdate(nextUpdate);
 					setAppVersion(versionPayload?.version || "");
 					if (syncDraft) {
 						const options = nextStatus?.options || {};
-						setDraft({
+						const nextDraft = {
 							executable: options.executable || "",
 							home: options.home || "",
 							workspace: options.workspace || ""
-						});
+						};
+						cache.draft = nextDraft;
+						cache.draftSeeded = true;
+						setDraft(nextDraft);
 						draftSeededRef.current = true;
 						draftDirtyRef.current = false;
 					}
@@ -4731,7 +5698,9 @@ window.__ModuleLoader__.load({
 					if (clearMessage) setMessage("");
 				} catch (error) {
 					if (error?.name === "AbortError") return;
-					setLink(classifyLinkError(error));
+					const nextLink = classifyLinkError(error);
+					cache.link = nextLink;
+					setLink(nextLink);
 					setMessage(error?.message || t("bridge.err_read_status"));
 					setMessageKind("error");
 				}
@@ -4763,10 +5732,22 @@ window.__ModuleLoader__.load({
 				const looksLikeUpdate = value.autoCheck !== undefined || value.currentVersion !== undefined || value.latestVersion !== undefined || endpoint === "setAutoCheckUpdate" || endpoint === "checkUpdate" || endpoint === "installUpdate" || endpoint === "updateStatus";
 				const looksLikePrefs = value.language !== undefined || value.confirmQuitWhenBusy !== undefined || value.trayEnabled !== undefined || value.closeToTray !== undefined || value.traySessionLimit !== undefined || value.deleteSessionActions !== undefined || value.hoverMessageActions !== undefined || value.chatContentVisibility !== undefined || value.eyeCareTheme !== undefined || value.fullAgentPresets !== undefined || value.themePreference !== undefined || value.promptOverlayMaxLines !== undefined || value.restoreLastSession !== undefined || value.rememberWindowSize !== undefined || value.supported !== undefined || endpoint === "setLanguage" || endpoint === "setConfirmQuitWhenBusy" || endpoint === "setTrayEnabled" || endpoint === "setCloseToTray" || endpoint === "setTraySessionLimit" || endpoint === "setDeleteSessionActions" || endpoint === "setHoverMessageActions" || endpoint === "setChatContentVisibility" || endpoint === "setEyeCareTheme" || endpoint === "setFullAgentPresets" || endpoint === "setThemePreference" || endpoint === "setPromptOverlayMaxLines" || endpoint === "setRestoreLastSession" || endpoint === "setRememberWindowSize" || endpoint === "setShortcuts" || endpoint === "prefs" || value.shortcuts !== undefined;
 				const looksLikeStatus = !looksLikeUpdate && !looksLikePrefs && (value.options !== undefined || processStates.has(value.state) || endpoint === "status" || endpoint === "start" || endpoint === "restart" || endpoint === "stop" || endpoint === "reloadChat");
-				if (looksLikeStatus) setStatus(value);
-				if (looksLikePrefs) setPrefs(value);
-				if (looksLikeUpdate) setUpdate(value);
-				if (value.version && endpoint === "appVersion") setAppVersion(value.version);
+				if (looksLikeStatus) {
+					cache.status = value;
+					setStatus(value);
+				}
+				if (looksLikePrefs) {
+					cache.prefs = value;
+					setPrefs(value);
+				}
+				if (looksLikeUpdate) {
+					cache.update = value;
+					setUpdate(value);
+				}
+				if (value.version && endpoint === "appVersion") {
+					cache.appVersion = value.version;
+					setAppVersion(value.version);
+				}
 				publishDeleteSessionActions(value);
 				publishHoverMessageActions(value);
 				publishPromptOverlayLanguage(value);
@@ -4775,6 +5756,7 @@ window.__ModuleLoader__.load({
 				publishEyeCareTheme(value);
 				publishFullAgentPresets(value);
 				publishThemePreference(value);
+				desktopShortcutsController.publishHostPrefs(value);
 				if (value.path) {
 					const key = endpoint === "chooseExecutable" ? "executable" : endpoint === "chooseHome" ? "home" : endpoint === "chooseWorkspace" ? "workspace" : "";
 					if (key) {
@@ -4829,15 +5811,6 @@ window.__ModuleLoader__.load({
 				hide: "CmdOrCtrl+h",
 				hideOthers: "CmdOrCtrl+OptionOrAlt+h"
 			};
-			const SHORTCUT_LABEL_KEYS = {
-				openSettings: "shortcut.open_settings_label",
-				closeChat: "shortcut.close_chat_label",
-				quit: "shortcut.quit_label",
-				hide: "shortcut.hide_label",
-				hideOthers: "shortcut.hide_others_label"
-			};
-			// A shortcut id without a catalog entry still renders itself instead of a blank row.
-			const shortcutLabel = (id) => (SHORTCUT_LABEL_KEYS[id] ? t(SHORTCUT_LABEL_KEYS[id]) : id);
 			const formatAccel = (accel) => {
 				if (accel == null || accel === "") return "";
 				let s = String(accel);
@@ -4853,63 +5826,15 @@ window.__ModuleLoader__.load({
 				return s;
 			};
 			const shortcutMap = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
-			const shortcutIds = ["openSettings", "closeChat", "quit", "hide", "hideOthers"].filter((id) => {
-				if (id === "hide" || id === "hideOthers") return isMac;
-				return true;
-			});
-			const setOneShortcut = (id, value) => {
-				const next = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
-				next[id] = value;
-				return invoke("setShortcuts", { shortcuts: next });
-			};
-			const normalizeAccelCompare = (accel) => String(accel || "").trim().toLowerCase();
-			react.useEffect(() => {
-				if (!recordingShortcutId) return undefined;
-				const onKey = (event) => {
-					event.preventDefault();
-					event.stopPropagation();
-					const parsed = keyboardEventToAccelerator(event, isMac);
-					if (!parsed) return;
-					if (parsed.cancel) {
-						setRecordingShortcutId(null);
-						return;
-					}
-					if (parsed.invalid || !parsed.accel) {
-						setMessage(t("shortcut.invalid"));
-						setMessageKind("error");
-						return;
-					}
-					const id = recordingShortcutId;
-					const current = Object.assign({}, DEFAULT_SHORTCUTS, prefs?.shortcuts || {});
-					const want = normalizeAccelCompare(parsed.accel);
-					for (const otherId of Object.keys(current)) {
-						if (otherId === id) continue;
-						if (normalizeAccelCompare(current[otherId]) === want && current[otherId] !== "") {
-							setMessage(t("shortcut.conflict", shortcutLabel(otherId)));
-							setMessageKind("error");
-							return;
-						}
-					}
-					setRecordingShortcutId(null);
-					void setOneShortcut(id, parsed.accel);
-				};
-				window.addEventListener("keydown", onKey, true);
-				return () => window.removeEventListener("keydown", onKey, true);
-			}, [recordingShortcutId, isMac, prefs]);
-			react.useEffect(() => {
-				if (!recordingShortcutId) return undefined;
-				const onPointerDown = (event) => {
-					if (event.button != null && event.button !== 0) return;
-					const el = event.target;
-					if (el && typeof el.closest === "function" && el.closest(".dshDesktopBridgeKbd.is-recording")) {
-						return;
-					}
-					setRecordingShortcutId(null);
-				};
-				window.addEventListener("pointerdown", onPointerDown, true);
-				return () => window.removeEventListener("pointerdown", onPointerDown, true);
-			}, [recordingShortcutId]);
+			// 优先从 DSH 原生 ctx.shortcuts.catalog 实时读取当前生效快捷键，未挂载时回退 prefs.shortcuts。
 			const boundShortcutLabel = (id) => {
+				const spec = DESKTOP_HOST_SHORTCUT_SPECS.find((item) => item.prefKey === id);
+				if (spec && Array.isArray(catalogShortcuts)) {
+					const row = catalogShortcuts.find((entry) => entry && entry.id === spec.commandId);
+					if (row && Array.isArray(row.keys)) {
+						return row.keys.length > 0 ? row.keys.join("") : "";
+					}
+				}
 				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : (DEFAULT_SHORTCUTS[id] || "");
 				if (!accel) return "";
 				return formatAccel(accel) || accel;
@@ -4925,63 +5850,6 @@ window.__ModuleLoader__.load({
 				if (at < 0) return template;
 				return [template.slice(0, at), inlineShortcut(id, label), template.slice(at + 3)];
 			};
-			const shortcutRows = shortcutIds.map((id) => {
-				const accel = Object.prototype.hasOwnProperty.call(shortcutMap, id) ? shortcutMap[id] : DEFAULT_SHORTCUTS[id];
-				const defaultAccel = DEFAULT_SHORTCUTS[id] || "";
-				const cleared = accel === "";
-				const isDefault = normalizeAccelCompare(accel) === normalizeAccelCompare(defaultAccel);
-				const recording = recordingShortcutId === id;
-				return jsxs("div", {
-					className: "dshDesktopBridgeShortcutRow",
-					key: id,
-					children: [
-						jsx("div", { className: "dshDesktopBridgeTitle", children: shortcutLabel(id) }),
-						jsxs("div", {
-							className: "dshDesktopBridgeShortcutActions",
-							children: [
-								jsx("kbd", {
-									className: "dshDesktopBridgeKbd" + (cleared && !recording ? " is-cleared" : "") + (recording ? " is-recording" : ""),
-									role: "button",
-									tabIndex: 0,
-									title: t("shortcut.recording"),
-									onClick: () => {
-										if (!connected || pending || !prefs) return;
-										setRecordingShortcutId((prev) => (prev === id ? null : id));
-									},
-									onKeyDown: (event) => {
-										if (recordingShortcutId) return;
-										if (event.key !== "Enter" && event.key !== " ") return;
-										event.preventDefault();
-										if (!connected || pending || !prefs) return;
-										setRecordingShortcutId(id);
-									},
-									children: recording ? t("shortcut.recording") : (cleared ? t("shortcut.cleared") : (formatAccel(accel) || accel))
-								}),
-								jsx("button", {
-									className: "dshDesktopBridgeSelector",
-									type: "button",
-									disabled: !connected || pending || !prefs || cleared,
-									onClick: () => {
-										setRecordingShortcutId(null);
-										void setOneShortcut(id, "");
-									},
-									children: t("shortcut.clear")
-								}),
-								jsx("button", {
-									className: "dshDesktopBridgeSelector",
-									type: "button",
-									disabled: !connected || pending || !prefs || isDefault,
-									onClick: () => {
-										setRecordingShortcutId(null);
-										void setOneShortcut(id, defaultAccel);
-									},
-									children: t("shortcut.reset")
-								})
-							]
-						})
-					]
-				});
-			});
 
 			return jsxs("div", {
 				className: "dshDesktopBridge",
@@ -5687,18 +6555,6 @@ window.__ModuleLoader__.load({
 								})
 							]
 						})
-						]
-					}),
-					jsxs("div", {
-						className: "dshDesktopBridgeCard",
-						children: [
-						jsx("div", { className: "dshDesktopBridgeCardTitle", children: t("dashboard.shortcuts_title") }),
-						jsx("div", {
-							className: "dshDesktopBridgeDesc",
-							style: { padding: "0 0 8px" },
-							children: t("dashboard.shortcuts_hint")
-						}),
-						...shortcutRows,
 						]
 					}),
 					jsxs("div", {
@@ -7094,6 +7950,8 @@ window.__ModuleLoader__.load({
 			};
 			callDesktopRPC(ctx.connection, "prefs", {}).then((result) => {
 				if (!result?.ok) return;
+				const initialCache = getDesktopSettingsCache(ctx.connection);
+				if (!initialCache.prefs) initialCache.prefs = result.value;
 				publishDeleteSessionActions(result.value);
 				publishHoverMessageActions(result.value);
 				publishPromptOverlayLanguage(result.value);
@@ -7102,8 +7960,37 @@ window.__ModuleLoader__.load({
 				publishEyeCareTheme(result.value);
 				publishFullAgentPresets(result.value);
 				publishThemePreference(result.value);
+				desktopShortcutsController.publishHostPrefs(result.value);
 				if (applyWarmPrefs(result.value) && lastListState) scheduleWarm(lastListState);
 			}).catch(() => {});
+			desktopShortcutsController.setConnection(ctx.connection);
+			const stopDesktopShortcuts = (() => {
+				const cleanups = [];
+				let registeredService = null;
+				const resolveShortcuts = (scope) => (typeof scope?.get === "function" ? scope.get("shortcuts") : undefined) || scope?.shortcuts;
+				const tryBindShortcuts = (svc) => {
+					if (!svc || registeredService === svc) return;
+					registeredService = svc;
+					cleanups.push(desktopShortcutsController.registerDesktopCommands(svc, ctx));
+				};
+				cleanups.push(desktopShortcutsController.subscribeService(tryBindShortcuts));
+				const proxySvc = (typeof globalThis !== "undefined" && globalThis.__DSH_DESKTOP_SHORTCUTS_PROXY__?.service) ||
+					(typeof window !== "undefined" && window.__DSH_DESKTOP_SHORTCUTS_PROXY__?.service) || null;
+				tryBindShortcuts(desktopShortcutsController.getService() || proxySvc || resolveShortcuts(ctx));
+				if (!registeredService && typeof ctx?.inject === "function") {
+					try {
+						const stopInject = ctx.inject(["shortcuts"], (scope) => {
+							tryBindShortcuts(desktopShortcutsController.getService() || resolveShortcuts(scope) || resolveShortcuts(ctx));
+						});
+						if (typeof stopInject === "function") cleanups.push(stopInject);
+					} catch (_) {}
+				}
+				return () => {
+					for (const fn of cleanups.splice(0, cleanups.length)) {
+						try { fn(); } catch (_) {}
+					}
+				};
+			})();
 			const stopNavIcon = installDesktopNavIcon();
 			const stopSessionMenuSlots = installSessionMenuSlots(ctx);
 			const stopArchivedSessionDelete = installArchivedSessionDelete(ctx);
@@ -7114,6 +8001,7 @@ window.__ModuleLoader__.load({
 			const stopFullAgentPresets = installFullAgentPresets(ctx);
 			if (typeof ctx.effect === "function") {
 				ctx.effect(() => () => {
+					stopDesktopShortcuts();
 					stopNavIcon();
 					stopSessionMenuSlots();
 					stopArchivedSessionDelete();
@@ -7612,5 +8500,9 @@ window.__ModuleLoader__.load({
 		exports.apply = apply;
 		exports.inject = inject;
 		return module.exports;
-	}
-});
+	};
+	window.__ModuleLoader__.load({
+		id: "@deepseek-ai/deepseek-harness-desktop-bridge",
+		factory: (require) => bridgeFactoryFn(require)
+	});
+})();
