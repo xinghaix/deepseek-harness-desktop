@@ -537,7 +537,6 @@ export function injectLoadBundle(table) {
 
 const AUTH_COOKIE_PREFIX = "dsh-auth-";
 const AUTH_COOKIE_NAME_RE = /^dsh-auth-[A-Za-z0-9_-]+$/;
-const AUTH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 // 计算当前回环 Host（如 127.0.0.1:61419）对应的 dsh-auth-* Cookie 名。
 export function authCookieNameForHost(rawHost) {
@@ -552,19 +551,10 @@ export function authCookieNameForHost(rawHost) {
   }
 }
 
-// 改写 dsh-auth-* Cookie 的 SameSite=Strict 为 SameSite=Lax：
-// WKWebView 的 WebContent 进程崩溃重建后，从初始 about:blank 恢复顶层地址
-// http://127.0.0.1:<port>/ 时会剥离 SameSite=Strict Cookie 导致 401；
-// SameSite=Lax 允许顶层 GET 导航携带该 Cookie，同时依然拦截跨站 POST/fetch/WebSocket。
-export function rewriteAuthCookieSameSiteLax(cookieHeader) {
-  if (typeof cookieHeader !== "string") return cookieHeader;
-  if (!cookieHeader.startsWith(AUTH_COOKIE_PREFIX)) return cookieHeader;
-  return cookieHeader.replace(/;\s*SameSite=Strict\b/gi, "; SameSite=Lax");
-}
-
 // 提取请求头中不属于当前端口的历史 dsh-auth-* 残留 Cookie 并生成立即过期指令。
 // RFC 6265 Cookie 按 IP 匹配而不区分端口，每次桌面端换随机端口启动都会在 WebKit
 // binarycookies 中沉淀旧 Cookie，定期清理可避免请求头无限膨胀。
+// 保持上游 SameSite=Strict 属性不变，不降级 SameSite，也不重签或篡改当前有效 Cookie 的寿命。
 export function collectStaleAuthCookies(rawCookie, activeCookieName, maxCount = 32) {
   if (typeof rawCookie !== "string" || !rawCookie || !activeCookieName) return [];
   const expired = [];
@@ -576,22 +566,10 @@ export function collectStaleAuthCookies(rawCookie, activeCookieName, maxCount = 
     if (!name || name === activeCookieName || seen.has(name)) continue;
     if (!AUTH_COOKIE_NAME_RE.test(name)) continue;
     seen.add(name);
-    expired.push(`${name}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax`);
+    expired.push(`${name}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict`);
     if (expired.length >= maxCount) break;
   }
   return expired;
-}
-
-function readCookieValue(rawCookie, targetName) {
-  if (typeof rawCookie !== "string" || !rawCookie || !targetName) return "";
-  for (const part of rawCookie.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === targetName) {
-      return part.slice(eq + 1).trim();
-    }
-  }
-  return "";
 }
 
 function isRootDocumentGet(req) {
@@ -602,8 +580,8 @@ function isRootDocumentGet(req) {
 
 function normalizeSetCookieList(existing) {
   if (existing === undefined || existing === null) return [];
-  if (Array.isArray(existing)) return existing.map((item) => rewriteAuthCookieSameSiteLax(String(item)));
-  return [rewriteAuthCookieSameSiteLax(String(existing))];
+  if (Array.isArray(existing)) return existing.map((item) => String(item));
+  return [String(existing)];
 }
 
 export function createLoopbackWebViewMiddleware() {
@@ -612,65 +590,50 @@ export function createLoopbackWebViewMiddleware() {
       const activeCookieName = authCookieNameForHost(req.headers && req.headers.host);
       const rawCookie = req.headers && req.headers.cookie;
       const staleCookies = collectStaleAuthCookies(rawCookie, activeCookieName);
-      const activeCookieValue = readCookieValue(rawCookie, activeCookieName);
-      const origWriteHead = res.writeHead;
-      let patched = false;
+      if (staleCookies.length > 0) {
+        const origWriteHead = res.writeHead;
+        let patched = false;
 
-      res.writeHead = function patchedWriteHead(statusCode, statusMessage, headers) {
-        if (!patched) {
-          patched = true;
-          let hdrs = headers;
-          let msg = statusMessage;
-          if (typeof msg === "object" && msg !== null) {
-            hdrs = msg;
-            msg = undefined;
-          }
-          const setCookieList = [];
-          let setCookieKey = "set-cookie";
-          if (hdrs && typeof hdrs === "object") {
-            for (const key of Object.keys(hdrs)) {
-              if (key.toLowerCase() === "set-cookie") {
-                setCookieKey = key;
-                setCookieList.push(...normalizeSetCookieList(hdrs[key]));
+        res.writeHead = function patchedWriteHead(statusCode, statusMessage, headers) {
+          if (!patched && (statusCode === 200 || statusCode === 303)) {
+            patched = true;
+            let hdrs = headers;
+            let msg = statusMessage;
+            if (typeof msg === "object" && msg !== null) {
+              hdrs = msg;
+              msg = undefined;
+            }
+            const setCookieList = [];
+            let setCookieKey = "set-cookie";
+            if (hdrs && typeof hdrs === "object") {
+              for (const key of Object.keys(hdrs)) {
+                if (key.toLowerCase() === "set-cookie") {
+                  setCookieKey = key;
+                  setCookieList.push(...normalizeSetCookieList(hdrs[key]));
+                }
+              }
+            } else if (typeof res.getHeader === "function") {
+              const existing = res.getHeader("set-cookie");
+              if (existing !== undefined) {
+                setCookieList.push(...normalizeSetCookieList(existing));
               }
             }
-          } else if (typeof res.getHeader === "function") {
-            const existing = res.getHeader("set-cookie");
-            if (existing !== undefined) {
-              setCookieList.push(...normalizeSetCookieList(existing));
-            }
-          }
-          // 若当前请求已通过旧版 SameSite=Strict Cookie 认证返回 200，原地将其升级为 SameSite=Lax
-          if (
-            statusCode === 200 &&
-            activeCookieName &&
-            activeCookieValue &&
-            !setCookieList.some((c) => c.startsWith(activeCookieName + "="))
-          ) {
-            const expires = new Date(Date.now() + AUTH_COOKIE_MAX_AGE_SECONDS * 1000).toUTCString();
-            setCookieList.push(
-              `${activeCookieName}=${activeCookieValue}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; Expires=${expires}; HttpOnly; SameSite=Lax`,
-            );
-          }
-          if ((statusCode === 200 || statusCode === 303) && staleCookies.length > 0) {
             setCookieList.push(...staleCookies);
-          }
-          if (setCookieList.length > 0) {
             if (hdrs && typeof hdrs === "object") {
               hdrs[setCookieKey] = setCookieList.length === 1 ? setCookieList[0] : setCookieList;
             } else if (typeof res.setHeader === "function") {
               res.setHeader("set-cookie", setCookieList.length === 1 ? setCookieList[0] : setCookieList);
             }
+            if (msg !== undefined) {
+              return origWriteHead.call(this, statusCode, msg, hdrs);
+            }
+            if (hdrs !== undefined) {
+              return origWriteHead.call(this, statusCode, hdrs);
+            }
           }
-          if (msg !== undefined) {
-            return origWriteHead.call(this, statusCode, msg, hdrs);
-          }
-          if (hdrs !== undefined) {
-            return origWriteHead.call(this, statusCode, hdrs);
-          }
-        }
-        return origWriteHead.apply(this, arguments);
-      };
+          return origWriteHead.apply(this, arguments);
+        };
+      }
     }
     next();
   };
@@ -682,7 +645,7 @@ export function apply(ctx) {
 
   // 本机回环接口（127.0.0.1 / ::1）传输 13MB+ 客户端插件 combo 包时，
   // 实时 gzip 压缩与浏览器解压开销高达 ~220ms，而回环内存直传仅需 ~22ms；
-  // 同时在回环入口层将认证 Cookie 设为 SameSite=Lax 并自动清理历史随机端口残留 Cookie。
+  // 同时自动清理历史随机端口残留的过期 dsh-auth-* Cookie（保持 SameSite=Strict 不变）。
   if (ctx.webServer && "gzip" in ctx.webServer && typeof ctx.effect === "function") {
     ctx.effect(() => {
       const prevGzip = ctx.webServer.gzip;

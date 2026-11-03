@@ -298,11 +298,60 @@ static void dshInstallSmoothWindowZoom(NSWindow *window) {
 	});
 }
 
+static const char dshSuppressTerminateReloadKey = 0;
+static IMP dshOrigWebContentDidTerminateIMP = NULL;
+static IMP dshOrigWebViewReloadIMP = NULL;
+
+static WKNavigation *dshSwizzledWebViewReload(id self, SEL _cmd) {
+	if ([objc_getAssociatedObject(self, &dshSuppressTerminateReloadKey) boolValue]) {
+		return nil;
+	}
+	return ((WKNavigation *(*)(id, SEL))dshOrigWebViewReloadIMP)(self, _cmd);
+}
+
+static void dshSwizzledWebContentDidTerminate(id self, SEL _cmd, WKWebView *webView) {
+	NSString *host = webView != nil && webView.URL != nil ? webView.URL.host : nil;
+	BOOL isLoopbackChat = host != nil && ([host isEqualToString:@"127.0.0.1"] || [host isEqualToString:@"localhost"] || [host isEqualToString:@"::1"]);
+	if (isLoopbackChat) {
+		objc_setAssociatedObject(webView, &dshSuppressTerminateReloadKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+	((void (*)(id, SEL, WKWebView *))dshOrigWebContentDidTerminateIMP)(self, _cmd, webView);
+	if (isLoopbackChat) {
+		objc_setAssociatedObject(webView, &dshSuppressTerminateReloadKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	}
+}
+
+// 拦截 Wails WebviewWindowDelegate 在 WebContent 崩溃时的盲目 [webView reload]：
+// Chat 窗口使用 SameSite=Strict 认证 Cookie，崩溃后从新进程初始 about:blank 直接 reload 无 token URL
+// 会被 WebKit 剥离 SameSite=Strict Cookie 导致 401；此处保留事件派发由 Go 侧 recoverChatWebView
+// 统一使用带 ?token= 的入口 URL 重新建立 SameSite=Strict 会话。
+static void dshInstallTerminateReloadGuard(WKWebView *webView) {
+	if (webView == nil || webView.navigationDelegate == nil) {
+		return;
+	}
+	Class delegateCls = [webView.navigationDelegate class];
+	if (delegateCls == nil || ![NSStringFromClass(delegateCls) isEqualToString:@"WebviewWindowDelegate"]) {
+		return;
+	}
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		Method mReload = class_getInstanceMethod([WKWebView class], @selector(reload));
+		if (mReload != NULL) {
+			dshOrigWebViewReloadIMP = method_setImplementation(mReload, (IMP)dshSwizzledWebViewReload);
+		}
+		Method mTerminate = class_getInstanceMethod(delegateCls, @selector(webViewWebContentProcessDidTerminate:));
+		if (mTerminate != NULL) {
+			dshOrigWebContentDidTerminateIMP = method_setImplementation(mTerminate, (IMP)dshSwizzledWebContentDidTerminate);
+		}
+	});
+}
+
 static void dshApplyDisplayRefreshToWebView(WKWebView *webView) {
 	if (webView == nil) {
 		return;
 	}
 	dshAttachWindowBridgeToWebView(webView);
+	dshInstallTerminateReloadGuard(webView);
 	WKPreferences *preferences = webView.configuration.preferences;
 	if (preferences == nil) {
 		return;

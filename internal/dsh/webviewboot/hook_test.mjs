@@ -4,7 +4,6 @@ import {
   collectStaleAuthCookies,
   createLoopbackWebViewMiddleware,
   injectLoadBundle,
-  rewriteAuthCookieSameSiteLax,
   stripComboPreloads,
 } from "./index.js";
 
@@ -59,6 +58,11 @@ assert.equal(globalThis.__loaded, "from-eval");
   const registered = new Map();
   const pendingQueue = [];
   globalThis.window = globalThis;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { platform: "MacIntel", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X)" },
+    configurable: true,
+    writable: true,
+  });
   globalThis.document = { documentElement: { dataset: {} } };
   globalThis.HTMLScriptElement = function () {};
   globalThis.HTMLScriptElement.prototype = {};
@@ -143,7 +147,7 @@ assert.equal(globalThis.__loaded, "from-eval");
   });
 }
 
-// 验证回环认证 Cookie SameSite=Lax 改写与历史过期端口 Cookie 自动清理
+// 验证历史过期端口 dsh-auth-* Cookie 自动清理，同时保持当前有效 Cookie 的 SameSite=Strict 与签名寿命不变
 {
   const currentName = authCookieNameForHost("127.0.0.1:61419");
   const oldPortName1 = authCookieNameForHost("127.0.0.1:54523");
@@ -151,17 +155,13 @@ assert.equal(globalThis.__loaded, "from-eval");
   assert.match(currentName, /^dsh-auth-[A-Za-z0-9_-]+$/);
   assert.notEqual(currentName, oldPortName1);
 
-  const rewritten = rewriteAuthCookieSameSiteLax(
-    `${currentName}=v1.2000000000.sig; Max-Age=2592000; Path=/; HttpOnly; SameSite=Strict`,
-  );
-  assert.ok(rewritten.endsWith("; SameSite=Lax"), "dsh-auth cookie must be downgraded from SameSite=Strict to SameSite=Lax");
-
   const stale = collectStaleAuthCookies(
     `${oldPortName1}=v1.1.a; other_cookie=keep; ${currentName}=v1.2.b; ${oldPortName2}=v1.3.c`,
     currentName,
   );
   assert.equal(stale.length, 2, "must only expire stale dsh-auth-* cookies from previous ports");
   assert.ok(stale[0].startsWith(`${oldPortName1}=; Max-Age=0;`));
+  assert.ok(stale[0].includes("SameSite=Strict"));
   assert.ok(stale[1].startsWith(`${oldPortName2}=; Max-Age=0;`));
 
   const mw = createLoopbackWebViewMiddleware();
@@ -191,12 +191,11 @@ assert.equal(globalThis.__loaded, "from-eval");
   assert.equal(capturedStatus, 303);
   assert.ok(Array.isArray(capturedHeaders["set-cookie"]), "303 response must carry both new cookie and stale cookie evictions");
   assert.equal(capturedHeaders["set-cookie"].length, 3);
-  assert.ok(capturedHeaders["set-cookie"][0].includes("SameSite=Lax"));
-  assert.ok(!capturedHeaders["set-cookie"][0].includes("SameSite=Strict"));
+  assert.ok(capturedHeaders["set-cookie"][0].includes("SameSite=Strict"), "active cookie must keep SameSite=Strict");
   assert.ok(capturedHeaders["set-cookie"][1].startsWith(`${oldPortName1}=; Max-Age=0;`));
   assert.ok(capturedHeaders["set-cookie"][2].startsWith(`${oldPortName2}=; Max-Age=0;`));
 
-  // 已认证 200 顶层页面响应：将旧 SameSite=Strict Cookie 原地续期升级为 SameSite=Lax 并清理旧端口残留
+  // 已认证 200 顶层页面响应：仅清理旧端口残留 Cookie，不重发或篡改当前有效 Cookie 的 Max-Age/SameSite
   let headers200 = null;
   const req200 = {
     method: "GET",
@@ -214,11 +213,7 @@ assert.equal(globalThis.__loaded, "from-eval");
   mw(req200, res200, () => {
     res200.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   });
-  assert.ok(Array.isArray(headers200["set-cookie"]));
-  assert.equal(headers200["set-cookie"].length, 2);
-  assert.ok(headers200["set-cookie"][0].startsWith(`${currentName}=v1.2000000000.sig;`));
-  assert.ok(headers200["set-cookie"][0].includes("SameSite=Lax"));
-  assert.ok(headers200["set-cookie"][1].startsWith(`${oldPortName1}=; Max-Age=0;`));
+  assert.equal(headers200["set-cookie"], `${oldPortName1}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict`);
 }
 
 console.log("webview boot hook order ok");
