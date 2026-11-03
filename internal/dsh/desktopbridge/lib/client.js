@@ -3718,8 +3718,22 @@
 			if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 			window.dispatchEvent(new CustomEvent(CHAT_CONTENT_VISIBILITY_EVENT, { detail: enabled }));
 		}
+		// 避免 content-visibility:auto 影响 DSH 原生行为：
+		// 1. 排除 [hidden]（含 hidden="until-found"，浏览器 UA 靠 content-visibility:hidden 隐藏）、
+		//    [data-turn-process-hidden]、折叠动画节点 [data-chat-motion] 与空节点，防止折叠过程节点重新露出或被撑出 80px 高度；
+		// 2. 排除 ChatGroupSeat 内部嵌套的二级 [data-chat-flow-key]（避免干扰 useProcessScroll 高度测量），
+		//    并在节点 :hover / :focus-within 时恢复 content-visibility:visible，解除 contain:paint 对底部操作栏
+		//    .hWmORq_actions / .TS9iAW_actions 左侧 margin-left:-6px 悬停圆角背景与焦点环的裁剪；
+		// 3. 将 .md-table-wide 约束回 100% 容器宽度并改用 overflow-x:auto，解决宽表格被 contain:paint 裁剪、
+		//    滚动条不出现/拉不到最右以及拉宽时不自适应的问题。
 		function chatContentVisibilityCSS() {
-			return "html[" + CHAT_CONTENT_VISIBILITY_ATTR + "] [data-chat-flow-key]{content-visibility:auto;contain-intrinsic-size:auto 80px;}";
+			const root = "html[" + CHAT_CONTENT_VISIBILITY_ATTR + "]";
+			return [
+				root + " [data-chat-flow-key]:not([hidden]):not([data-turn-process-hidden]):not([data-chat-motion]):not(:empty):not(:has(>[data-slot=\"conversation.chat.node\"]:empty)){content-visibility:auto;contain-intrinsic-size:auto 80px;}",
+				root + " [data-chat-flow-key] [data-chat-flow-key]," + root + " [data-chat-flow-key]:is(:hover,:focus-within){content-visibility:visible;contain-intrinsic-size:none;}",
+				".md-table-wide,.md-table-wide:hover,.md-table-wide:focus-visible{box-sizing:border-box !important;width:100% !important;max-width:100% !important;margin-left:0 !important;padding-left:0 !important;padding-bottom:0 !important;overflow-x:auto !important;}",
+				".md-table-wide>table{min-width:100%;}"
+			].join("");
 		}
 		function setChatContentVisibilityAttr(enabled) {
 			const root = typeof document === "undefined" ? null : document.documentElement;

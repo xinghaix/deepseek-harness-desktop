@@ -81,6 +81,9 @@ assert.match(source, /t\("bridge\.enhanced_hover_title"\)/, "sticky prompt setti
 assert.match(source, /setHoverMessageActions/, "hover message-actions setter missing");
 assert.match(source, /installChatContentVisibility/, "chat content-visibility installer missing");
 assert.match(source, /content-visibility:auto/, "chat content-visibility CSS missing");
+assert.match(source, /\[data-chat-flow-key\]:not\(\[hidden\]\):not\(\[data-turn-process-hidden\]\):not\(\[data-chat-motion\]\):not\(:empty\)/, "chat content-visibility must exclude hidden/motion/empty flow seats");
+assert.match(source, /\[data-chat-flow-key\] \[data-chat-flow-key\].*\[data-chat-flow-key\]:is\(:hover,:focus-within\)\{content-visibility:visible;contain-intrinsic-size:none;\}/, "chat content-visibility must exempt nested and hovered/focused flow seats");
+assert.match(source, /\.md-table-wide,\.md-table-wide:hover,\.md-table-wide:focus-visible\{[^}]*width:100% !important;max-width:100% !important;margin-left:0 !important;padding-left:0 !important;padding-bottom:0 !important;overflow-x:auto !important;\}/, "wide markdown table overflow/width reset CSS missing");
 assert.match(source, /setChatContentVisibility/, "chat content-visibility setter missing");
 assert.match(source, /t\("field\.chat_content_visibility"\)/, "chat content-visibility settings label must resolve through the catalog");
 assert.match(source, /setRestoreLastSession/, "setRestoreLastSession setter missing");
