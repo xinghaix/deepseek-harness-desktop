@@ -373,6 +373,24 @@
 			const profileKey = "desktop:" + env.platform;
 			let serviceInstance = null;
 			let activeConnection = null;
+			let latestCommandCtx = null;
+
+			// Cordis Context Proxy 在未声明 inject 的属性上直接读取会抛出
+			// "cannot get property '<prop>' without inject"，需优先走 scope.get(prop) 并捕获异常。
+			const safeReadCtxProp = (scope, prop) => {
+				if (!scope) return undefined;
+				if (typeof scope.get === "function") {
+					try {
+						const byGet = scope.get(prop);
+						if (byGet !== undefined) return byGet;
+					} catch (_) {}
+				}
+				try {
+					return scope[prop];
+				} catch (_) {
+					return undefined;
+				}
+			};
 			let configListeners = new Set();
 			let catalogListeners = new Set();
 			let serviceListeners = new Set();
@@ -854,6 +872,9 @@
 			};
 
 			const registerDesktopCommands = (service, ctx) => {
+				if (ctx) {
+					latestCommandCtx = ctx;
+				}
 				if (!service || typeof service.register !== "function") return () => {};
 				if (typeof service.__dshDesktopCommandsDispose === "function") {
 					return service.__dshDesktopCommandsDispose;
@@ -872,7 +893,8 @@
 							label: () => {
 								const fromCatalog = localeCatalog[spec.labelKey];
 								if (fromCatalog != null && fromCatalog !== "") return String(fromCatalog);
-								const snap = (ctx || service.ctx)?.locale?.getSnapshot?.();
+								const localeSvc = safeReadCtxProp(latestCommandCtx, "locale") || safeReadCtxProp(ctx, "locale") || safeReadCtxProp(service.ctx, "locale");
+								const snap = localeSvc?.getSnapshot?.();
 								const snapLang = typeof snap === "string" ? snap : (typeof snap?.active === "string" ? snap.active : "");
 								const docLang = typeof document !== "undefined" ? (document.documentElement?.lang || "") : "";
 								const activeLang = localeCode || snapLang || docLang || (typeof navigator !== "undefined" ? navigator.language : "") || "";
@@ -882,16 +904,23 @@
 							defaults: { ...spec.defaults },
 							regions: ["page", "editable", "terminal"],
 							modals: ["settings", "shortcuts", "other"],
-							resolve: () => ({
-								status: "handled",
-								run: () => {
-									const conn = (ctx || service.ctx)?.connection || activeConnection || localeConnection;
-									if (!conn) return;
-									if (spec.prefKey === "quit") {
+							resolve: () => {
+								// desktop.hide / desktop.hideOthers 由 macOS 原生应用菜单 Role 处理；
+								// 返回 pass 以免 preventDefault() 拦截 WKWebView 向 [NSApp mainMenu] 转发按键。
+								if (spec.prefKey !== "quit") {
+									return { status: "pass" };
+								}
+								const conn = activeConnection || localeConnection || safeReadCtxProp(latestCommandCtx, "connection") || safeReadCtxProp(ctx, "connection") || safeReadCtxProp(service.ctx, "connection");
+								if (!conn) {
+									return { status: "pass" };
+								}
+								return {
+									status: "handled",
+									run: () => {
 										void callDesktopRPC(conn, "shortcutAction", { action: "quit" }).catch(() => {});
 									}
-								}
-							})
+								};
+							}
 						});
 						if (typeof dispose === "function") disposers.push(dispose);
 					} catch (_) { /* ignore duplicate registration during HMR */ }
@@ -902,9 +931,10 @@
 					}
 				});
 				if (typeof offLocale === "function") disposers.push(offLocale);
-				if (effectiveCtx?.locale && typeof effectiveCtx.locale.subscribe === "function") {
+				const dshLocaleSvc = safeReadCtxProp(effectiveCtx, "locale") || safeReadCtxProp(service.ctx, "locale");
+				if (dshLocaleSvc && typeof dshLocaleSvc.subscribe === "function") {
 					try {
-						const offDshLocale = effectiveCtx.locale.subscribe(() => {
+						const offDshLocale = dshLocaleSvc.subscribe(() => {
 							if (service.registry && typeof service.registry.refreshLabels === "function") {
 								try { service.registry.refreshLabels(); } catch (_) {}
 							}
@@ -7981,7 +8011,19 @@
 			const stopDesktopShortcuts = (() => {
 				const cleanups = [];
 				let registeredService = null;
-				const resolveShortcuts = (scope) => (typeof scope?.get === "function" ? scope.get("shortcuts") : undefined) || scope?.shortcuts;
+				const resolveShortcuts = (scope) => {
+					if (!scope) return null;
+					if (typeof scope.get === "function") {
+						try {
+							const byGet = scope.get("shortcuts");
+							if (byGet) return byGet;
+						} catch (_) {}
+					}
+					try {
+						if (scope.shortcuts) return scope.shortcuts;
+					} catch (_) {}
+					return null;
+				};
 				const tryBindShortcuts = (svc) => {
 					if (!svc || registeredService === svc) return;
 					registeredService = svc;

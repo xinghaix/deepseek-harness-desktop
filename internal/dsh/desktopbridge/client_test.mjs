@@ -956,6 +956,90 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
     ["standard", "cordis"],
     "disabling fullAgentPresets must restore native coding-view filtering"
   );
+
+  // Regression: ShortcutsService's own Cordis Context only injects ["locale"].
+  // Accessing service.ctx.connection throws "cannot get property \"connection\" without inject".
+  // When ShortcutsService is constructed via wrapShortcutsModuleFactory before/during apply(ctx),
+  // pressing Command+Q (desktop.quit) must still invoke shortcutAction({ action: "quit" })
+  // without throwing a Cordis Context Proxy error, and desktop.hide / desktop.hideOthers
+  // must return status: "pass" so macOS WKWebView forwards ⌘H / ⌥⌘H to the native NSMenu.
+  const shortcutCtrl = window.__DSH_DESKTOP_SHORTCUTS_CONTROLLER__;
+  assert.ok(shortcutCtrl, "desktopShortcutsController must be exposed on window");
+  const quitActions = [];
+  shortcutCtrl.setConnection({
+    rpc: {
+      call(_channel, method, payload) {
+        if (method === "shortcutAction") {
+          quitActions.push(payload);
+        }
+        return Promise.resolve({ ok: true, value: {} });
+      },
+    },
+  });
+  const cordisShortcutsCtx = new Proxy(
+    {
+      locale: { getSnapshot: () => ({ active: "zh-CN" }) },
+      get(prop) {
+        if (prop === "locale") return this.locale;
+        return undefined;
+      },
+    },
+    {
+      get(target, prop, receiver) {
+        if (prop === "locale" || prop === "get") {
+          return Reflect.get(target, prop, receiver);
+        }
+        throw new Error(`cannot get property "${String(prop)}" without inject`);
+      },
+    },
+  );
+  const registeredCommands = new Map();
+  const WrappedShortcutsService = shortcutCtrl.wrapShortcutsModuleFactory(() => {
+    return class MockShortcutsService {
+      constructor(c) {
+        this.ctx = c;
+        this.registry = {
+          commands: registeredCommands,
+          dispatch(_gesture, context, consume) {
+            const cmd = registeredCommands.get("desktop.quit");
+            const res = cmd.resolve(context);
+            if (res.status === "pass") return res;
+            consume();
+            res.run();
+            return { status: "handled", commandId: cmd.id };
+          },
+        };
+      }
+      register(cmd) {
+        registeredCommands.set(cmd.id, cmd);
+        return () => registeredCommands.delete(cmd.id);
+      }
+    };
+  }, () => ({}));
+  const mockSvc = new WrappedShortcutsService(cordisShortcutsCtx);
+  assert.ok(registeredCommands.has("desktop.quit"), "desktop.quit must be registered on ShortcutsService");
+  const quitResolution = registeredCommands.get("desktop.quit").resolve({ region: "editable", modal: null });
+  assert.equal(quitResolution.status, "handled", "desktop.quit must resolve as handled when connection is available");
+  assert.doesNotThrow(() => {
+    quitResolution.run();
+  }, "desktop.quit run() must not throw Cordis Context Proxy inject error");
+  assert.equal(quitActions.length, 1, "desktop.quit must invoke shortcutAction once");
+  assert.equal(quitActions[0]?.action, "quit", "desktop.quit must invoke shortcutAction({ action: 'quit' })");
+  if (registeredCommands.has("desktop.hide")) {
+    assert.equal(
+      registeredCommands.get("desktop.hide").resolve({ region: "page", modal: null }).status,
+      "pass",
+      "desktop.hide must pass through to native macOS menu without calling preventDefault"
+    );
+  }
+  if (registeredCommands.has("desktop.hideOthers")) {
+    assert.equal(
+      registeredCommands.get("desktop.hideOthers").resolve({ region: "page", modal: null }).status,
+      "pass",
+      "desktop.hideOthers must pass through to native macOS menu without calling preventDefault"
+    );
+  }
+  void mockSvc;
 }
 console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and persistence verified");
 

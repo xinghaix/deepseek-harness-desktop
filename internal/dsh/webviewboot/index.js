@@ -243,8 +243,13 @@ const LOAD_BUNDLE = `(function () {
                     var d = self.register({
                       id: spec.id,
                       label: function () {
-                        var snap = (ctx || self.ctx) && (ctx || self.ctx).locale && typeof (ctx || self.ctx).locale.getSnapshot === "function"
-                          ? (ctx || self.ctx).locale.getSnapshot()
+                        var localeSvc = null;
+                        try {
+                          var c = ctx || self.ctx;
+                          localeSvc = (c && typeof c.get === "function" ? c.get("locale") : null) || (c ? c.locale : null);
+                        } catch (_) {}
+                        var snap = localeSvc && typeof localeSvc.getSnapshot === "function"
+                          ? localeSvc.getSnapshot()
                           : null;
                         var snapLang = typeof snap === "string" ? snap : (snap && typeof snap.active === "string" ? snap.active : "");
                         var docLang = typeof document !== "undefined" && document.documentElement ? (document.documentElement.lang || "") : "";
@@ -257,7 +262,7 @@ const LOAD_BUNDLE = `(function () {
                       regions: ["page", "editable", "terminal"],
                       modals: ["settings", "shortcuts", "other"],
                       resolve: function () {
-                        return { status: "handled", run: function () {} };
+                        return { status: "pass" };
                       }
                     });
                     if (typeof d === "function") bootDisposers.push(d);
