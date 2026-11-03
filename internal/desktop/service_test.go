@@ -221,4 +221,36 @@ func TestResolveChatBackgroundRGBAMatchesTheme(t *testing.T) {
 	}
 }
 
+func TestInMemorySessionRecoveryAndWebContentTerminationHook(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DSH_DESKTOP_STATE_DIR", dir)
+	desktopstate.ResetCacheForTest()
+
+	s := New(nil)
+	defer func() { _ = s.Close() }()
+
+	// 即使关闭冷启动恢复上次会话，运行期内存仍应记录当前会话以供 WebContent 崩溃重建后无感恢复
+	s.prefs.restoreLastSession.Store(false)
+	s.ReportCurrentSession("session-live-crash-recover")
+	if got := s.currentSessionIDForRecovery(); got != "session-live-crash-recover" {
+		t.Fatalf("currentSessionIDForRecovery() = %q, want %q", got, "session-live-crash-recover")
+	}
+	if persisted, err := desktopstate.LoadLastSessionID(); err != nil || persisted != "" {
+		t.Fatalf("disabled restoreLastSession must not persist to disk, got %q (err=%v)", persisted, err)
+	}
+
+	// 验证 macOS 钩子绑定了 WebViewWebContentProcessDidTerminate 与高内存主动回收
+	serviceSrc, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(serviceSrc), "WebViewWebContentProcessDidTerminate") {
+		t.Fatal("hookChatWindow must handle events.Mac.WebViewWebContentProcessDidTerminate")
+	}
+	if !strings.Contains(string(serviceSrc), "maybeRelieveChatWebViewMemory") {
+		t.Fatal("monitorChatWindowGeometry must periodically run maybeRelieveChatWebViewMemory")
+	}
+	_ = maxWebContentPhysFootprint()
+}
+
 

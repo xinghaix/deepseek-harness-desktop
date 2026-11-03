@@ -64,9 +64,12 @@ type Service struct {
 	windowStateMu       sync.Mutex
 	windowStateTimer    *time.Timer
 	cachedWindowState   *desktopstate.WindowState
-	lastSessionMu       sync.Mutex
-	lastSessionTimer    *time.Timer
-	cachedLastSessionID string
+	lastSessionMu            sync.Mutex
+	lastSessionTimer         *time.Timer
+	cachedLastSessionID      string
+	memoryReliefMu           sync.Mutex
+	lastMemoryCachePurgeAt   time.Time
+	lastMemoryReliefReloadAt time.Time
 }
 
 func New(icon []byte) *Service {
@@ -484,6 +487,12 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 		registerMoveResize(events.Mac.WindowDidZoom)
 		registerMoveResize(events.Mac.WindowDidBecomeKey)
 		registerMoveResize(events.Mac.WindowDidResignKey)
+		// WebContent 渲染进程崩溃重建（例如 JSC 512MB JIT 代码池耗尽或 Jetsam 回收）时，
+		// Wails 默认直接调 [webView reload] 加载无 token 的历史 URL 会导致 401；
+		// 此处主动携带当前 dsh web 的 launch token 重新加载并恢复崩溃前的会话。
+		window.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(event *application.WindowEvent) {
+			d.recoverChatWebView(window)
+		})
 	case "windows":
 		registerMoveResize(events.Windows.WindowDidMove)
 		registerMoveResize(events.Windows.WindowDidResize)
@@ -556,18 +565,33 @@ func (d *Service) scheduleChatWindowStateRecord(window application.Window) {
 	d.windowStateMu.Unlock()
 }
 
+const (
+	// WebContent 内存缓存主动清理水位（700 MiB）：窗口失焦/后台且空闲时释放 WKWebsiteDataTypeMemoryCache。
+	webContentMemoryCachePurgeThresholdBytes = 700 << 20
+	// WebContent 进程后台静默重置水位（1200 MiB）：窗口已隐藏或最小化且无运行中会话时，
+	// 提前在后台重置渲染进程与 512MB JIT 代码池，避免对话中途触顶崩溃。
+	webContentSilentReloadThresholdBytes = 1200 << 20
+	webContentMemoryCachePurgeCooldown   = 5 * time.Minute
+	webContentSilentReloadCooldown       = 15 * time.Minute
+)
+
 func (d *Service) monitorChatWindowGeometry(window application.Window) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	wid := window.ID()
+	ticks := 0
 	for {
 		<-ticker.C
+		ticks++
 		d.windowMu.Lock()
 		hooked := d.chatHookedID == wid
 		d.windowMu.Unlock()
 		if !hooked || window == nil || d.closing.Load() {
 			return
+		}
+		if ticks%15 == 0 {
+			d.maybeRelieveChatWebViewMemory(window)
 		}
 		if !d.prefs.getRememberWindowSize() {
 			continue
@@ -579,6 +603,119 @@ func (d *Service) monitorChatWindowGeometry(window application.Window) {
 			continue
 		}
 		d.recordChatWindowState(window)
+	}
+}
+
+func (d *Service) isChatOrAnySessionBusy() bool {
+	if d.chatBusy.Load() {
+		return true
+	}
+	d.sessionsMu.Lock()
+	defer d.sessionsMu.Unlock()
+	for _, s := range d.sessions {
+		if s.Running {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *Service) currentSessionIDForRecovery() string {
+	d.lastSessionMu.Lock()
+	id := d.cachedLastSessionID
+	d.lastSessionMu.Unlock()
+	if id != "" {
+		return id
+	}
+	if d.prefs.getRestoreLastSession() {
+		if persisted, err := desktopstate.LoadLastSessionID(); err == nil && persisted != "" {
+			return persisted
+		}
+	}
+	return ""
+}
+
+// prepareChatWebViewRecoveryURL 为 WebView 崩溃恢复或后台高内存自愈准备带 token 的认证 URL，
+// 同时把当前活跃会话写入 pendingOpen，确保重载后前端自动切回原会话。
+func (d *Service) prepareChatWebViewRecoveryURL() (string, bool) {
+	if d.closing.Load() || d.quitStarted.Load() {
+		return "", false
+	}
+	if d.pendingOpen.peek() == "" {
+		if lastID := d.currentSessionIDForRecovery(); lastID != "" {
+			d.pendingOpen.set(lastID)
+		}
+	}
+	d.ResetBrowserToken()
+	entry, err := d.ChatEntryPoint()
+	if err != nil {
+		return "", false
+	}
+	if err := validateChatURL(entry.LoadURL, entry.FirstLoad); err != nil {
+		return "", false
+	}
+	return entry.LoadURL, true
+}
+
+func (d *Service) recoverChatWebView(window application.Window) {
+	if window == nil {
+		return
+	}
+	chatURL, ok := d.prepareChatWebViewRecoveryURL()
+	if !ok {
+		return
+	}
+	d.windowMu.Lock()
+	if d.closing.Load() || d.chatHookedID != window.ID() {
+		d.windowMu.Unlock()
+		return
+	}
+	window.SetURL(chatURL)
+	d.MarkBrowserOpened()
+	d.openedChatURL = chatURL
+	d.NoteChatWindowURL(chatURL)
+	d.windowMu.Unlock()
+}
+
+func (d *Service) maybeRelieveChatWebViewMemory(window application.Window) {
+	if window == nil || d.closing.Load() || d.quitStarted.Load() || d.isChatOrAnySessionBusy() {
+		return
+	}
+	footprint := maxWebContentPhysFootprint()
+	if footprint < webContentMemoryCachePurgeThresholdBytes {
+		return
+	}
+	visible := window.IsVisible()
+	minimised := window.IsMinimised()
+	focused := window.IsFocused()
+	if visible && !minimised && focused {
+		// 用户当前正在前台聚焦查看 Chat 窗口时绝不打断
+		return
+	}
+	now := time.Now()
+	d.memoryReliefMu.Lock()
+	canPurge := now.Sub(d.lastMemoryCachePurgeAt) >= webContentMemoryCachePurgeCooldown
+	canReload := footprint >= webContentSilentReloadThresholdBytes &&
+		(!visible || minimised) &&
+		now.Sub(d.lastMemoryReliefReloadAt) >= webContentSilentReloadCooldown
+	if canPurge {
+		d.lastMemoryCachePurgeAt = now
+	}
+	if canReload {
+		d.lastMemoryReliefReloadAt = now
+	}
+	d.memoryReliefMu.Unlock()
+
+	if canPurge {
+		purgeWebViewMemoryCache()
+	}
+	if canReload {
+		d.windowMu.Lock()
+		modalOpen := d.configIsModal
+		d.windowMu.Unlock()
+		if !modalOpen {
+			d.recoverChatWebView(window)
+		}
 	}
 }
 
@@ -673,9 +810,6 @@ func (d *Service) flushPendingWindowState() {
 
 func (d *Service) ReportCurrentSession(sessionID string) {
 	sessionID = strings.TrimSpace(sessionID)
-	if !d.prefs.getRestoreLastSession() {
-		return
-	}
 	if sessionID != "" && !desktopstate.ValidateSessionID(sessionID) {
 		return
 	}
@@ -691,6 +825,9 @@ func (d *Service) ReportCurrentSession(sessionID string) {
 	}
 	d.lastSessionMu.Unlock()
 
+	if !d.prefs.getRestoreLastSession() {
+		return
+	}
 	_ = desktopstate.SaveLastSessionID(sessionID)
 }
 
@@ -702,6 +839,9 @@ func (d *Service) flushPendingLastSession() {
 	}
 	id := d.cachedLastSessionID
 	d.lastSessionMu.Unlock()
+	if !d.prefs.getRestoreLastSession() {
+		return
+	}
 	_ = desktopstate.SaveLastSessionID(id)
 }
 

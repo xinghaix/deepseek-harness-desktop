@@ -1167,6 +1167,15 @@ func (d *Manager) MarkBrowserOpened() {
 	d.browserTokenUsed = true
 }
 
+// ResetBrowserToken 重置浏览器首载令牌消费标记，使后续 ChatEntryPoint/BrowserURL
+// 重新返回带 ?token= 的认证入口 URL（用于 WebView 渲染进程崩溃重建或后台高内存自愈重载）。
+func (d *Manager) ResetBrowserToken() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.browserTokenUsed = false
+	d.chatWindowURL = ""
+}
+
 // fastReadCLIVersion 尝试直接从已安装的 @deepseek-ai/dsh package.json 中零进程开销读取版本号；
 // 若可执行文件不是标准 npm 全局包结构（如单测二进制或自定义包装脚本），返回空字符串以回退到并行 checkCLI。
 func fastReadCLIVersion(executable string) string {

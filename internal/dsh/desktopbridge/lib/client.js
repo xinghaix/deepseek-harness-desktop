@@ -8159,12 +8159,21 @@
 					}
 				} catch (_) { /* overlay dismiss is best-effort */ }
 			};
+			const warmedHistoryIds = new Set();
 			const prefetchSessionHistory = (id) => {
+				if (!id || warmedHistoryIds.has(id)) return;
 				try {
 					const session = ctx.sessions && typeof ctx.sessions.binding === "function"
 						? ctx.sessions.binding(id)?.session
 						: null;
-					if (session && typeof session.open === "function") void session.open();
+					if (session && typeof session.open === "function") {
+						if (warmedHistoryIds.size >= 64) {
+							const oldest = warmedHistoryIds.values().next().value;
+							if (oldest !== undefined) warmedHistoryIds.delete(oldest);
+						}
+						warmedHistoryIds.add(id);
+						void session.open();
+					}
 				} catch (_) { /* warming is best-effort; navigation still proceeds */ }
 			};
 			let lastReportedActiveSessionId = "";
@@ -8478,6 +8487,17 @@
 					let pollDelay = OPEN_SESSION_CLAIM_POLL_INITIAL_MS;
 					const poll = () => {
 						if (stopped) return;
+						// 窗口处于隐藏/最小化后台且已完成启动期退避时，暂停无意义的回环 HTTP 轮询，
+						// 避免长时间驻留后台持续产生 NetworkResourceLoader 请求与缓存开销。
+						if (
+							typeof document !== "undefined" &&
+							document.hidden === true &&
+							pollDelay >= OPEN_SESSION_CLAIM_POLL_MAX_MS &&
+							!pendingOpenSessionId
+						) {
+							timer = setTimeout(poll, pollDelay);
+							return;
+						}
 						void claimOpenSession().then((claimed) => {
 							pollDelay = claimed
 								? OPEN_SESSION_CLAIM_POLL_INITIAL_MS
@@ -8487,10 +8507,26 @@
 							if (!stopped) timer = setTimeout(poll, pollDelay);
 						});
 					};
+					const onVisibilityWake = () => {
+						if (stopped) return;
+						if (typeof document !== "undefined" && document.hidden === true) return;
+						if (timer !== null) {
+							clearTimeout(timer);
+							timer = null;
+						}
+						pollDelay = OPEN_SESSION_CLAIM_POLL_INITIAL_MS;
+						poll();
+					};
+					if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+						document.addEventListener("visibilitychange", onVisibilityWake);
+					}
 					poll();
 					return () => {
 						stopped = true;
 						if (timer !== null) clearTimeout(timer);
+						if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+							document.removeEventListener("visibilitychange", onVisibilityWake);
+						}
 					};
 				}, "desktop-bridge: poll pending open session");
 			} else {

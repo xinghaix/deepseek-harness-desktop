@@ -9,6 +9,10 @@ package desktop
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#include <libproc.h>
+#include <string.h>
+#include <sys/proc_info.h>
+#include <unistd.h>
 
 static char dshWindowBridgeControllerKey;
 
@@ -413,6 +417,51 @@ int dshIsSystemDarkMode(void) {
 #endif
 	return 0;
 }
+
+// 查询当前进程名下最大的 com.apple.WebKit.WebContent 子进程物理内存占用（ri_phys_footprint，字节）。
+// 直接通过内核 proc_listchildpids + proc_pid_rusage 读取，无需切回 UI 主线程。
+unsigned long long dshMaxWebContentPhysFootprint(void) {
+	pid_t selfPid = getpid();
+	pid_t childPids[128];
+	int bytes = proc_listchildpids(selfPid, childPids, (int)sizeof(childPids));
+	if (bytes <= 0) {
+		return 0;
+	}
+	int count = bytes / (int)sizeof(pid_t);
+	unsigned long long maxFootprint = 0;
+	for (int i = 0; i < count; i++) {
+		pid_t pid = childPids[i];
+		if (pid <= 0) {
+			continue;
+		}
+		char pathBuf[PROC_PIDPATHINFO_MAXSIZE];
+		int pathLen = proc_pidpath(pid, pathBuf, sizeof(pathBuf));
+		if (pathLen <= 0 || strstr(pathBuf, "WebContent") == NULL) {
+			continue;
+		}
+		struct rusage_info_v4 ri;
+		if (proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)&ri) == 0) {
+			if (ri.ri_phys_footprint > maxFootprint) {
+				maxFootprint = (unsigned long long)ri.ri_phys_footprint;
+			}
+		}
+	}
+	return maxFootprint;
+}
+
+// 异步清理 WKWebsiteDataStore 的内存态资源缓存（仅 WKWebsiteDataTypeMemoryCache，不触碰 Cookie 与存储）。
+void dshPurgeWebViewMemoryCache(void) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		WKWebsiteDataStore *store = [WKWebsiteDataStore defaultDataStore];
+		if (store == nil) {
+			return;
+		}
+		NSSet *types = [NSSet setWithObject:WKWebsiteDataTypeMemoryCache];
+		[store removeDataOfTypes:types
+		           modifiedSince:[NSDate distantPast]
+		       completionHandler:^{}];
+	});
+}
 */
 import "C"
 
@@ -442,4 +491,12 @@ func applyNativeWindowBackground(window application.Window, colour application.R
 
 func isPlatformDarkMode() bool {
 	return C.dshIsSystemDarkMode() != 0
+}
+
+func maxWebContentPhysFootprint() uint64 {
+	return uint64(C.dshMaxWebContentPhysFootprint())
+}
+
+func purgeWebViewMemoryCache() {
+	C.dshPurgeWebViewMemoryCache()
 }

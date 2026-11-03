@@ -414,6 +414,25 @@ assert.ok(!newlyWarmed.includes("warm-00"), "oldest session must stay outside th
 assert.ok(!newlyWarmed.includes("warm-current"), "current session must not be warmed");
 assert.ok(!newlyWarmed.includes("warm-blank"), "blank session must not be warmed");
 
+// 重复的 sessions.list 刷新不应重复对同一会话调用 session.open() 预热
+const warmedCountBeforeRepeat = warmed.length;
+listListener();
+const repeatWarmIndex = timers.findIndex((timer) => !timer.cancelled && timer.delay === 400);
+assert.notEqual(repeatWarmIndex, -1, "repeat warm timer missing");
+await timers.splice(repeatWarmIndex, 1)[0].fn();
+await drainWarmChunks();
+assert.equal(warmed.length, warmedCountBeforeRepeat, "already-warmed sessions must not re-open history on every list tick");
+
+// 窗口隐藏且已完成退避（pollDelay=10000）时应跳过无意义的后台 claimOpenSession 网络请求
+const claimsBeforeHidden = claimCalls;
+document.hidden = true;
+const hiddenPollIndex = nextClaimTimer();
+assert.notEqual(hiddenPollIndex, -1, "hidden poll timer missing");
+await timers.splice(hiddenPollIndex, 1)[0].fn();
+await flushMicrotasks();
+assert.equal(claimCalls, claimsBeforeHidden, "hidden idle window must not fire claimOpenSession RPC");
+document.hidden = false;
+
 // A late claim is the same delivery, not a second user request. A later
 // click on the SAME session with a lost WebView event must still recover.
 snapshot = {

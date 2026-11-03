@@ -266,6 +266,12 @@ func TestDSH(t *testing.T) {
 		if err != nil || strings.Contains(after, "token=") {
 			t.Fatalf("token must not be reused after the WebView opens: %q %v", after, err)
 		}
+		d.ResetBrowserToken()
+		recoveredEntry, err := d.ChatEntryPoint()
+		if err != nil || !recoveredEntry.FirstLoad || !strings.Contains(recoveredEntry.LoadURL, "token=") {
+			t.Fatalf("ResetBrowserToken must re-enable tokenized entry URL for renderer crash recovery: %+v %v", recoveredEntry, err)
+		}
+		d.MarkBrowserOpened()
 		raw, err := os.ReadFile(filepath.Join(o.Home, "observed.json"))
 		if err != nil {
 			t.Fatal(err)
