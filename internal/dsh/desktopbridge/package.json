@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/deepseek-harness-desktop-bridge",
   "version": "0.1.0",
-  "description": "Built-in Deepseek Harness Desktop bridge injected via Cordis --patch",
+  "description": "Built-in Deepseek Harness bridge injected via Cordis --patch",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

@@ -42,7 +42,7 @@ func TestManagementUIContract(t *testing.T) {
 		}
 	}
 	if strings.Contains(html, "DSH Desktop") {
-		t.Fatal("UI must use the full Deepseek Harness Desktop application name")
+		t.Fatal("UI must use the full Deepseek Harness application name")
 	}
 	for _, removed := range []string{"Chat 折叠交互", "横向操作胶囊", "useActionPill", "action-pill", "metric-sidebar-mode"} {
 		if strings.Contains(html, removed) {

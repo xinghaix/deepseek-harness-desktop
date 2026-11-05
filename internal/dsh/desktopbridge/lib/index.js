@@ -214,7 +214,7 @@ async function invoke(config, endpoint, payload, signal) {
 			ok: false,
 			error: {
 				code: "desktop-bridge/desktop-not-running",
-				message: "Desktop control plane unavailable; start DSH from Deepseek Harness Desktop",
+				message: "Desktop control plane unavailable; start DSH from Deepseek Harness",
 				details: {}
 			}
 		};

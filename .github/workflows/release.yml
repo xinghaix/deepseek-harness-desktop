@@ -125,14 +125,14 @@ jobs:
           os="${{ matrix.goos }}"
           case "$os" in
             darwin)
-              ditto -c -k --keepParent "dist/Deepseek Harness Desktop.app" \
+              ditto -c -k --keepParent "dist/Deepseek Harness.app" \
                 "release/deepseek-harness-desktop-darwin-${arch}.zip"
               # build.sh already wrote a DMG under dist/; copy or recreate.
               if [ -f "dist/deepseek-harness-desktop-darwin-${arch}.dmg" ]; then
                 cp "dist/deepseek-harness-desktop-darwin-${arch}.dmg" \
                   "release/deepseek-harness-desktop-darwin-${arch}.dmg"
               else
-                sh scripts/package-darwin-dmg.sh "dist/Deepseek Harness Desktop.app" \
+                sh scripts/package-darwin-dmg.sh "dist/Deepseek Harness.app" \
                   "release/deepseek-harness-desktop-darwin-${arch}.dmg"
               fi
               ;;

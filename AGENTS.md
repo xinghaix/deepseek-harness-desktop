@@ -1,4 +1,4 @@
-# AGENTS.md — Deepseek Harness Desktop
+# AGENTS.md — Deepseek Harness
 
 给在本仓库工作的**编码助手与贡献者**用的技术说明（架构、边界、构建、发版）。
 

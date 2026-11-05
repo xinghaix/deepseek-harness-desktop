@@ -11,7 +11,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const appMenuLabel = "Deepseek Harness Desktop"
+const appMenuLabel = "Deepseek Harness"
 
 type menuController interface {
 	OpenManagement() error

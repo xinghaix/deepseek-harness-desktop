@@ -14,7 +14,7 @@ $cert = $null
 if ($thumbprint -ne "") {
 	$cert = Get-ChildItem "Cert:\CurrentUser\My\$thumbprint" -ErrorAction Stop
 } elseif (-not $production) {
-	$subject = "CN=Deepseek Harness Desktop Ad-hoc"
+	$subject = "CN=Deepseek Harness Ad-hoc"
 	$storePath = "Cert:\CurrentUser\My"
 	$cert = Get-ChildItem $storePath -ErrorAction SilentlyContinue |
 		Where-Object { $_.Subject -eq $subject -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } |

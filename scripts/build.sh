@@ -14,7 +14,7 @@ goos=${GOOS:-$(go env GOOS)}
 goarch=${GOARCH:-$(go env GOARCH)}
 dist=${DIST:-dist}
 app=deepseek-harness-desktop
-bundle_name="Deepseek Harness Desktop"
+bundle_name="Deepseek Harness"
 ldflags="-s -w -X deepseek-harness-desktop/internal/version.Version=$version"
 tags=${BUILD_TAGS:-wails,production}
 
@@ -55,13 +55,13 @@ darwin)
 	CGO_ENABLED=${CGO_ENABLED:-1} GOOS=darwin GOARCH="$goarch" \
 		go build -tags "$tags" -ldflags "$ldflags" -trimpath -buildvcs=false -o "$dist/$app" .
 	bundle="$dist/$bundle_name.app"
-	rm -rf "$dist/$app.app" "$bundle"
+	rm -rf "$dist/$app.app" "$bundle" "$dist/Deepseek Harness Desktop.app"
 	mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
-	cp "$dist/$app" "$bundle/Contents/MacOS/$app"
+	cp "$dist/$app" "$bundle/Contents/MacOS/$bundle_name"
 	cp assets/darwin/icons.icns "$bundle/Contents/Resources/icons.icns"
 	cp assets/darwin/Info.plist "$bundle/Contents/Info.plist"
 	python3 scripts/stamp-plist-version.py "$bundle/Contents/Info.plist" "$version"
-	chmod 755 "$bundle/Contents/MacOS/$app"
+	chmod 755 "$bundle/Contents/MacOS/$bundle_name"
 	sh scripts/sign.sh "$bundle"
 	sh scripts/package-darwin-dmg.sh "$bundle" "$dist/$app-darwin-$goarch.dmg"
 	;;

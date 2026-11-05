@@ -154,7 +154,7 @@ func buildSVG(pathData string) []byte {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
-  <title>Deepseek Harness Desktop</title>
+  <title>Deepseek Harness</title>
   <rect id="background" x="48" y="48" width="928" height="928" rx="192" fill="#F5F9FF"/>
   <g transform="translate(128 128) scale(15.36)">
     <path id="whale" d="`)

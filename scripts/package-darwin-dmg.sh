@@ -22,7 +22,7 @@ if [ ! -d "$app" ]; then
 	exit 1
 fi
 
-volname="Deepseek Harness Desktop"
+volname="Deepseek Harness"
 appname="$volname.app"
 staging=$(mktemp -d "${TMPDIR:-/tmp}/dsh-dmg.XXXXXX")
 cleanup() {

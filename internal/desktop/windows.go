@@ -20,7 +20,7 @@ const (
 func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
 		Name:               setupWindowName,
-		Title:              "Deepseek Harness Desktop",
+		Title:              "Deepseek Harness",
 		Width:              980,
 		Height:             760,
 		MinWidth:           760,
@@ -72,7 +72,7 @@ func ConfigModalWindowOptions(url string, locale string) application.WebviewWind
 func ChatWindowOptions(url string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
 		Name:               chatWindowName,
-		Title:              "Deepseek Harness Desktop",
+		Title:              "Deepseek Harness",
 		Width:              DefaultChatWidth,
 		Height:             DefaultChatHeight,
 		MinWidth:           MinChatWidth,

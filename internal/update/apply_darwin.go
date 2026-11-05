@@ -50,7 +50,10 @@ func applyAndRelaunch(staged, _ string) error {
 	}
 	inner := filepath.Join(app, "Contents", "MacOS", filepath.Base(exe))
 	if _, err := os.Stat(inner); err != nil {
-		return i18n.ErrorfActive("update.no_executable_in_package")
+		inner = filepath.Join(app, "Contents", "MacOS", "Deepseek Harness")
+		if _, err2 := os.Stat(inner); err2 != nil {
+			return i18n.ErrorfActive("update.no_executable_in_package")
+		}
 	}
 	if err := replaceFile(exe, inner); err != nil {
 		return err
@@ -66,7 +69,7 @@ func applyAndRelaunch(staged, _ string) error {
 	return nil
 }
 
-const macOSBundleName = "Deepseek Harness Desktop.app"
+const macOSBundleName = "Deepseek Harness.app"
 
 func preferDisplayBundle(bundle string) string {
 	wanted := filepath.Join(filepath.Dir(bundle), macOSBundleName)

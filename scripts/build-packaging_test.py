@@ -49,8 +49,8 @@ class BuildPackagingTest(unittest.TestCase):
                     executable = "deepseek-harness-desktop" + (".exe" if target == "windows" else "")
                     self.assertTrue((dist / executable).is_file())
                     if target == "darwin":
-                        contents = dist / "Deepseek Harness Desktop.app/Contents"
-                        self.assertTrue((contents / "MacOS" / executable).is_file())
+                        contents = dist / "Deepseek Harness.app/Contents"
+                        self.assertTrue((contents / "MacOS/Deepseek Harness").is_file())
                         self.assertTrue((contents / "Resources/icons.icns").is_file())
                         self.assertFalse((contents / "Resources/plugins").exists())
                         plist = (contents / "Info.plist").read_text()

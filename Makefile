@@ -1,4 +1,4 @@
-# GNU Make entry for Deepseek Harness Desktop (replaces Taskfile.yml).
+# GNU Make entry for Deepseek Harness (replaces Taskfile.yml).
 # Prefer: make build / make test. CI may still call scripts/build.sh directly.
 # Requires GNU Make (macOS ships /usr/bin/make 3.81+).
 
@@ -8,7 +8,7 @@
 
 DIST ?= dist
 APP ?= deepseek-harness-desktop
-BUNDLE_NAME ?= Deepseek Harness Desktop
+BUNDLE_NAME ?= Deepseek Harness
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 VERSION ?=

@@ -50,7 +50,7 @@ func main() {
 	service := desktop.New(icon)
 	manager := &DSH{WailsFacade: desktop.NewWailsFacade(service)}
 	app := application.New(application.Options{
-		Name:        "Deepseek Harness Desktop",
+		Name:        "Deepseek Harness",
 		Description: i18n.TActive("app.description"),
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "com.deepseek.harness.desktop",
