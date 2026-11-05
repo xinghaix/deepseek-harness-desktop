@@ -319,7 +319,7 @@ const LOAD_BUNDLE = `(function () {
               construct: function (Target, args, newTarget) {
                 var m = Reflect.construct(Target, args, newTarget);
                 try {
-                  if (m && typeof m.get === "function" && typeof m.set === "function" && m.get("shortcuts.open") === 0 && m.get("page.close") === 19) {
+                  if (m && typeof m.get === "function" && typeof m.set === "function" && m.get("shortcuts.open") === 0 && typeof m.get("page.close") === "number") {
                     m.set("settings.open", 0.1);
                     m.set("page.close", 0.2);
                     m.set("desktop.quit", 0.3);
@@ -671,6 +671,14 @@ export function apply(ctx) {
           if (scripts && typeof scripts.values === "function") {
             for (const build of scripts.values()) {
               if (typeof build === "function") build();
+            }
+          }
+          const batchResponses = cm?.batchResponses;
+          if (batchResponses && typeof batchResponses.entries === "function") {
+            for (const [url, entry] of batchResponses.entries()) {
+              if (typeof url === "string" && !url.endsWith(".map") && typeof entry?.body === "function") {
+                Promise.resolve(entry.body()).catch(() => {});
+              }
             }
           }
         } catch {

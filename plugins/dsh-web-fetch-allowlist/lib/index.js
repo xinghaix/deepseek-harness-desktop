@@ -78,13 +78,24 @@ async function resolveAllowlisted(hostname, signal) {
 	return addresses;
 }
 
-function wrapHttpProvider(provider, getAllowlist) {
+export function wrapHttpProvider(provider, getAllowlist) {
 	if (provider == null || provider.id !== "http" || provider.__dshFetchAllowlist) return;
-	const original = provider.resolveAddresses.bind(provider);
-	provider.resolveAddresses = (hostname, signal) => {
-		if (!hostMatches(hostname, getAllowlist())) return original(hostname, signal);
-		return resolveAllowlisted(hostname, signal);
-	};
+	if (typeof provider.resolveAddresses === "function") {
+		const original = provider.resolveAddresses.bind(provider);
+		provider.resolveAddresses = (hostname, signal) => {
+			if (!hostMatches(hostname, getAllowlist())) return original(hostname, signal);
+			return resolveAllowlisted(hostname, signal);
+		};
+	} else if (provider.network != null && typeof provider.network.resolve === "function") {
+		const network = provider.network;
+		const original = network.resolve.bind(network);
+		network.resolve = (hostname, signal) => {
+			if (!hostMatches(hostname, getAllowlist())) return original(hostname, signal);
+			return resolveAllowlisted(hostname, signal);
+		};
+	}
+	// DSH 0.2.2-rc.1+ removed private-IP/Fake-IP blocking from HttpFetchProvider,
+	// so neither resolveAddresses nor network.resolve exists; mark as handled without throwing.
 	provider.__dshFetchAllowlist = true;
 }
 

@@ -392,3 +392,63 @@ test("patches agent-scoped ops_bash and skips get() for non-escalation schema to
   await ctx.fiber.dispose();
   assert.equal(opsBash.execute, opsBashOriginal);
 });
+
+test("patches run_code owned by 0.2.2+ PtcExecutor via selectExecutor/setExecutor", async () => {
+  const ctx = new Context();
+  const agents = [];
+  const received = [];
+  const runCode = escalationTool("run_code", received);
+  const runCodeOriginal = runCode.execute;
+  let activeExecutor;
+
+  const toolsService = {
+    get: () => undefined,
+    schemas(agent) {
+      const exec = this.selectExecutor(agent);
+      return exec.describe([]).schemas;
+    },
+    selectExecutor() {
+      if (!activeExecutor) throw new Error("no tool executor is active in the selected scope");
+      return activeExecutor;
+    },
+    setExecutor(executor) {
+      activeExecutor = executor;
+      return () => {
+        if (activeExecutor === executor) activeExecutor = undefined;
+      };
+    },
+  };
+
+  ctx.provide("agents", { list: () => [...agents] });
+  ctx.provide("tools", toolsService);
+  ctx.provide("sandboxPolicy", sandboxPolicy("danger-full-access"));
+
+  // Apply before PtcExecutor is mounted: schemas() throws until setExecutor runs.
+  apply(ctx);
+  assert.equal(runCode.execute, runCodeOriginal);
+
+  const disposeExecutor = toolsService.setExecutor({
+    describe: () => ({
+      schemas: [{
+        name: runCode.name,
+        description: runCode.description,
+        parameters: runCode.parameters,
+      }],
+      knownNames: ["run_code"],
+    }),
+    requirePtcTransport: () => runCode,
+  });
+
+  assert.notEqual(runCode.execute, runCodeOriginal);
+  await runCode.execute({
+    value: "ptc-exec",
+    sandbox_permissions: "danger-full-access",
+    justification: "already full access",
+  }, {});
+  assert.deepEqual(received, [{ value: "ptc-exec" }]);
+
+  disposeExecutor();
+  assert.equal(runCode.execute, runCodeOriginal);
+
+  await ctx.fiber.dispose();
+});

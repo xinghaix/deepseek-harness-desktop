@@ -244,6 +244,9 @@ test("真实 Loader 子树在重连前 await 旧 fiber 的异步销毁，管理�
   assert.equal(active, 0);
   assert.equal(externalDisposed, false);
   assert.equal(Object.keys(runtime.tree.store).length, 0);
+  assert.equal(typeof runtime.tree.write, "function");
+  assert.equal(typeof runtime.tree.commit, "function");
+  assert.doesNotThrow(() => runtime.tree.commit({ action: "create", entry: null }));
   await root.fiber.dispose();
 });
 

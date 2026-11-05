@@ -13,11 +13,11 @@ test("official Gateway resolves unarchiveSession on the session resource, not gl
   const read = path => readFileSync(join(official, path), "utf8");
   const sessionController = read("packages/api/session-controller/src/index.ts");
   const workspaceController = read("packages/api/workspace-controller/src/index.ts");
-  assert.match(sessionController, /resources\.register\('session', \{ field: 'sessionId' \}\)/);
+  assert.match(sessionController, /resources\.register\('session', \{ (?:field: 'sessionId'|resolve: resolveSessionResource) \}\)/);
   assert.match(workspaceController, /resources\.register\('workspace', \{ field: 'workspaceId' \}\)/);
   assert.match(workspaceController, /@Remote\('unarchiveSession'\)/);
   const fields = [sessionController, workspaceController].flatMap(source =>
-    [...source.matchAll(/resources\.register\('([^']+)', \{ field: '([^']+)' \}\)/g)].map(([, kind, field]) => ({ kind, field })));
+    [...source.matchAll(/resources\.register\('([^']+)', \{ (?:field: '([^']+)'|resolve: resolveSessionResource) \}\)/g)].map(([, kind, field]) => ({ kind, field: field || "sessionId" })));
   const resources = callResources({
     resources: { entries: () => fields },
     contexts: { getHost: () => undefined },

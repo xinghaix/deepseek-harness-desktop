@@ -25,6 +25,15 @@ function isRecord(value) {
 function isToolName(value) {
     return typeof value === "string" && value.length > 0;
 }
+function isExecutorUnavailableError(error) {
+    if (!isRecord(error))
+        return false;
+    if (error.code === "TOOL_EXECUTOR_UNAVAILABLE" || error.name === "ToolExecutorUnavailableError") {
+        return true;
+    }
+    return typeof error.message === "string"
+        && error.message.includes("no tool executor is active in the selected scope");
+}
 function hasEscalationProperties(parameters) {
     if (!isRecord(parameters))
         return false;
@@ -161,16 +170,42 @@ export function apply(ctx) {
         for (const patch of activePatches.reverse())
             patch.restore();
     };
+    const resolveExecutorTool = (toolName, agent) => {
+        const rawTools = ctx.tools;
+        if (!isRecord(rawTools) || typeof rawTools.selectExecutor !== "function")
+            return undefined;
+        try {
+            const executor = rawTools.selectExecutor(agent);
+            if (!isRecord(executor))
+                return undefined;
+            if (toolName === "run_code" && typeof executor.requirePtcTransport === "function") {
+                const candidate = executor.requirePtcTransport();
+                if (isRecord(candidate))
+                    return candidate;
+            }
+            if (isRecord(executor.pipeline) && typeof executor.pipeline.get === "function") {
+                const candidate = executor.pipeline.get(toolName, agent);
+                if (isRecord(candidate))
+                    return candidate;
+            }
+        }
+        catch {
+            // Executor may not be active yet in the selected scope; setExecutor hook will rescan.
+        }
+        return undefined;
+    };
     const lookupVisible = (agent, onError) => {
         let complete = true;
         const names = collectCandidateToolNames(ctx.tools, agent, (error) => {
+            if (isExecutorUnavailableError(error))
+                return;
             complete = false;
             onError?.schemas?.(error);
         });
         const definitions = [];
         for (const toolName of names) {
             try {
-                const definition = ctx.tools.get(toolName, agent);
+                const definition = ctx.tools.get(toolName, agent) ?? resolveExecutorTool(toolName, agent);
                 if (definition !== undefined)
                     definitions.push(definition);
             }
@@ -284,8 +319,55 @@ export function apply(ctx) {
         let stopChange;
         let stopCreated;
         let stopDisposed;
+        let restoreSetExecutor;
         try {
             scanAll();
+            const rawTools = ctx.tools;
+            if (isRecord(rawTools) && typeof rawTools.setExecutor === "function") {
+                const origSetExecutor = rawTools.setExecutor;
+                const wrappedSetExecutor = function (...args) {
+                    const handle = origSetExecutor.apply(this === rawTools ? ctx.tools : this, args);
+                    scanSafely("executor change", () => [undefined, ...ctx.agents.list()], true);
+                    if (typeof handle === "function") {
+                        return () => {
+                            try {
+                                return handle();
+                            }
+                            finally {
+                                scanSafely("executor dispose", () => [undefined, ...ctx.agents.list()], true);
+                            }
+                        };
+                    }
+                    if (isRecord(handle) && typeof handle.dispose === "function") {
+                        const origDispose = handle.dispose;
+                        try {
+                            handle.dispose = function (...disposeArgs) {
+                                try {
+                                    return origDispose.apply(this, disposeArgs);
+                                }
+                                finally {
+                                    scanSafely("executor dispose", () => [undefined, ...ctx.agents.list()], true);
+                                }
+                            };
+                        }
+                        catch {
+                            // Ignore non-writable dispose on effect handles.
+                        }
+                    }
+                    return handle;
+                };
+                try {
+                    rawTools.setExecutor = wrappedSetExecutor;
+                    restoreSetExecutor = () => {
+                        if (rawTools.setExecutor === wrappedSetExecutor) {
+                            rawTools.setExecutor = origSetExecutor;
+                        }
+                    };
+                }
+                catch {
+                    // Ignore non-writable setExecutor on frozen/custom tool registries.
+                }
+            }
             stopChange = ctx.on("tools/change", () => {
                 scanSafely("runtime", () => [undefined, ...ctx.agents.list()], true);
                 return undefined;
@@ -300,6 +382,7 @@ export function apply(ctx) {
             });
         }
         catch (error) {
+            restoreSetExecutor?.();
             stopDisposed?.();
             stopCreated?.();
             stopChange?.();
@@ -307,6 +390,7 @@ export function apply(ctx) {
             throw error;
         }
         return () => {
+            restoreSetExecutor?.();
             stopDisposed?.();
             stopCreated?.();
             stopChange?.();

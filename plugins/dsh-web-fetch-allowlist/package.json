@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-fetch-allowlist",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Allowlisted native web_fetch through Surge/Clash Fake-IP (198.18.0.0/15) without replacing the http fetch provider.",
   "type": "module",
   "main": "./lib/index.js",

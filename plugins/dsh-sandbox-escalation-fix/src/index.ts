@@ -58,6 +58,15 @@ function isToolName(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function isExecutorUnavailableError(error: unknown): boolean {
+  if (!isRecord(error)) return false;
+  if (error.code === "TOOL_EXECUTOR_UNAVAILABLE" || error.name === "ToolExecutorUnavailableError") {
+    return true;
+  }
+  return typeof error.message === "string"
+    && error.message.includes("no tool executor is active in the selected scope");
+}
+
 function hasEscalationProperties(parameters: unknown): boolean {
   if (!isRecord(parameters)) return false;
   const properties = parameters.properties;
@@ -226,6 +235,29 @@ export function apply(ctx: Context): void {
     for (const patch of activePatches.reverse()) patch.restore();
   };
 
+  const resolveExecutorTool = (
+    toolName: string,
+    agent: Agent | undefined,
+  ): ToolDefinition | undefined => {
+    const rawTools = ctx.tools as unknown;
+    if (!isRecord(rawTools) || typeof rawTools.selectExecutor !== "function") return undefined;
+    try {
+      const executor = rawTools.selectExecutor(agent);
+      if (!isRecord(executor)) return undefined;
+      if (toolName === "run_code" && typeof executor.requirePtcTransport === "function") {
+        const candidate = executor.requirePtcTransport();
+        if (isRecord(candidate)) return candidate as unknown as ToolDefinition;
+      }
+      if (isRecord(executor.pipeline) && typeof executor.pipeline.get === "function") {
+        const candidate = executor.pipeline.get(toolName, agent);
+        if (isRecord(candidate)) return candidate as unknown as ToolDefinition;
+      }
+    } catch {
+      // Executor may not be active yet in the selected scope; setExecutor hook will rescan.
+    }
+    return undefined;
+  };
+
   const lookupVisible = (
     agent: Agent | undefined,
     onError?: {
@@ -235,13 +267,14 @@ export function apply(ctx: Context): void {
   ): { definitions: ToolDefinition[]; complete: boolean } => {
     let complete = true;
     const names = collectCandidateToolNames(ctx.tools as ToolLookup, agent, (error) => {
+      if (isExecutorUnavailableError(error)) return;
       complete = false;
       onError?.schemas?.(error);
     });
     const definitions: ToolDefinition[] = [];
     for (const toolName of names) {
       try {
-        const definition = ctx.tools.get(toolName, agent);
+        const definition = ctx.tools.get(toolName, agent) ?? resolveExecutorTool(toolName, agent);
         if (definition !== undefined) definitions.push(definition);
       } catch (error) {
         complete = false;
@@ -359,8 +392,51 @@ export function apply(ctx: Context): void {
     let stopChange: (() => void) | undefined;
     let stopCreated: (() => void) | undefined;
     let stopDisposed: (() => void) | undefined;
+    let restoreSetExecutor: (() => void) | undefined;
     try {
       scanAll();
+      const rawTools = ctx.tools as unknown;
+      if (isRecord(rawTools) && typeof rawTools.setExecutor === "function") {
+        const origSetExecutor = rawTools.setExecutor as (...args: unknown[]) => unknown;
+        const wrappedSetExecutor = function (this: unknown, ...args: unknown[]): unknown {
+          const handle = origSetExecutor.apply(this === rawTools ? ctx.tools : this, args);
+          scanSafely("executor change", () => [undefined, ...ctx.agents.list()], true);
+          if (typeof handle === "function") {
+            return () => {
+              try {
+                return (handle as () => unknown)();
+              } finally {
+                scanSafely("executor dispose", () => [undefined, ...ctx.agents.list()], true);
+              }
+            };
+          }
+          if (isRecord(handle) && typeof handle.dispose === "function") {
+            const origDispose = handle.dispose as (...disposeArgs: unknown[]) => unknown;
+            try {
+              handle.dispose = function (this: unknown, ...disposeArgs: unknown[]): unknown {
+                try {
+                  return origDispose.apply(this, disposeArgs);
+                } finally {
+                  scanSafely("executor dispose", () => [undefined, ...ctx.agents.list()], true);
+                }
+              };
+            } catch {
+              // Ignore non-writable dispose on effect handles.
+            }
+          }
+          return handle;
+        };
+        try {
+          rawTools.setExecutor = wrappedSetExecutor;
+          restoreSetExecutor = () => {
+            if (rawTools.setExecutor === wrappedSetExecutor) {
+              rawTools.setExecutor = origSetExecutor;
+            }
+          };
+        } catch {
+          // Ignore non-writable setExecutor on frozen/custom tool registries.
+        }
+      }
       stopChange = ctx.on("tools/change", () => {
         scanSafely("runtime", () => [undefined, ...ctx.agents.list()], true);
         return undefined;
@@ -374,6 +450,7 @@ export function apply(ctx: Context): void {
         return undefined;
       });
     } catch (error) {
+      restoreSetExecutor?.();
       stopDisposed?.();
       stopCreated?.();
       stopChange?.();
@@ -382,6 +459,7 @@ export function apply(ctx: Context): void {
     }
 
     return () => {
+      restoreSetExecutor?.();
       stopDisposed?.();
       stopCreated?.();
       stopChange?.();

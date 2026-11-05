@@ -95,9 +95,10 @@ export function connectionConfig(server, current = {}) {
   return config;
 }
 
-// 私有子树复用官方 Loader，但 write 不落盘。实例属于管理器的上下文，停用时统一等待销毁。
+// 私有子树复用官方 Loader，但 write/commit 不落盘（兼容 cordis-plugin-loader 1.0.x 与 1.1.0+）。实例属于管理器的上下文，停用时统一等待销毁。
 class ConnectionTree extends EntryTree {
   write() {}
+  commit() {}
   async import(name) {
     try {
       return await super.import(name);

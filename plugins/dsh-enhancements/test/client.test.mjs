@@ -132,8 +132,8 @@ function nodes(tree, type) {
   return [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
 }
 
-test("bundle is standard, exact-runtime gated and independent of desktop controls", () => {
-  assert.equal(manifest.engines.dsh, "0.2.1-rc.2");
+test("bundle is standard, runtime gated and independent of desktop controls", () => {
+  assert.equal(manifest.engines.dsh, ">=0.2.1-rc.2");
   assert.equal(manifest.dsh.engines, undefined);
   assert.equal(manifest.dsh.client.platform, "web");
   assert.ok(manifest.dsh.bundle.patch);
