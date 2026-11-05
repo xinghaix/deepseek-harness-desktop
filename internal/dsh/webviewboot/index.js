@@ -467,6 +467,11 @@ const LOAD_BUNDLE = `(function () {
   } else {
     setTimeout(prefetchBootBatches, 0);
   }
+  if (typeof setTimeout === "function") {
+    setTimeout(function () {
+      xhrCache = Object.create(null);
+    }, 10000);
+  }
 
   var transport = globalThis.__DSH_TRANSPORT__ = globalThis.__DSH_TRANSPORT__ || {};
   transport.loadBundle = loadBundle;
@@ -770,7 +775,33 @@ export function apply(ctx) {
           .catch(() => {});
       }, 20);
       if (typeof timer?.unref === "function") timer.unref();
-      return () => clearTimeout(timer);
+
+      // 开启 V8 尺寸优先策略并在首屏加载稳定后清理上一代模块缓存、执行一次紧凑型 GC，压降 dsh web 常驻老生代堆。
+      const gcTimer = setTimeout(() => {
+        try {
+          const cm = typeof ctx.get === "function" ? ctx.get("clientModules") : ctx.clientModules;
+          if (cm?.previousBatchResponses && typeof cm.previousBatchResponses.clear === "function") {
+            cm.previousBatchResponses.clear();
+          }
+        } catch {}
+        Promise.all([import("node:v8"), import("node:vm")])
+          .then(([v8Mod, vmMod]) => {
+            if (typeof v8Mod?.setFlagsFromString === "function") {
+              v8Mod.setFlagsFromString("--optimize-for-size --expose-gc");
+            }
+            if (typeof vmMod?.runInNewContext === "function") {
+              const gc = vmMod.runInNewContext("gc");
+              if (typeof gc === "function") gc();
+            }
+          })
+          .catch(() => {});
+      }, 6000);
+      if (typeof gcTimer?.unref === "function") gcTimer.unref();
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(gcTimer);
+      };
     }, "desktop-webview-boot:warm-caches");
   }
 }

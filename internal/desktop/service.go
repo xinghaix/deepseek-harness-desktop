@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -75,7 +76,14 @@ type Service struct {
 
 func New(icon []byte) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel, icon: icon}
+	var idleIcon []byte
+	if len(icon) > 0 {
+		if scaled, err := trayIconIdleCanvas(icon); err == nil && len(scaled) > 0 {
+			idleIcon = scaled
+			icon = scaled
+		}
+	}
+	s := &Service{Manager: dsh.New(), updater: update.New(), stopAuto: cancel, icon: icon, trayIconIdle: idleIcon}
 	s.prefs.load()
 	if ws, err := desktopstate.LoadWindowState(); err == nil && ws != nil {
 		s.cachedWindowState = ws
@@ -347,6 +355,9 @@ func closeConfigOrSetupWindow(window application.Window) {
 	}
 	teardownClosedWindowWebView(window)
 	window.Close()
+	time.AfterFunc(500*time.Millisecond, func() {
+		debug.FreeOSMemory()
+	})
 }
 
 func presentConfigModal(chat, config application.Window, reused ...bool) {
@@ -595,12 +606,12 @@ func (d *Service) scheduleChatWindowStateRecord(window application.Window) {
 }
 
 const (
-	// WebContent 内存缓存主动清理水位（700 MiB）：窗口失焦/后台且空闲时释放 WKWebsiteDataTypeMemoryCache。
-	webContentMemoryCachePurgeThresholdBytes = 700 << 20
-	// WebContent 进程后台静默重置水位（1200 MiB）：窗口已隐藏或最小化且无运行中会话时，
+	// WebContent 内存缓存与 JSC 堆主动回收水位（380 MiB）：窗口失焦/后台且空闲时释放缓存并触发 JSC GC。
+	webContentMemoryCachePurgeThresholdBytes = 380 << 20
+	// WebContent 进程后台静默重置水位（950 MiB）：窗口已隐藏或最小化且无运行中会话时，
 	// 提前在后台重置渲染进程与 512MB JIT 代码池，避免对话中途触顶崩溃。
-	webContentSilentReloadThresholdBytes = 1200 << 20
-	webContentMemoryCachePurgeCooldown   = 5 * time.Minute
+	webContentSilentReloadThresholdBytes = 950 << 20
+	webContentMemoryCachePurgeCooldown   = 2 * time.Minute
 	webContentSilentReloadCooldown       = 15 * time.Minute
 )
 

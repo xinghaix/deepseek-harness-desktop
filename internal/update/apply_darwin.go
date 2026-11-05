@@ -76,6 +76,16 @@ func preferDisplayBundle(bundle string) string {
 	if filepath.Clean(bundle) == filepath.Clean(wanted) {
 		return bundle
 	}
+	// 在 macOS 默认不区分大小写的 APFS 上，仅大小写不同的路径（如 DeepSeek Harness.app）
+	// 指向同一目录 inode；不能先 RemoveAll(wanted)，否则会误删刚更新完的自身目录。
+	if srcInfo, err1 := os.Stat(bundle); err1 == nil {
+		if dstInfo, err2 := os.Stat(wanted); err2 == nil && os.SameFile(srcInfo, dstInfo) {
+			if err := os.Rename(bundle, wanted); err != nil {
+				return bundle
+			}
+			return wanted
+		}
+	}
 	_ = os.RemoveAll(wanted)
 	if err := os.Rename(bundle, wanted); err != nil {
 		return bundle

@@ -7,7 +7,9 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
+	"strings"
 
 	"deepseek-harness-desktop/internal/desktop"
 	"deepseek-harness-desktop/internal/dsh"
@@ -61,7 +63,7 @@ func main() {
 				}
 			},
 		},
-		Icon: icon,
+		Icon: appOptionIcon(icon),
 		Services: []application.Service{
 			application.NewService(manager),
 		},
@@ -99,6 +101,18 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// appOptionIcon 在 macOS 已打包为 .app 时返回 nil，由系统直接从 Contents/Resources/icons.icns
+// 加载 Dock 与应用图标，避免 Wails 调用 [NSApp setApplicationIconImage:] 将 1024×1024 PNG
+// 光栅化为 ~32MB 的常驻 CG Image 脏内存；裸二进制（如 go run）与其它平台保持原样。
+func appOptionIcon(icon []byte) []byte {
+	if runtime.GOOS == "darwin" {
+		if exe, err := os.Executable(); err == nil && strings.Contains(exe, ".app/Contents/MacOS/") {
+			return nil
+		}
+	}
+	return icon
 }
 
 func appIcon() []byte {

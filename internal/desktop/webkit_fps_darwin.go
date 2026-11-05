@@ -10,6 +10,7 @@ package desktop
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #include <libproc.h>
+#include <malloc/malloc.h>
 #include <stdatomic.h>
 #include <string.h>
 #include <sys/proc_info.h>
@@ -18,6 +19,18 @@ package desktop
 @interface WKWebView (DSHWebKitPrivate)
 - (pid_t)_webProcessIdentifier;
 - (void)_close;
+- (void)_clearBackForwardCache;
+@end
+
+@interface WKProcessPool (DSHWebKitPrivate)
+- (void)_clearWebProcessCache;
+- (void)_garbageCollectJavaScriptObjectsForTesting;
+@end
+
+@interface WKPreferences (DSHWebKitPrivate)
+- (void)_setUsesPageCache:(BOOL)usesPageCache;
+- (void)_setPageVisibilityBasedProcessSuppressionEnabled:(BOOL)enabled;
+- (void)_setLowPowerVideoAudioBufferSizeEnabled:(BOOL)enabled;
 @end
 
 static char dshWindowBridgeControllerKey;
@@ -377,9 +390,28 @@ static void dshApplyDisplayRefreshToWebView(WKWebView *webView) {
 	dshAttachWindowBridgeToWebView(webView);
 	dshInstallTerminateReloadGuard(webView);
 	dshExtractWebViewProcessID(webView);
+	WKProcessPool *pool = webView.configuration.processPool;
+	if (pool != nil && [pool respondsToSelector:@selector(_clearWebProcessCache)]) {
+		@try {
+			[pool _clearWebProcessCache];
+		} @catch (NSException *ex) {
+		}
+	}
 	WKPreferences *preferences = webView.configuration.preferences;
 	if (preferences == nil) {
 		return;
+	}
+	@try {
+		if ([preferences respondsToSelector:@selector(_setUsesPageCache:)]) {
+			[preferences _setUsesPageCache:NO];
+		}
+		if ([preferences respondsToSelector:@selector(_setPageVisibilityBasedProcessSuppressionEnabled:)]) {
+			[preferences _setPageVisibilityBasedProcessSuppressionEnabled:YES];
+		}
+		if ([preferences respondsToSelector:@selector(_setLowPowerVideoAudioBufferSizeEnabled:)]) {
+			[preferences _setLowPowerVideoAudioBufferSizeEnabled:YES];
+		}
+	} @catch (NSException *ex) {
 	}
 	SEL featuresSel = NSSelectorFromString(@"_features");
 	Class prefsClass = [WKPreferences class];
@@ -603,27 +635,45 @@ unsigned long long dshMaxWebContentPhysFootprint(void *nsWindow) {
 	return maxFootprint;
 }
 
-// 异步清理 WKWebsiteDataStore 的内存态资源缓存（仅 WKWebsiteDataTypeMemoryCache，不触碰 Cookie 与存储）。
+// 异步清理 WKWebsiteDataStore 的内存态资源缓存、前进后退页面快照并触发 JSC GC 归还空闲页（不触碰 Cookie 与存储）。
 void dshPurgeWebViewMemoryCache(void *nsWindow) {
 	dispatch_async(dispatch_get_main_queue(), ^{
+		WKWebView *webView = nil;
 		WKWebsiteDataStore *store = nil;
 		if (nsWindow != NULL) {
 			NSWindow *window = (NSWindow *)nsWindow;
-			WKWebView *webView = dshFindWebViewInView([window contentView]);
+			webView = dshFindWebViewInView([window contentView]);
 			if (webView != nil) {
 				store = webView.configuration.websiteDataStore;
+			}
+		}
+		if (webView != nil) {
+			@try {
+				if ([webView respondsToSelector:@selector(_clearBackForwardCache)]) {
+					[webView _clearBackForwardCache];
+				}
+				WKProcessPool *pool = webView.configuration.processPool;
+				if (pool != nil) {
+					if ([pool respondsToSelector:@selector(_clearWebProcessCache)]) {
+						[pool _clearWebProcessCache];
+					}
+					if ([pool respondsToSelector:@selector(_garbageCollectJavaScriptObjectsForTesting)]) {
+						[pool _garbageCollectJavaScriptObjectsForTesting];
+					}
+				}
+			} @catch (NSException *ex) {
 			}
 		}
 		if (store == nil) {
 			store = [WKWebsiteDataStore defaultDataStore];
 		}
-		if (store == nil) {
-			return;
+		if (store != nil) {
+			NSSet *types = [NSSet setWithObject:WKWebsiteDataTypeMemoryCache];
+			[store removeDataOfTypes:types
+			           modifiedSince:[NSDate distantPast]
+			       completionHandler:^{}];
 		}
-		NSSet *types = [NSSet setWithObject:WKWebsiteDataTypeMemoryCache];
-		[store removeDataOfTypes:types
-		           modifiedSince:[NSDate distantPast]
-		       completionHandler:^{}];
+		malloc_zone_pressure_relief(NULL, 0);
 	});
 }
 */
