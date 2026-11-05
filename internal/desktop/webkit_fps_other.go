@@ -20,9 +20,11 @@ func isPlatformDarkMode() bool {
 	return false
 }
 
-func maxWebContentPhysFootprint() uint64 {
+func teardownClosedWindowWebView(application.Window) {}
+
+func maxWebContentPhysFootprint(...application.Window) uint64 {
 	return 0
 }
 
-func purgeWebViewMemoryCache() {}
+func purgeWebViewMemoryCache(...application.Window) {}
 

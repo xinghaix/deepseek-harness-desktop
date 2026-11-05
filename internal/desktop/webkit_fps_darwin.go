@@ -10,11 +10,18 @@ package desktop
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #include <libproc.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <sys/proc_info.h>
 #include <unistd.h>
 
+@interface WKWebView (DSHWebKitPrivate)
+- (pid_t)_webProcessIdentifier;
+- (void)_close;
+@end
+
 static char dshWindowBridgeControllerKey;
+static _Atomic(pid_t) dshTrackedWebContentPid = 0;
 
 static void dshApplyWindowBackgroundColorToView(NSView *view, NSColor *colour) {
 	if (view == nil || colour == nil) {
@@ -346,12 +353,30 @@ static void dshInstallTerminateReloadGuard(WKWebView *webView) {
 	});
 }
 
+static pid_t dshExtractWebViewProcessID(WKWebView *webView) {
+	if (webView == nil) {
+		return 0;
+	}
+	if ([webView respondsToSelector:@selector(_webProcessIdentifier)]) {
+		@try {
+			pid_t pid = [webView _webProcessIdentifier];
+			if (pid > 0) {
+				atomic_store_explicit(&dshTrackedWebContentPid, pid, memory_order_relaxed);
+				return pid;
+			}
+		} @catch (NSException *ex) {
+		}
+	}
+	return 0;
+}
+
 static void dshApplyDisplayRefreshToWebView(WKWebView *webView) {
 	if (webView == nil) {
 		return;
 	}
 	dshAttachWindowBridgeToWebView(webView);
 	dshInstallTerminateReloadGuard(webView);
+	dshExtractWebViewProcessID(webView);
 	WKPreferences *preferences = webView.configuration.preferences;
 	if (preferences == nil) {
 		return;
@@ -467,20 +492,102 @@ int dshIsSystemDarkMode(void) {
 	return 0;
 }
 
-// 查询当前进程名下最大的 com.apple.WebKit.WebContent 子进程物理内存占用（ri_phys_footprint，字节）。
-// 直接通过内核 proc_listchildpids + proc_pid_rusage 读取，无需切回 UI 主线程。
-unsigned long long dshMaxWebContentPhysFootprint(void) {
-	pid_t selfPid = getpid();
-	pid_t childPids[128];
-	int bytes = proc_listchildpids(selfPid, childPids, (int)sizeof(childPids));
-	if (bytes <= 0) {
+static unsigned long long dshPidPhysFootprint(pid_t pid) {
+	if (pid <= 0) {
 		return 0;
 	}
-	int count = bytes / (int)sizeof(pid_t);
+	struct rusage_info_v4 ri;
+	if (proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)&ri) == 0) {
+		return (unsigned long long)ri.ri_phys_footprint;
+	}
+	return 0;
+}
+
+// 关闭临时窗口（如冷启动配置窗、模态配置窗）时主动卸载其 WKWebView 并调用 _close，
+// 打破 WKUserContentController ScriptMessageHandler 引用环并立即终止对应的 WebContent XPC 进程。
+static void dshTeardownWindowWebViewOnMain(NSWindow *window) {
+	if (window == nil) {
+		return;
+	}
+	WKWebView *webView = dshFindWebViewInView([window contentView]);
+	if (webView == nil) {
+		return;
+	}
+	@try {
+		pid_t closedPid = 0;
+		if ([webView respondsToSelector:@selector(_webProcessIdentifier)]) {
+			closedPid = [webView _webProcessIdentifier];
+		}
+		[webView stopLoading];
+		WKUserContentController *controller = webView.configuration.userContentController;
+		if (controller != nil) {
+			[controller removeScriptMessageHandlerForName:@"external"];
+			[controller removeScriptMessageHandlerForName:@"dshWindowAction"];
+			[controller removeScriptMessageHandlerForName:@"dshWindowBackground"];
+			[controller removeAllUserScripts];
+		}
+		[webView setNavigationDelegate:nil];
+		[webView setUIDelegate:nil];
+		if ([webView respondsToSelector:@selector(_close)]) {
+			[webView _close];
+		}
+		[webView removeFromSuperview];
+		@try {
+			[window setValue:nil forKey:@"webView"];
+		} @catch (NSException *ex) {
+		}
+		if (closedPid > 0) {
+			pid_t expected = closedPid;
+			atomic_compare_exchange_strong_explicit(
+				&dshTrackedWebContentPid, &expected, 0,
+				memory_order_relaxed, memory_order_relaxed);
+		}
+	} @catch (NSException *ex) {
+	}
+}
+
+void dshTeardownWindowWebView(void *nsWindow) {
+	if (nsWindow == NULL) {
+		return;
+	}
+	if ([NSThread isMainThread]) {
+		dshTeardownWindowWebViewOnMain((NSWindow *)nsWindow);
+		return;
+	}
+	dispatch_async(dispatch_get_main_queue(), ^{
+		dshTeardownWindowWebViewOnMain((NSWindow *)nsWindow);
+	});
+}
+
+// 查询目标窗口（及当前进程）关联的 com.apple.WebKit.WebContent 进程物理内存占用（ri_phys_footprint，字节）。
+// macOS 下 WebContent 为 launchd 托管的 XPC 进程（PPID=1），通过 -[WKWebView _webProcessIdentifier]
+// 获取真实 PID 后调用 proc_pid_rusage 读取，无需阻塞 UI 主线程。
+unsigned long long dshMaxWebContentPhysFootprint(void *nsWindow) {
+	if (nsWindow != NULL) {
+		if ([NSThread isMainThread]) {
+			NSWindow *window = (NSWindow *)nsWindow;
+			dshExtractWebViewProcessID(dshFindWebViewInView([window contentView]));
+		} else {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				NSWindow *window = (NSWindow *)nsWindow;
+				dshExtractWebViewProcessID(dshFindWebViewInView([window contentView]));
+			});
+		}
+	}
 	unsigned long long maxFootprint = 0;
+	pid_t trackedPid = atomic_load_explicit(&dshTrackedWebContentPid, memory_order_relaxed);
+	if (trackedPid > 0) {
+		maxFootprint = dshPidPhysFootprint(trackedPid);
+	}
+	pid_t selfPid = getpid();
+	pid_t childPids[128];
+	int count = proc_listchildpids(selfPid, childPids, (int)sizeof(childPids));
+	if (count > 128) {
+		count = 128;
+	}
 	for (int i = 0; i < count; i++) {
 		pid_t pid = childPids[i];
-		if (pid <= 0) {
+		if (pid <= 0 || pid == trackedPid) {
 			continue;
 		}
 		char pathBuf[PROC_PIDPATHINFO_MAXSIZE];
@@ -488,20 +595,28 @@ unsigned long long dshMaxWebContentPhysFootprint(void) {
 		if (pathLen <= 0 || strstr(pathBuf, "WebContent") == NULL) {
 			continue;
 		}
-		struct rusage_info_v4 ri;
-		if (proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)&ri) == 0) {
-			if (ri.ri_phys_footprint > maxFootprint) {
-				maxFootprint = (unsigned long long)ri.ri_phys_footprint;
-			}
+		unsigned long long fp = dshPidPhysFootprint(pid);
+		if (fp > maxFootprint) {
+			maxFootprint = fp;
 		}
 	}
 	return maxFootprint;
 }
 
 // 异步清理 WKWebsiteDataStore 的内存态资源缓存（仅 WKWebsiteDataTypeMemoryCache，不触碰 Cookie 与存储）。
-void dshPurgeWebViewMemoryCache(void) {
+void dshPurgeWebViewMemoryCache(void *nsWindow) {
 	dispatch_async(dispatch_get_main_queue(), ^{
-		WKWebsiteDataStore *store = [WKWebsiteDataStore defaultDataStore];
+		WKWebsiteDataStore *store = nil;
+		if (nsWindow != NULL) {
+			NSWindow *window = (NSWindow *)nsWindow;
+			WKWebView *webView = dshFindWebViewInView([window contentView]);
+			if (webView != nil) {
+				store = webView.configuration.websiteDataStore;
+			}
+		}
+		if (store == nil) {
+			store = [WKWebsiteDataStore defaultDataStore];
+		}
 		if (store == nil) {
 			return;
 		}
@@ -514,7 +629,11 @@ void dshPurgeWebViewMemoryCache(void) {
 */
 import "C"
 
-import "github.com/wailsapp/wails/v3/pkg/application"
+import (
+	"unsafe"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
 
 func unlockWebKitDisplayRefresh(window application.Window) {
 	if window == nil {
@@ -538,14 +657,33 @@ func applyNativeWindowBackground(window application.Window, colour application.R
 	C.dshApplyWindowBackground(ptr, C.int(colour.Red), C.int(colour.Green), C.int(colour.Blue))
 }
 
+func teardownClosedWindowWebView(window application.Window) {
+	if window == nil {
+		return
+	}
+	ptr := window.NativeWindow()
+	if ptr == nil {
+		return
+	}
+	C.dshTeardownWindowWebView(ptr)
+}
+
 func isPlatformDarkMode() bool {
 	return C.dshIsSystemDarkMode() != 0
 }
 
-func maxWebContentPhysFootprint() uint64 {
-	return uint64(C.dshMaxWebContentPhysFootprint())
+func maxWebContentPhysFootprint(window ...application.Window) uint64 {
+	var ptr unsafe.Pointer
+	if len(window) > 0 && window[0] != nil {
+		ptr = window[0].NativeWindow()
+	}
+	return uint64(C.dshMaxWebContentPhysFootprint(ptr))
 }
 
-func purgeWebViewMemoryCache() {
-	C.dshPurgeWebViewMemoryCache()
+func purgeWebViewMemoryCache(window ...application.Window) {
+	var ptr unsafe.Pointer
+	if len(window) > 0 && window[0] != nil {
+		ptr = window[0].NativeWindow()
+	}
+	C.dshPurgeWebViewMemoryCache(ptr)
 }

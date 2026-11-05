@@ -92,11 +92,7 @@ func main() {
 	if management != nil {
 		management.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 			desktop.TuneNativeWebView(management)
-			if err := update.MarkHealthy(); err != nil {
-				log.Printf("更新健康标记失败: %v", err)
-				return
-			}
-			update.CleanupLeftovers()
+			service.MarkUpdateHealthyOnce()
 		})
 	}
 

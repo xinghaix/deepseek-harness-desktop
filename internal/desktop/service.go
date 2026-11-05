@@ -70,6 +70,7 @@ type Service struct {
 	memoryReliefMu           sync.Mutex
 	lastMemoryCachePurgeAt   time.Time
 	lastMemoryReliefReloadAt time.Time
+	healthyOnce              sync.Once
 }
 
 func New(icon []byte) *Service {
@@ -89,8 +90,18 @@ func New(icon []byte) *Service {
 	return s
 }
 
+// MarkUpdateHealthyOnce 在任一主窗口（管理窗或 Chat 窗）WebView 就绪后幂等写入健康标记并清理旧备份。
+func (d *Service) MarkUpdateHealthyOnce() {
+	d.healthyOnce.Do(func() {
+		if err := update.MarkHealthy(); err != nil {
+			return
+		}
+		update.CleanupLeftovers()
+	})
+}
+
 // PrestartPersistedLaunch 在桌面进程初始化阶段异步预启动上次已验证成功的 DSH 配置，
-// 使 dsh web 子进程启动与管理页 WebView 自身加载并行执行。
+// 使 dsh web 子进程启动与管理页 WebView 自身加载并行执行；就绪后直接打开 Chat 并回收启动配置窗。
 func (d *Service) PrestartPersistedLaunch() {
 	persisted, err := d.PersistedLaunch()
 	if err != nil || !persisted.Present || !persisted.LastStartSucceeded {
@@ -102,7 +113,9 @@ func (d *Service) PrestartPersistedLaunch() {
 	opts := persisted.Options
 	opts.Port = 0
 	go func() {
-		_ = d.Start(opts)
+		if err := d.Start(opts); err == nil {
+			_ = d.OpenDSH()
+		}
 	}()
 }
 
@@ -264,7 +277,7 @@ func (d *Service) PresentRecoverySettings() error {
 	d.configDirty = false
 	if config, ok := app.Window.GetByName(configWindowName); ok {
 		config.SetAlwaysOnTop(false)
-		config.Close()
+		closeConfigOrSetupWindow(config)
 	}
 	// Hide Chat (do not Close — that would trip the quit confirmation hook).
 	if chat, ok := app.Window.GetByName(chatWindowName); ok {
@@ -300,6 +313,7 @@ func (d *Service) OpenManagement() error {
 		chat.Show()
 		const modalURL = "/?manage=1&modal=1"
 		window, ok := app.Window.GetByName(configWindowName)
+		reused := ok
 		if !ok {
 			window = app.Window.NewWithOptions(ConfigModalWindowOptions(modalURL, d.resolvedLocale()))
 			d.configIsModal = true
@@ -307,10 +321,10 @@ func (d *Service) OpenManagement() error {
 			d.NoteManagementWindowURL(modalURL)
 		}
 		if setup, setupOK := app.Window.GetByName(setupWindowName); setupOK {
-			setup.Hide()
+			closeConfigOrSetupWindow(setup)
 		}
 		d.hookConfigWindow(window)
-		presentConfigModal(chat, window)
+		presentConfigModal(chat, window, reused)
 		return nil
 	}
 	const managementURL = "/?manage=1"
@@ -327,17 +341,28 @@ func (d *Service) OpenManagement() error {
 	return nil
 }
 
-func presentConfigModal(chat, config application.Window) {
+func closeConfigOrSetupWindow(window application.Window) {
+	if window == nil {
+		return
+	}
+	teardownClosedWindowWebView(window)
+	window.Close()
+}
+
+func presentConfigModal(chat, config application.Window, reused ...bool) {
 	if chat == nil || config == nil {
 		return
 	}
-	config.SetAlwaysOnTop(true)
-	config.SetCloseButtonState(application.ButtonHidden)
-	config.SetMinimiseButtonState(application.ButtonHidden)
-	config.SetMaximiseButtonState(application.ButtonHidden)
-	config.SetFullscreenButtonState(application.ButtonHidden)
-	config.SetSize(720, 680)
-	config.SetMinSize(560, 480)
+	// 新建模态窗已在 ConfigModalWindowOptions 中预设尺寸与隐藏按钮，仅在复用已有窗口时重新同步，避免多余 InvokeSync 往返。
+	if len(reused) == 0 || reused[0] {
+		config.SetAlwaysOnTop(true)
+		config.SetCloseButtonState(application.ButtonHidden)
+		config.SetMinimiseButtonState(application.ButtonHidden)
+		config.SetMaximiseButtonState(application.ButtonHidden)
+		config.SetFullscreenButtonState(application.ButtonHidden)
+		config.SetSize(720, 680)
+		config.SetMinSize(560, 480)
+	}
 	chat.ExecJS(dimChatJS)
 	config.Show()
 	config.Center()
@@ -366,10 +391,10 @@ func (d *Service) dismissConfigModal(app *application.App, chat application.Wind
 	d.configDirty = false
 	if config, ok := app.Window.GetByName(configWindowName); ok {
 		config.SetAlwaysOnTop(false)
-		config.Close()
+		closeConfigOrSetupWindow(config)
 	}
 	if setup, ok := app.Window.GetByName(setupWindowName); ok {
-		setup.Close()
+		closeConfigOrSetupWindow(setup)
 	}
 }
 
@@ -397,6 +422,7 @@ func (d *Service) hookConfigWindow(window application.Window) {
 			return
 		}
 		d.configHooked = false
+		teardownClosedWindowWebView(window)
 		app, err := desktopApp()
 		if err != nil {
 			return
@@ -459,6 +485,9 @@ func (d *Service) hookChatWindow(app *application.App, window application.Window
 		return
 	}
 	d.chatHookedID = wid
+	window.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		d.MarkUpdateHealthyOnce()
+	})
 
 	onResizeOrMove := func(event *application.WindowEvent) {
 		if !d.prefs.getRememberWindowSize() {
@@ -681,7 +710,7 @@ func (d *Service) maybeRelieveChatWebViewMemory(window application.Window) {
 	if window == nil || d.closing.Load() || d.quitStarted.Load() || d.isChatOrAnySessionBusy() {
 		return
 	}
-	footprint := maxWebContentPhysFootprint()
+	footprint := maxWebContentPhysFootprint(window)
 	if footprint < webContentMemoryCachePurgeThresholdBytes {
 		return
 	}
@@ -707,7 +736,7 @@ func (d *Service) maybeRelieveChatWebViewMemory(window application.Window) {
 	d.memoryReliefMu.Unlock()
 
 	if canPurge {
-		purgeWebViewMemoryCache()
+		purgeWebViewMemoryCache(window)
 	}
 	if canReload {
 		d.windowMu.Lock()

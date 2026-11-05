@@ -250,6 +250,12 @@ func TestInMemorySessionRecoveryAndWebContentTerminationHook(t *testing.T) {
 	if !strings.Contains(string(serviceSrc), "maybeRelieveChatWebViewMemory") {
 		t.Fatal("monitorChatWindowGeometry must periodically run maybeRelieveChatWebViewMemory")
 	}
+	if !strings.Contains(string(serviceSrc), "closeConfigOrSetupWindow") || !strings.Contains(string(serviceSrc), "teardownClosedWindowWebView") {
+		t.Fatal("closing config or setup window must tear down its WKWebView to release the WebContent process")
+	}
+	if !strings.Contains(string(serviceSrc), "maxWebContentPhysFootprint(window)") || !strings.Contains(string(serviceSrc), "purgeWebViewMemoryCache(window)") {
+		t.Fatal("maybeRelieveChatWebViewMemory must pass target window to footprint and cache purge helpers")
+	}
 	_ = maxWebContentPhysFootprint()
 }
 

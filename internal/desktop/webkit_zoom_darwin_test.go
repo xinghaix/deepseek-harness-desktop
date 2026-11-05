@@ -73,3 +73,44 @@ int main(void) {
 		t.Fatalf("native zoom timing: %v\n%s", err, out)
 	}
 }
+
+func TestNativeWebViewTeardownAndFootprintTracking(t *testing.T) {
+	clang, err := exec.LookPath("clang")
+	if err != nil {
+		t.Skip("clang unavailable")
+	}
+	source, err := os.ReadFile(repoFile(t, "internal", "desktop", "webkit_fps_darwin.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(source), "#import <Cocoa/Cocoa.h>")
+	end := strings.Index(string(source), "*/")
+	if start < 0 || end <= start {
+		t.Fatal("missing native WebView hooks")
+	}
+	harness := string(source[start:end]) + `
+#include <stdio.h>
+
+int main(void) {
+	@autoreleasepool {
+		pid_t selfPid = getpid();
+		atomic_store_explicit(&dshTrackedWebContentPid, selfPid, memory_order_relaxed);
+		unsigned long long fp = dshMaxWebContentPhysFootprint(NULL);
+		if (fp == 0) {
+			fprintf(stderr, "expected non-zero phys_footprint for tracked pid %d\n", (int)selfPid);
+			return 1;
+		}
+	}
+	return 0;
+}
+`
+	binary := filepath.Join(t.TempDir(), "webview-teardown-probe")
+	cmd := exec.Command(clang, "-x", "objective-c", "-framework", "Cocoa", "-framework", "WebKit", "-o", binary, "-")
+	cmd.Stdin = strings.NewReader(harness)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("compile native webview probe: %v\n%s", err, out)
+	}
+	if out, err := exec.Command(binary).CombinedOutput(); err != nil {
+		t.Fatalf("native webview probe: %v\n%s", err, out)
+	}
+}
