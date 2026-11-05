@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Skills de ingeniería y productividad de Matt Pocock",
-    "description": "27 skills principales de ingeniería y productividad más 11 extensiones opcionales, con sincronización automática de enlaces simbólicos en ~/.dsh/skills."
+    "description": "27 skills principales de ingeniería y productividad más 11 extensiones opcionales, con sincronización automática de enlaces simbólicos en ~/.dsh/skills.",
+    "detail": "locale/detail.es.md"
   }
 }

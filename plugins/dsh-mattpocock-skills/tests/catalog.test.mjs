@@ -128,3 +128,19 @@ test("Contract 5 & 6: Relative markdown links in SKILL.md resolve on disk and ze
     }
   }
 });
+
+test("Contract 8: All 8 locales declare concise localized meta.detail markdown with upstream hyperlink", () => {
+  const pluginRoot = join(DEFAULT_ASSETS_DIR, "..");
+  const langs = ["zh", "en", "de", "fr", "es", "ja", "ko", "pt"];
+  for (const lang of langs) {
+    const locFile = join(pluginRoot, "locale", `${lang}.json`);
+    const loc = JSON.parse(readFileSync(locFile, "utf8"));
+    assert.equal(loc.meta?.detail, `locale/detail.${lang}.md`);
+    const detailPath = join(pluginRoot, loc.meta.detail);
+    assert.equal(existsSync(detailPath), true);
+    const md = readFileSync(detailPath, "utf8").trim();
+    assert.equal(md.startsWith("# "), false, `${loc.meta.detail} should not repeat top-level h1 title`);
+    assert.equal(md.includes("https://github.com/mattpocock/skills"), true);
+    assert.equal(md.split("\n").length <= 8, true);
+  }
+});

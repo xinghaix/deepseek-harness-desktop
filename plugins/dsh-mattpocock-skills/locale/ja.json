@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Matt Pocock エンジニアリング＆生産性スキル集",
-    "description": "27個のコアエンジニアリング＆生産性スキルと11個の拡張スキルを収録（~/.dsh/skills への自動シンボリックリンク同期対応）。"
+    "description": "27個のコアエンジニアリング＆生産性スキルと11個の拡張スキルを収録（~/.dsh/skills への自動シンボリックリンク同期対応）。",
+    "detail": "locale/detail.ja.md"
   }
 }
