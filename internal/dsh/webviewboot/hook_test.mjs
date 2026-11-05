@@ -4,6 +4,7 @@ import {
   collectStaleAuthCookies,
   createLoopbackWebViewMiddleware,
   injectLoadBundle,
+  installLegacyInternalUpdateCompat,
   stripComboPreloads,
 } from "./index.js";
 
@@ -214,6 +215,92 @@ assert.equal(globalThis.__loaded, "from-eval");
     res200.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   });
   assert.equal(headers200["set-cookie"], `${oldPortName1}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict`);
+}
+
+// 验证 Cordis 4.1 (config, next) 二参数 internal/update 与旧版插件 (_config, _noSave, next) 三参数监听器的兼容垫片
+{
+  const hooks = [];
+  const fakeEvents = {
+    _hooks: { "internal/update": hooks },
+    _resolve(type, args) {
+      const thisArg = typeof args[0] === "object" || typeof args[0] === "function" ? args.shift() : null;
+      const name = args.shift();
+      return [thisArg, (this._hooks[name] || []).map((h) => h.callback)];
+    },
+    on(name, listener, options = {}) {
+      (this._hooks[name] ??= []).push({ callback: listener, ...options });
+      return () => {
+        const idx = this._hooks[name].findIndex((h) => h.callback === listener);
+        if (idx >= 0) this._hooks[name].splice(idx, 1);
+      };
+    },
+    waterfall(...args) {
+      const [thisArg, callbacks] = this._resolve("waterfall", args);
+      const inner = args.pop();
+      const dispatch = () => {
+        const cb = callbacks.shift();
+        if (!cb) return inner();
+        let called = false;
+        const next = () => {
+          if (called) throw new Error("next() called multiple times");
+          called = true;
+          return dispatch();
+        };
+        return Reflect.apply(cb, thisArg, [...args, next]);
+      };
+      return dispatch();
+    },
+  };
+
+  let refreshed = 0;
+  // 模拟 dsh-ops 在 webview-boot 加载前已注册的三参数 global internal/update 监听器
+  const disposePre = fakeEvents.on(
+    "internal/update",
+    async (_config, _noSave, next) => {
+      try {
+        return await next();
+      } finally {
+        refreshed++;
+      }
+    },
+    { global: true, prepend: true },
+  );
+
+  // 未安装兼容垫片前，按 Cordis 4.1 二参数分发会抛出 TypeError: next is not a function
+  await assert.rejects(
+    async () => {
+      await fakeEvents.waterfall({}, "internal/update", { enabled: true }, async () => "applied");
+    },
+    /next is not a function/,
+  );
+
+  const cleanupCompat = installLegacyInternalUpdateCompat({ events: fakeEvents });
+
+  // 安装垫片后，存量三参数监听器与后续新增的三参数/二参数监听器均可正常工作
+  let postCalledWithNoSave = null;
+  const disposePost3 = fakeEvents.on("internal/update", async (_config, noSave, next) => {
+    postCalledWithNoSave = noSave;
+    return await next();
+  });
+  let twoArgConfig = null;
+  const disposePost2 = fakeEvents.on("internal/update", async (config, next) => {
+    twoArgConfig = config;
+    return await next();
+  });
+
+  const outcome = await fakeEvents.waterfall({}, "internal/update", { enabled: true }, async () => "applied");
+  assert.equal(outcome, "applied");
+  assert.equal(postCalledWithNoSave, false);
+  assert.deepEqual(twoArgConfig, { enabled: true });
+  assert.ok(refreshed >= 2);
+
+  // 验证卸载监听器依然能按原始引用移除
+  disposePre();
+  disposePost3();
+  disposePost2();
+  assert.equal(hooks.length, 0);
+
+  cleanupCompat();
 }
 
 console.log("webview boot hook order ok");

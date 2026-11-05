@@ -644,7 +644,84 @@ export function createLoopbackWebViewMiddleware() {
   };
 }
 
+export function wrapLegacyInternalUpdateCallback(cb) {
+  if (typeof cb !== "function" || cb.__dshLegacyInternalUpdateWrapped) {
+    return cb;
+  }
+  if (cb.length < 3) {
+    return cb;
+  }
+  const wrapped = function legacyInternalUpdateCompat(config, maybeNoSave, maybeNext) {
+    if (typeof maybeNoSave === "function" && typeof maybeNext !== "function") {
+      return cb.call(this, config, false, maybeNoSave);
+    }
+    return Reflect.apply(cb, this, arguments);
+  };
+  Object.defineProperty(wrapped, "__dshLegacyInternalUpdateWrapped", {
+    value: true,
+    configurable: true,
+  });
+  return wrapped;
+}
+
+export function installLegacyInternalUpdateCompat(ctx) {
+  const events = ctx?.events;
+  if (!events || typeof events._resolve !== "function") {
+    return () => {};
+  }
+  const origResolve = events._resolve;
+  const origOn = typeof events.on === "function" ? events.on : null;
+
+  const patchedResolve = function patchedResolve(type, args) {
+    const hasThisArg =
+      Array.isArray(args) &&
+      args.length > 1 &&
+      (typeof args[0] === "object" || typeof args[0] === "function");
+    const eventName = Array.isArray(args) ? (hasThisArg ? args[1] : args[0]) : undefined;
+    const resolved = origResolve.apply(this, arguments);
+    if (
+      type === "waterfall" &&
+      eventName === "internal/update" &&
+      Array.isArray(resolved) &&
+      Array.isArray(resolved[1])
+    ) {
+      resolved[1] = resolved[1].map(wrapLegacyInternalUpdateCallback);
+    }
+    return resolved;
+  };
+
+  events._resolve = patchedResolve;
+
+  let patchedOn = null;
+  if (origOn) {
+    patchedOn = function patchedOn(name, listener, options) {
+      if (name === "internal/update" && typeof listener === "function" && listener.length >= 3) {
+        listener = wrapLegacyInternalUpdateCallback(listener);
+      }
+      return origOn.call(this, name, listener, options);
+    };
+    events.on = patchedOn;
+  }
+
+  return () => {
+    if (events._resolve === patchedResolve) {
+      events._resolve = origResolve;
+    }
+    if (origOn && patchedOn && events.on === patchedOn) {
+      events.on = origOn;
+    }
+  };
+}
+
 export function apply(ctx) {
+  if (typeof ctx.effect === "function") {
+    ctx.effect(
+      () => installLegacyInternalUpdateCompat(ctx),
+      "desktop-webview-boot:legacy-internal-update-compat",
+    );
+  } else {
+    installLegacyInternalUpdateCompat(ctx);
+  }
   ctx.webServer.tapIndex(stripComboPreloads);
   ctx.on("webserver/index-inject", injectLoadBundle);
 
