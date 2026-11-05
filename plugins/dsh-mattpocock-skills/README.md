@@ -1,6 +1,6 @@
 # dsh-mattpocock-skills
 
-Complete DeepSeek Harness (DSH) Cordis Bundle port of [`mattpocock/skills`](https://github.com/mattpocock/skills) (`v1.3.1`).
+Complete DeepSeek Harness (DSH) Cordis Bundle port of [`mattpocock/skills`](https://github.com/mattpocock/skills) (`v1.3.2`).
 
 ## Features
 

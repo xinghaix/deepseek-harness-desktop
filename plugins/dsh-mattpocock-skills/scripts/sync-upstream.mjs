@@ -21,8 +21,8 @@ export const SURGICAL_PATCHES = [
   {
     id: "P02-grilling-subagent",
     file: "productivity/grilling/SKILL.md",
-    before: `dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself.`,
-    after: `dispatch a sub-agent (via \`subagent\`, or look it up directly if sub-agent delegation depth is 0) to find it; don't ask the user for anything you could look up yourself.`,
+    before: `dispatch a sub-agent with a fresh context window to find it; don't ask the user for anything you could look up yourself.`,
+    after: `dispatch a sub-agent with a fresh context window (via \`subagent\`, or look it up directly if sub-agent delegation depth is 0) to find it; don't ask the user for anything you could look up yourself.`,
   },
   {
     id: "P03-writing-for-agents-skill-mechanics",
@@ -63,8 +63,8 @@ export const SURGICAL_PATCHES = [
   {
     id: "P08-design-it-twice-subagents",
     file: "engineering/codebase-design/DESIGN-IT-TWICE.md",
-    before: `Spawn 3+ sub-agents in parallel. Each must produce a **radically different** interface for the deepened module.`,
-    after: `Spawn 3+ sub-agents in parallel via \`subagent\` (or if sub-agent delegation depth is 0, design the 3+ radically different interfaces side by side in independent sections). Each must produce a **radically different** interface for the deepened module.`,
+    before: `Spawn 3+ sub-agents in parallel, each with a fresh context window. Each must produce a **radically different** interface for the deepened module.`,
+    after: `Spawn 3+ sub-agents in parallel, each with a fresh context window via \`subagent\` (or if sub-agent delegation depth is 0, design the 3+ radically different interfaces side by side in independent sections). Each must produce a **radically different** interface for the deepened module.`,
   },
   {
     id: "P09-improve-codebase-architecture-skill-and-present",
@@ -113,6 +113,12 @@ export const SURGICAL_PATCHES = [
     file: "engineering/wayfinder/SKILL.md",
     before: `1. **Name the destination.** Call the Skill tool twice, for "grilling" and "domain-modeling", to pin down what this map is finding its way to: the spec, decision, or change. The destination fixes the scope, so it's settled first.`,
     after: `1. **Name the destination.** Call the \`skill\` tool twice, for \`"grilling"\` and \`"domain-modeling"\`, to pin down what this map is finding its way to: the spec, decision, or change. The destination fixes the scope, so it's settled first.`,
+  },
+  {
+    id: "P12b2-wayfinder-research-subagents-skill-tool",
+    file: "engineering/wayfinder/SKILL.md",
+    before: `5. **Fire the research subagents.** For each \`research\` ticket you just created, spin up a subagent with a fresh context window that calls the Skill tool with "research" to resolve it in parallel`,
+    after: `5. **Fire the research subagents.** For each \`research\` ticket you just created, spin up a subagent with a fresh context window that calls the \`skill\` tool with \`"research"\` to resolve it in parallel`,
   },
   {
     id: "P12c-wayfinder-work-skill-tool",
@@ -173,6 +179,18 @@ export const SURGICAL_PATCHES = [
     file: "misc/git-guardrails-claude-code/SKILL.md",
     before: `Ask the user: install for **this project only** (\`.claude/settings.json\`) or **all projects** (\`~/.claude/settings.json\`)?`,
     after: `Ask the user: install for **this project only** (\`.claude/settings.json\` or standard \`.git/hooks/pre-push\`) or **all projects** (\`~/.claude/settings.json\`)?`,
+  },
+  {
+    id: "P17e-tdd-codebase-design-skill-tool",
+    file: "engineering/tdd/SKILL.md",
+    before: `call the Skill tool with "codebase-design" for the vocabulary.`,
+    after: `call the \`skill\` tool with \`"codebase-design"\` for the vocabulary.`,
+  },
+  {
+    id: "P17f-handoff-skill-tool",
+    file: "productivity/handoff/SKILL.md",
+    before: `Include a "suggested skills" section in the document, naming which skills the next agent should call the Skill tool for.`,
+    after: `Include a "suggested skills" section in the document, naming which skills the next agent should call the \`skill\` tool for.`,
   },
 ];
 
