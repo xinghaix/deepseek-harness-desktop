@@ -1,6 +1,6 @@
 module deepseek-harness-desktop
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/jackmordaunt/icns/v2 v2.2.7
