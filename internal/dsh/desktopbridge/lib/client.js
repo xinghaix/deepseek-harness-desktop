@@ -917,7 +917,11 @@
 								return {
 									status: "handled",
 									run: () => {
-										void callDesktopRPC(conn, "shortcutAction", { action: "quit" }).catch(() => {});
+										void callDesktopRPC(conn, "shortcutAction", { action: "quit" }).catch(() => {
+											if (typeof window !== "undefined" && typeof window.__DSH_DESKTOP_WINDOW_ACTION__ === "function") {
+												window.__DSH_DESKTOP_WINDOW_ACTION__("quit");
+											}
+										});
 									}
 								};
 							}

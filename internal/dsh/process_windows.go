@@ -246,3 +246,15 @@ func reclaimOrphanedProcessGroup(pgid int) error {
 	_ = pgid
 	return nil
 }
+
+func killSupervisedDetachedChildren(pgid int) {
+	_ = pgid
+}
+
+func killApplicationCoalitionChildren(pgid int) {
+	_ = pgid
+}
+
+func killProcessGroupByID(pgid int) {
+	_ = pgid
+}

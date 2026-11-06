@@ -86,6 +86,9 @@ func main() {
 	// 桌面动作放进各平台宿主菜单（macOS 应用菜单 / Windows·Linux「文件」），
 	// 不再单独挂「设置」。Edit role 仍负责把焦点 WebView 接到系统剪贴板快捷键。
 	app.Menu.SetApplicationMenu(desktop.ApplicationMenu(app, service))
+	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+		service.HandleAppReopen()
+	})
 
 	management := app.Window.NewWithOptions(desktop.ManagementWindowOptions("/"))
 	service.StartTrayIfEnabled()

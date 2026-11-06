@@ -114,6 +114,10 @@ static void dshApplyWindowBackgroundColorToWindow(NSWindow *window, int r, int g
 			if (![window isMiniaturized]) {
 				[window miniaturize:nil];
 			}
+		} else if ([action isEqualToString:@"quit"]) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[NSApp terminate:nil];
+			});
 		}
 		return;
 	}

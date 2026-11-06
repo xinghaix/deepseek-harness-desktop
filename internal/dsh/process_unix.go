@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -70,14 +72,137 @@ func terminateOwnedProcess(owner *ownedProcess, cmd *exec.Cmd) error {
 
 func killOwnedProcessTree(owner *ownedProcess, cmd *exec.Cmd) error {
 	_ = owner
-	if cmd.Process == nil {
+	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
-	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	pgid := cmd.Process.Pid
+	killSupervisedDetachedChildren(pgid)
+	err := syscall.Kill(-pgid, syscall.SIGKILL)
 	if errors.Is(err, syscall.ESRCH) {
 		return nil
 	}
 	return err
+}
+
+func killProcessGroupByID(pgid int) {
+	if pgid < 1 {
+		return
+	}
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+}
+
+func parsePSHierarchyDetachedChildren(output string, rootPGID, selfPID int) (pids []int, pgids []int) {
+	if rootPGID < 1 {
+		return nil, nil
+	}
+	type procRow struct {
+		pid  int
+		ppid int
+		pgid int
+	}
+	var rows []procRow
+	childrenByPPID := make(map[int][]procRow)
+	for _, rawLine := range strings.Split(output, "\n") {
+		fields := strings.Fields(rawLine)
+		if len(fields) < 3 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(fields[0])
+		ppid, err2 := strconv.Atoi(fields[1])
+		pgid, err3 := strconv.Atoi(fields[2])
+		if err1 != nil || err2 != nil || err3 != nil || pid < 1 {
+			continue
+		}
+		row := procRow{pid: pid, ppid: ppid, pgid: pgid}
+		rows = append(rows, row)
+		childrenByPPID[ppid] = append(childrenByPPID[ppid], row)
+	}
+	visited := make(map[int]bool)
+	var queue []int
+	for _, row := range rows {
+		if row.pid == rootPGID || row.pgid == rootPGID {
+			if !visited[row.pid] {
+				visited[row.pid] = true
+				queue = append(queue, row.pid)
+			}
+		}
+	}
+	seenPGID := make(map[int]bool)
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		for _, child := range childrenByPPID[curr] {
+			if !visited[child.pid] {
+				visited[child.pid] = true
+				queue = append(queue, child.pid)
+			}
+			if child.pid != selfPID && child.pid != rootPGID {
+				pids = append(pids, child.pid)
+			}
+			if child.pgid > 1 && child.pgid != rootPGID && child.pgid != selfPID && !seenPGID[child.pgid] {
+				seenPGID[child.pgid] = true
+				pgids = append(pgids, child.pgid)
+			}
+		}
+	}
+	return pids, pgids
+}
+
+func parsePSEnvDetachedChildren(output string, rootPGID, selfPID int) (pids []int, pgids []int) {
+	if rootPGID < 1 {
+		return nil, nil
+	}
+	wantedToken := "DSHD_SUPERVISE_PGID=" + strconv.Itoa(rootPGID)
+	seenPID := make(map[int]bool)
+	seenPGID := make(map[int]bool)
+	for _, rawLine := range strings.Split(output, "\n") {
+		fields := strings.Fields(rawLine)
+		if len(fields) < 4 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(fields[0])
+		ppid, err2 := strconv.Atoi(fields[1])
+		pgid, err3 := strconv.Atoi(fields[2])
+		if err1 != nil || err2 != nil || err3 != nil || pid <= 1 || pid == selfPID || pid == rootPGID {
+			continue
+		}
+		matched := hasEnvToken(fields[3:], wantedToken)
+		if !matched && ppid == 1 && hasEnvToken(fields[3:], "DSHD_SUPERVISE=1") && !hasEnvPrefix(fields[3:], "DSHD_SUPERVISE_PGID=") {
+			if strings.Contains(rawLine, "ego-cast-worker.mjs") {
+				matched = true
+			}
+		}
+		if !matched {
+			continue
+		}
+		if !seenPID[pid] {
+			seenPID[pid] = true
+			pids = append(pids, pid)
+		}
+		if pgid > 1 && pgid != rootPGID && pgid != selfPID && !seenPGID[pgid] {
+			seenPGID[pgid] = true
+			pgids = append(pgids, pgid)
+		}
+	}
+	return pids, pgids
+}
+
+func hasEnvToken(tokens []string, wanted string) bool {
+	for _, tok := range tokens {
+		if tok == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnvPrefix(tokens []string, prefix string) bool {
+	for _, tok := range tokens {
+		if strings.HasPrefix(tok, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func ownedProcessTreeAlive(owner *ownedProcess, pid int) bool {
@@ -108,6 +233,7 @@ func reclaimOrphanedProcessGroup(pgid int) error {
 	if pgid < 1 {
 		return nil
 	}
+	killSupervisedDetachedChildren(pgid)
 	err := syscall.Kill(-pgid, syscall.SIGKILL)
 	if errors.Is(err, syscall.ESRCH) {
 		return nil

@@ -44,7 +44,14 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 	}
 	dialog := d.quitDialog(app.Dialog)
 	if chat, ok := app.Window.GetByName(chatWindowName); ok {
-		dialog.AttachToWindow(chat)
+		// macOS 的 AttachToWindow 会挂载 NSAlert Sheet 到目标窗口；若 Chat 处于隐藏到托盘或最小化状态，
+		// Sheet 将不可见并导致 quitPromptOpen 永久卡死，后续 Command+Q 全部失效。
+		if !chat.IsVisible() || chat.IsMinimised() {
+			revealExistingChatWindow(chat)
+		}
+		if chat.IsVisible() && !chat.IsMinimised() {
+			dialog.AttachToWindow(chat)
+		}
 	}
 	dialog.Show()
 }
@@ -95,4 +102,32 @@ func (d *Service) forceQuit() {
 			app.Quit()
 		}
 	}()
+}
+
+// HandleAppReopen 在用户点击 macOS Dock 图标且当前无可见窗口（如已通过 ⌘W / X 隐藏到后台）时唤回窗口。
+func (d *Service) HandleAppReopen() {
+	if d.quitStarted.Load() || d.allowQuit.Load() {
+		return
+	}
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	for _, name := range []string{configWindowName, chatWindowName, setupWindowName} {
+		if w, ok := app.Window.GetByName(name); ok && w != nil && w.IsVisible() && !w.IsMinimised() {
+			w.Focus()
+			return
+		}
+	}
+	if chat, ok := app.Window.GetByName(chatWindowName); ok && chat != nil {
+		revealExistingChatWindow(chat)
+		return
+	}
+	if d.Status().State == "running" {
+		d.revealChatFromTray()
+		return
+	}
+	if err := d.OpenManagement(); err != nil {
+		log.Printf("reopen window failed: %v", err)
+	}
 }

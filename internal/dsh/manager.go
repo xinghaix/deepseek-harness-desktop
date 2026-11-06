@@ -1021,6 +1021,7 @@ func (d *Manager) Close() error {
 	d.autoRelaunchGen++
 	d.mu.Unlock()
 	stopErr := d.stop()
+	killApplicationCoalitionChildren(0)
 	d.mu.Lock()
 	bridge := d.bridge
 	transport := d.transport
