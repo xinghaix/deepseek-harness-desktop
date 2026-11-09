@@ -85,10 +85,15 @@ function normalizeTimeoutMs(value) {
   return num;
 }
 
-// 规范化可选的按需调用提示词，去除首尾空白并统一换行符
+// 无损规范化按需调用提示词：逐行 trim、合并连续空格/Tab、去除全角标点后冗余空格并剔除空行
 function normalizePrompt(value) {
   if (typeof value !== "string") return "";
-  return value.replace(/\r\n/g, "\n").trim();
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t\f\v]+/g, " ").replace(/([。；！？，、：]) +/g, "$1").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 // 解析 MCP 工具公有名称 mcp__<serverName>__<toolName>，提取所属 serverName
@@ -103,11 +108,14 @@ function parseMcpToolServerName(toolName) {
   return { serverName, toolName: localToolName };
 }
 
-// 组装在调用 MCP 工具后注入给模型的提示词文本
+// 组装并无损压平注入给模型的单行提示词文本（全角标点行直接拼接，其余行以单空格连接）
 function formatCallPromptText(serverName, prompt) {
   const cleanPrompt = normalizePrompt(prompt);
   if (!cleanPrompt) return "";
-  return `<system-reminder>\n[MCP server: ${serverName}]\n${cleanPrompt}\n</system-reminder>`;
+  const compact = cleanPrompt
+    .split("\n")
+    .reduce((acc, line) => (!acc ? line : /[。；！？，、：]$/.test(acc) ? acc + line : acc + " " + line), "");
+  return `<system-reminder>[MCP:${serverName}] ${compact}</system-reminder>`;
 }
 
 /**

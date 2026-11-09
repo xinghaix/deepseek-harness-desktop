@@ -13,7 +13,11 @@ const model = require("../lib/model.cjs");
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("normalizePrompt, parseMcpToolServerName, and formatCallPromptText handle MCP call-time prompts", () => {
-  assert.equal(model.normalizePrompt("  当前为只读权限\r\n请勿写入  "), "当前为只读权限\n请勿写入");
+  assert.equal(
+    model.normalizePrompt("  当前为只读权限。   \r\n\r\n   查大表请加  LIMIT  "),
+    "当前为只读权限。\n查大表请加 LIMIT",
+  );
+  assert.equal(model.normalizePrompt("只读权限。  禁止写入，  注意安全"), "只读权限。禁止写入，注意安全");
   assert.equal(model.normalizePrompt("   "), "");
   assert.equal(model.normalizePrompt(null), "");
   assert.deepEqual(model.parseMcpToolServerName("mcp__clickhouse-mcp__run_query"), {
@@ -24,8 +28,12 @@ test("normalizePrompt, parseMcpToolServerName, and formatCallPromptText handle M
   assert.equal(model.parseMcpToolServerName("mcp__bad name__tool"), null);
   assert.equal(model.parseMcpToolServerName("mcp__onlyserver__"), null);
   assert.equal(
-    model.formatCallPromptText("clickhouse-mcp", " 当前为只读权限 "),
-    "<system-reminder>\n[MCP server: clickhouse-mcp]\n当前为只读权限\n</system-reminder>",
+    model.formatCallPromptText("clickhouse-mcp", " 当前为只读权限。 \n\n 查大表请加  LIMIT "),
+    "<system-reminder>[MCP:clickhouse-mcp] 当前为只读权限。查大表请加 LIMIT</system-reminder>",
+  );
+  assert.equal(
+    model.formatCallPromptText("clickhouse-mcp", "Read-only.\nUse LIMIT."),
+    "<system-reminder>[MCP:clickhouse-mcp] Read-only. Use LIMIT.</system-reminder>",
   );
 });
 

@@ -124,7 +124,7 @@ test("Host 路由使用真实 Cordis 与 JSON 数据域：跨重载持久化，�
     plugin: "dsh-mcp-manager",
     form: "instructions",
   });
-  assert.match(decision1.additionalContexts[0].content[0].text, /\[MCP server: persisted-renamed\]/);
+  assert.match(decision1.additionalContexts[0].content[0].text, /\[MCP:persisted-renamed\]/);
   assert.match(decision1.additionalContexts[0].content[0].text, /当前为只读权限，禁止执行写操作/);
 
   // 同一批次（相同 rootCallId）再次调用该 MCP 的其它工具不会重复注入
