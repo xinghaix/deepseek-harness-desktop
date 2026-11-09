@@ -120,8 +120,7 @@ test("Host 路由使用真实 Cordis 与 JSON 数据域：跨重载持久化，�
   assert.equal(decision1.additionalContexts?.length, 1);
   assert.equal(decision1.additionalContexts[0].role, "user");
   assert.deepEqual(decision1.additionalContexts[0].source, {
-    kind: "plugin",
-    plugin: "dsh-mcp-manager",
+    kind: "plugin:dsh-mcp-manager",
     form: "instructions",
   });
   assert.match(decision1.additionalContexts[0].content[0].text, /\[MCP:persisted-renamed\]/);

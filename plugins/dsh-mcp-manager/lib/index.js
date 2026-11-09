@@ -623,8 +623,7 @@ export async function apply(ctx) {
         text: model.formatCallPromptText(parsed.serverName, prompt),
       })]),
       source: Object.freeze({
-        kind: "plugin",
-        plugin: "dsh-mcp-manager",
+        kind: "plugin:dsh-mcp-manager",
         form: "instructions",
       }),
     });
