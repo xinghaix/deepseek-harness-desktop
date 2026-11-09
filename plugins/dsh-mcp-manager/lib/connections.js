@@ -322,7 +322,9 @@ export class Connections {
   async save(server, origin) {
     const old = server.patchId ? this.get(server.patchId) : null;
     if (server.patchId && (!old || old.legacy?.pending)) throw new Error("连接已变更，请刷新后重试");
-    if (old && old.config.serverName !== String(server.serverName).trim()) throw new Error(model.nameMessage("taken", server.serverName));
+    const otherNames = this.records().filter((r) => r.id !== old?.id).map((r) => r.config.serverName);
+    const issue = model.nameIssue(server.serverName, otherNames);
+    if (issue) throw new Error(model.nameMessage(issue, server.serverName));
     const record = {
       ...(old || {}),
       id: old?.id || "dsh-mcp-" + randomUUID(),

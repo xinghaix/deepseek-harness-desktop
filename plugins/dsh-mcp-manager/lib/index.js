@@ -318,7 +318,6 @@ async function saveServer(ctx, server, origin, lastErrors, connections) {
   const timeoutMs = model.normalizeTimeoutMs(server.toolCallTimeoutMs);
   const managed = patchId ? connections.get(patchId) : null;
   if (!patchId || managed && !managed.legacy?.pending) {
-    if (managed && managed.config.serverName !== trimmedName) throw new CodedError("renameOwned");
     return connections.save(server, origin);
   }
   const existing = findEntry(ctx, patchId);
@@ -392,6 +391,7 @@ async function saveServer(ctx, server, origin, lastErrors, connections) {
     }
     if (existing.fiber === undefined) throw new CodedError("editDisabled");
     await ctx.configEditor.edit(existing, () => next);
+    lastErrors?.delete(currentName);
     lastErrors?.delete(trimmedName);
     return "applied";
   } catch (error) {

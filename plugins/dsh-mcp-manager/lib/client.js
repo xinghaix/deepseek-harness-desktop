@@ -2890,6 +2890,7 @@ module.exports = {
 				const source = server || base;
 				setDraft({
 					patchId: server?.patchId || "",
+					bundleName: server?.bundleName || "",
 					templateId: server ? "" : (template || ""),
 					serverName: source?.serverName || "",
 					transport: source?.transport || "stdio",
@@ -3579,7 +3580,7 @@ module.exports = {
 			const { tr, draft } = props;
 			const set = (patch) => props.setDraft({ ...draft, ...patch });
 			const issue = model.nameIssue(draft.serverName, props.names);
-			const isExistingOwned = Boolean(draft.patchId) && !draft.external;
+			const isLegacyBundle = Boolean(draft.patchId && draft.bundleName);
 			const launchModified = Boolean(draft.patchId && draft.enabled && model.launchChanged(props.previous, draft));
 			return jsxs("div", {
 				"data-editor": "",
@@ -3607,8 +3608,8 @@ module.exports = {
 									"data-field": "name",
 									className: "dsh-mcp-input",
 									"data-mono": "true",
-									readOnly: isExistingOwned,
-									title: isExistingOwned ? tr("error.renameOwned") : undefined,
+									readOnly: isLegacyBundle,
+									title: isLegacyBundle ? tr("error.renameOwned") : undefined,
 									value: draft.serverName,
 									onChange: (event) => set({ serverName: event.target.value }),
 								}),

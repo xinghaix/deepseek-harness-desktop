@@ -94,9 +94,11 @@ test("Host 路由使用真实 Cordis 与 JSON 数据域：跨重载持久化，�
   assert.equal(restored.servers[0].patchId, first.patchId);
   assert.equal(restored.servers[0].toolCallTimeoutMs, 90000);
   const edited = await h.action({ op: "save", server: {
-    ...restored.servers[0], args: ["changed.js"], env: restored.servers[0].env.map((row) => ({ ...row, keep: true })),
+    ...restored.servers[0], serverName: "persisted-renamed", args: ["changed.js"], env: restored.servers[0].env.map((row) => ({ ...row, keep: true })),
   } });
   assert.equal(edited.ok, true, edited.message);
+  assert.equal(edited.state.servers[0].serverName, "persisted-renamed");
+  assert.equal(edited.state.servers[0].patchId, first.patchId);
   assert.doesNotMatch(JSON.stringify(edited), /test-private-value/);
   const deleted = await h.action({ op: "remove", patchId: first.patchId });
   assert.equal(deleted.ok, true, deleted.message);

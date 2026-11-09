@@ -107,6 +107,9 @@ test("新连接增删改、启停、恢复不安装任何 Bundle；删除后重�
   assert.equal(manager.get(old.id).enabled, true);
   await manager.save({ patchId: old.id, serverName: "alpha", command: "node", args: ["new.js"] });
   assert.deepEqual(manager.get(old.id).config.args, ["new.js"]);
+  await manager.save({ patchId: old.id, serverName: "alpha-renamed", command: "node", args: ["new.js"] });
+  assert.equal(manager.get(old.id).config.serverName, "alpha-renamed");
+  assert.equal(manager.get(old.id).enabled, true);
   await manager.remove(manager.get(old.id));
   await manager.save({ serverName: "alpha", command: "node", args: [] });
   assert.notEqual(manager.records()[0].id, old.id);

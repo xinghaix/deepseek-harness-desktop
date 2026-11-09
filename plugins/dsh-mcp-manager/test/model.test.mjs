@@ -399,7 +399,7 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     servers: [
       {
         patchId: "dsh-mcp-alpha-1",
-        bundleName: "@local/dsh-mcp-alpha",
+        bundleName: "",
         pluginEntryId: "entry-alpha",
         serverName: "alpha",
         enabled: false,
@@ -619,6 +619,23 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     const nameInput = findAll(treeDraftFromTpl, (n) => n.props?.["data-field"] === "name")[0];
     assert.ok(nameInput);
     assert.equal(nameInput.props.value, "filesystem");
+    assert.equal(nameInput.props.readOnly, false);
+
+    // 5) Editing an existing storageDomain-managed server keeps the name input editable
+    const alphaRow = findAll(tree1, (n) => n.props?.["data-server"] === "alpha")[0];
+    const summaryBtn = findAll(alphaRow, (n) => n.props?.className === "dsh-mcp-row-summary")[0];
+    summaryBtn.props.onClick();
+    cursor = 0;
+    const treeExpanded = expand(registeredPage({ t: (k) => k }));
+    const editBtn = findAll(treeExpanded, (n) => n.type === "button" && Array.isArray(n.props?.children) && n.props.children.includes("Edit connection"))[0];
+    assert.ok(editBtn);
+    editBtn.props.onClick();
+    cursor = 0;
+    const treeEditingExisting = expand(registeredPage({ t: (k) => k }));
+    const existingNameInput = findAll(treeEditingExisting, (n) => n.props?.["data-field"] === "name")[0];
+    assert.ok(existingNameInput);
+    assert.equal(existingNameInput.props.value, "alpha");
+    assert.equal(existingNameInput.props.readOnly, false);
   } finally {
     globalThis.window = prevWindow;
   }
