@@ -158,6 +158,56 @@ body[data-dsh-sidebar-dragging] #root > [data-slot="root"] > div,
     transition: none !important;
   }
 }
+
+::highlight(dsh-desktop-selection) {
+  background-color: rgba(54, 106, 206, 0.45);
+  background-color: color-mix(in srgb, var(--dsw-alias-brand-primary, #366ace) 45%, transparent);
+  color: inherit;
+}
+
+[data-text-interaction-source] :not(pre) > code {
+  display: inline !important;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 1px 5px;
+}
+
+[role="menu"] [role="menuitem"][data-dsh-automatic-focus]:focus-visible:not(:hover),
+[role="menu"]:has([role="menuitem"]:hover) [role="menuitem"]:focus-visible:not(:hover) {
+  background: transparent !important;
+}
+
+[data-context-menu] {
+  anchor-name: none !important;
+  background: var(--dsw-specific-menu, var(--dsw-menu-surface-fill)) !important;
+  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter) !important;
+  backdrop-filter: var(--dsw-menu-backdrop-filter) !important;
+  visibility: visible !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+[data-context-menu] > [aria-hidden="true"],
+[data-menu-backing] {
+  display: none !important;
+}
+
+[data-context-menu] > * {
+  animation: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+[data-context-menu] > [role="presentation"] {
+  position: relative !important;
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+
+[data-context-menu][data-menu-phase="dismiss"],
+[data-context-menu][data-menu-phase="replace"] {
+  opacity: 0 !important;
+}
 `
 
 const desktopNativeWindowInsetCSS = `

@@ -5100,27 +5100,85 @@
 			}
 		}
 
-		function readContextMenuSelection(event) {
-			if (typeof window === "undefined" || typeof window.getSelection !== "function") return "";
-			const selection = window.getSelection();
-			const text = String(selection?.toString?.() || "").trim();
-			if (!text) return "";
+		const DESKTOP_SELECTION_HIGHLIGHT = "dsh-desktop-selection";
+		const DESKTOP_SELECTION_STYLE_ID = "dsh-desktop-selection-highlight-style";
+
+		function ensureSelectionHighlightStyle() {
+			if (typeof document === "undefined" || typeof document.createElement !== "function") return;
+			if (typeof document.getElementById === "function" && document.getElementById(DESKTOP_SELECTION_STYLE_ID)) return;
+			const host = document.head || document.documentElement;
+			if (!host || typeof host.appendChild !== "function") return;
+			const style = document.createElement("style");
+			style.id = DESKTOP_SELECTION_STYLE_ID;
+			style.textContent = "::highlight(" + DESKTOP_SELECTION_HIGHLIGHT + "){background-color:rgba(54,106,206,0.45);background-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#366ace) 45%,transparent);color:inherit;}" +
+				"[data-text-interaction-source] :not(pre)>code{display:inline!important;-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:1px 5px;}" +
+				'[role="menu"] [role="menuitem"][data-dsh-automatic-focus]:focus-visible:not(:hover),' +
+				'[role="menu"]:has([role="menuitem"]:hover) [role="menuitem"]:focus-visible:not(:hover){background:transparent!important;}' +
+				'[data-context-menu]{anchor-name:none!important;background:var(--dsw-specific-menu,var(--dsw-menu-surface-fill))!important;-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter)!important;backdrop-filter:var(--dsw-menu-backdrop-filter)!important;visibility:visible!important;overflow-x:hidden!important;overflow-y:auto!important;}' +
+				'[data-context-menu]>[aria-hidden="true"],[data-menu-backing]{display:none!important;}' +
+				'[data-context-menu]>*{animation:none!important;opacity:1!important;visibility:visible!important;}' +
+				'[data-context-menu]>[role="presentation"]{position:relative!important;z-index:1!important;overflow:visible!important;}' +
+				'[data-context-menu][data-menu-phase="dismiss"],[data-context-menu][data-menu-phase="replace"]{opacity:0!important;}';
+			host.appendChild(style);
+		}
+
+		function isPointInsideRange(range, event) {
+			if (!range) return false;
 			const keyboard = (Number(event?.clientX) || 0) === 0 && (Number(event?.clientY) || 0) === 0;
-			if (keyboard || typeof selection.rangeCount !== "number" || selection.rangeCount < 1 || typeof selection.getRangeAt !== "function") {
-				return text.slice(0, 2048);
-			}
+			if (keyboard) return true;
 			try {
-				const range = selection.getRangeAt(0);
-				const rects = typeof range?.getClientRects === "function" ? [...range.getClientRects()] : [];
-				if (rects.length === 0) return text.slice(0, 2048);
-				const x = Number(event.clientX) || 0;
-				const y = Number(event.clientY) || 0;
-				const pad = 4;
-				const inside = rects.some((r) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad);
-				return inside ? text.slice(0, 2048) : "";
+				const x = Number(event?.clientX) || 0;
+				const y = Number(event?.clientY) || 0;
+				const pad = 6;
+				const rects = typeof range.getClientRects === "function" ? [...range.getClientRects()] : [];
+				if (rects.length === 0) return true;
+				if (rects.some((r) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad)) {
+					return true;
+				}
+				if (typeof range.getBoundingClientRect === "function" && typeof range.intersectsNode === "function" && event?.target) {
+					const box = range.getBoundingClientRect();
+					if (x >= box.left - pad && x <= box.right + pad && y >= box.top - pad && y <= box.bottom + pad && range.intersectsNode(event.target)) {
+						return true;
+					}
+				}
+				return false;
 			} catch (_) {
-				return text.slice(0, 2048);
+				return true;
 			}
+		}
+
+		function readContextMenuSelection(event, fallbackRange = null) {
+			if (typeof window !== "undefined" && typeof window.getSelection === "function") {
+				const selection = window.getSelection();
+				const text = String(selection?.toString?.() || "").trim();
+				if (text) {
+					const hasRange = typeof selection.rangeCount === "number" && selection.rangeCount >= 1 && typeof selection.getRangeAt === "function";
+					if (!hasRange) {
+						return { text: text.slice(0, 2048), range: null };
+					}
+					try {
+						const range = selection.getRangeAt(0);
+						if (isPointInsideRange(range, event)) {
+							return {
+								text: text.slice(0, 2048),
+								range: typeof range?.cloneRange === "function" ? range.cloneRange() : range
+							};
+						}
+					} catch (_) {
+						return { text: text.slice(0, 2048), range: null };
+					}
+				}
+			}
+			if (fallbackRange) {
+				const fallbackText = String(fallbackRange.toString?.() || "").trim();
+				if (fallbackText && isPointInsideRange(fallbackRange, event)) {
+					return {
+						text: fallbackText.slice(0, 2048),
+						range: typeof fallbackRange.cloneRange === "function" ? fallbackRange.cloneRange() : fallbackRange
+					};
+				}
+			}
+			return null;
 		}
 
 		function activeMenuSessionId(ctx) {
@@ -5138,6 +5196,156 @@
 			const cleanups = [];
 			const selectionObservable = createDesktopMenuObservable();
 			let boundMenus = null;
+			let rightDownSelectionRange = null;
+			let rightDownFocusElement = null;
+			let retainedSelectionCleanup = null;
+
+			ensureSelectionHighlightStyle();
+
+			const buildHighlightRanges = (range) => {
+				const cloned = typeof range.cloneRange === "function" ? range.cloneRange() : range;
+				const ranges = [cloned];
+				try {
+					const root = cloned.commonAncestorContainer;
+					if (!root || root.nodeType === 3 || typeof document === "undefined" || typeof document.createTreeWalker !== "function" || typeof document.createRange !== "function") {
+						return ranges;
+					}
+					const walker = document.createTreeWalker(root, 4);
+					let node = walker.nextNode();
+					while (node) {
+						if (node.nodeValue && node.nodeValue.length > 0) {
+							let intersects = false;
+							try {
+								intersects = typeof cloned.intersectsNode === "function" ? cloned.intersectsNode(node) : true;
+							} catch (_) {
+								intersects = false;
+							}
+							if (intersects) {
+								const start = node === cloned.startContainer ? cloned.startOffset : 0;
+								const end = node === cloned.endContainer ? cloned.endOffset : node.nodeValue.length;
+								if (end > start) {
+									const sub = document.createRange();
+									sub.setStart(node, start);
+									sub.setEnd(node, end);
+									ranges.push(sub);
+								}
+							}
+						}
+						node = walker.nextNode();
+					}
+				} catch (_) {}
+				return ranges;
+			};
+
+			const setCustomSelectionHighlight = (range) => {
+				try {
+					const highlights = (typeof CSS !== "undefined" && CSS?.highlights) || (typeof window !== "undefined" && window.CSS?.highlights);
+					const HighlightCtor = (typeof Highlight === "function" && Highlight) || (typeof window !== "undefined" && typeof window.Highlight === "function" && window.Highlight);
+					if (!highlights) return;
+					if (!range || !HighlightCtor) {
+						highlights.delete?.(DESKTOP_SELECTION_HIGHLIGHT);
+						return;
+					}
+					const ranges = buildHighlightRanges(range);
+					highlights.set?.(DESKTOP_SELECTION_HIGHLIGHT, new HighlightCtor(...ranges));
+				} catch (_) {}
+			};
+
+			const restoreNativeDomSelection = (range, focusElement) => {
+				if (!range || typeof window === "undefined" || typeof window.getSelection !== "function") return;
+				try {
+					if (focusElement && typeof focusElement.focus === "function" && (typeof document === "undefined" || !document.contains || document.contains(focusElement))) {
+						focusElement.focus({ preventScroll: true });
+					}
+				} catch (_) {}
+				try {
+					const sel = window.getSelection();
+					if (!sel || typeof sel.removeAllRanges !== "function" || typeof sel.addRange !== "function") return;
+					sel.removeAllRanges();
+					sel.addRange(typeof range.cloneRange === "function" ? range.cloneRange() : range);
+				} catch (_) {}
+			};
+
+			const retainSelectionForMenu = (range, focusElement, menus) => {
+				if (typeof retainedSelectionCleanup === "function") {
+					retainedSelectionCleanup({ restoreNative: false });
+				}
+				if (!range) return;
+				const savedRange = typeof range.cloneRange === "function" ? range.cloneRange() : range;
+				const savedFocus = focusElement || (typeof document !== "undefined" ? document.activeElement : null);
+				let dismissedByOutsidePointer = false;
+				let cleaned = false;
+				let unsubscribeActive = null;
+				let restoreTimer = null;
+
+				// 1. 立即通过 W3C CSS Custom Highlight API（含逐文本节点子 Range）与原生 Selection 双重锁定高亮渲染
+				setCustomSelectionHighlight(savedRange);
+				restoreNativeDomSelection(savedRange, null);
+
+				const onFocusIn = (event) => {
+					if (cleaned || dismissedByOutsidePointer) return;
+					const target = event?.target;
+					if (target?.closest?.('[role="menu"]')) {
+						setCustomSelectionHighlight(savedRange);
+						restoreNativeDomSelection(savedRange, null);
+					}
+				};
+
+				const onPointerDownCapture = (event) => {
+					if (cleaned) return;
+					const target = event?.target?.nodeType === 3 ? event.target.parentElement : event?.target;
+					if (target?.closest?.('[role="menu"]')) return;
+					if (Number(event?.button) === 2 && isPointInsideRange(savedRange, event)) return;
+					// 用户左键点击菜单外区域：顺应用户意图取消选中并移除高亮
+					dismissedByOutsidePointer = true;
+					cleanup({ restoreNative: false });
+				};
+
+				const cleanup = ({ restoreNative = true } = {}) => {
+					if (cleaned) return;
+					cleaned = true;
+					if (retainedSelectionCleanup === cleanup) retainedSelectionCleanup = null;
+					if (typeof unsubscribeActive === "function") {
+						try { unsubscribeActive(); } catch (_) {}
+						unsubscribeActive = null;
+					}
+					if (restoreTimer !== null && typeof clearTimeout === "function") {
+						clearTimeout(restoreTimer);
+						restoreTimer = null;
+					}
+					if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+						document.removeEventListener("focusin", onFocusIn, true);
+						document.removeEventListener("pointerdown", onPointerDownCapture, true);
+					}
+					if (restoreNative && !dismissedByOutsidePointer) {
+						restoreNativeDomSelection(savedRange, savedFocus);
+						if (typeof setTimeout === "function") {
+							setTimeout(() => {
+								restoreNativeDomSelection(savedRange, savedFocus);
+								setCustomSelectionHighlight(null);
+							}, 140);
+						} else {
+							setCustomSelectionHighlight(null);
+						}
+					} else {
+						setCustomSelectionHighlight(null);
+					}
+				};
+
+				if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+					document.addEventListener("focusin", onFocusIn, true);
+					document.addEventListener("pointerdown", onPointerDownCapture, true);
+				}
+				if (menus?.active && typeof menus.active.subscribe === "function") {
+					unsubscribeActive = menus.active.subscribe(() => {
+						const current = menus.active.getSnapshot?.();
+						if (!current || current.kind !== "selection") {
+							cleanup({ restoreNative: !current });
+						}
+					});
+				}
+				retainedSelectionCleanup = cleanup;
+			};
 
 			const bindMenus = (menus) => {
 				if (!menus || boundMenus === menus) return;
@@ -5177,7 +5385,6 @@
 									id: "search",
 									label: searchLabel,
 									icon: { key: "deepseek-harness-desktop.search" },
-									separatorBefore: true,
 									run: async () => {
 										const url = buildDesktopSearchURL(query);
 										if (!url) return;
@@ -5208,6 +5415,55 @@
 			}
 
 			if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+				// 在 window 捕获阶段（早于 dsh-client-ui-sidebar-right 在 document 捕获阶段注册的 observeSidebarFocus pointerdown -> pane.focus()）
+				// 提前保存右键按下时的选区 Range 并锁定 CSS Highlight，避免侧边栏 pane.focus() 切换焦点时丢失选区
+				const pointerCaptureTarget = (typeof window !== "undefined" && typeof window.addEventListener === "function") ? window : document;
+				const onRightPointerDownCapture = (event) => {
+					if (!event || Number(event.button) !== 2) return;
+					rightDownSelectionRange = null;
+					rightDownFocusElement = typeof document !== "undefined" ? document.activeElement : null;
+					if (typeof window === "undefined" || typeof window.getSelection !== "function") return;
+					try {
+						const sel = window.getSelection();
+						const text = String(sel?.toString?.() || "").trim();
+						if (!text || typeof sel.rangeCount !== "number" || sel.rangeCount < 1 || typeof sel.getRangeAt !== "function") return;
+						const range = sel.getRangeAt(0);
+						if (isPointInsideRange(range, event)) {
+							rightDownSelectionRange = typeof range.cloneRange === "function" ? range.cloneRange() : range;
+							setCustomSelectionHighlight(rightDownSelectionRange);
+						}
+					} catch (_) {}
+				};
+				pointerCaptureTarget.addEventListener("pointerdown", onRightPointerDownCapture, true);
+				cleanups.push(() => pointerCaptureTarget.removeEventListener("pointerdown", onRightPointerDownCapture, true));
+
+				// 当用户已拖选文本并在选区内右键时（含侧边栏顶部路径栏 PathLabel 等带 getTriggerProps 的元素），
+				// 在捕获阶段优先打开 selection 菜单并保留选区高亮，避免被元素的 file trigger 拦截并清空选区
+				const onContextMenuCapture = (event) => {
+					if (!event || event.defaultPrevented) return;
+					const rawTarget = event.target;
+					const element = rawTarget?.nodeType === 3 ? rawTarget.parentElement : rawTarget;
+					if (!element || isEditableMenuTarget(element) || element.closest?.('[role="menu"]')) return;
+					const menus = boundMenus || resolveContextMenus(ctx);
+					if (!menus || typeof menus.open !== "function") return;
+					const selectionHit = readContextMenuSelection(event, rightDownSelectionRange);
+					if (!selectionHit?.text) return;
+					const fallbackFocus = element.closest?.("[data-dockkit-pane], [data-dockkit-float]") || rightDownFocusElement;
+					rightDownSelectionRange = null;
+					rightDownFocusElement = null;
+					const point = {
+						x: Math.max(0, Math.round(Number(event.clientX) || 0)),
+						y: Math.max(0, Math.round(Number(event.clientY) || 0))
+					};
+					const sessionId = activeMenuSessionId(ctx);
+					event.preventDefault?.();
+					event.stopPropagation?.();
+					menus.open({ kind: "selection", value: { text: selectionHit.text, sessionId } }, point);
+					retainSelectionForMenu(selectionHit.range, fallbackFocus, menus);
+				};
+				document.addEventListener("contextmenu", onContextMenuCapture, true);
+				cleanups.push(() => document.removeEventListener("contextmenu", onContextMenuCapture, true));
+
 				const onContextMenu = (event) => {
 					if (!event || event.defaultPrevented) return;
 					const rawTarget = event.target;
@@ -5234,11 +5490,16 @@
 								return;
 							}
 						}
-						const selectedText = readContextMenuSelection(event);
-						if (selectedText) {
+						const fallbackRange = rightDownSelectionRange;
+						const fallbackFocus = rightDownFocusElement;
+						rightDownSelectionRange = null;
+						rightDownFocusElement = null;
+						const selectionHit = readContextMenuSelection(event, fallbackRange);
+						if (selectionHit?.text) {
 							event.preventDefault?.();
 							event.stopPropagation?.();
-							menus.open({ kind: "selection", value: { text: selectedText, sessionId } }, point);
+							menus.open({ kind: "selection", value: { text: selectionHit.text, sessionId } }, point);
+							retainSelectionForMenu(selectionHit.range, fallbackFocus, menus);
 							return;
 						}
 						const anchor = element.closest?.("a[href]");
@@ -5260,6 +5521,9 @@
 			}
 
 			return () => {
+				if (typeof retainedSelectionCleanup === "function") {
+					try { retainedSelectionCleanup({ restoreNative: false }); } catch (_) {}
+				}
 				for (const fn of cleanups.splice(0, cleanups.length)) {
 					try { if (typeof fn === "function") fn(); } catch (_) {}
 				}

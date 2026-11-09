@@ -1050,13 +1050,28 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   document.removeEventListener = (type, fn) => {
     if (docListeners.get(type) === fn) docListeners.delete(type);
   };
+  let activeMenuTarget = null;
+  const activeMenuSubscribers = new Set();
   const mockContextMenus = {
+    active: {
+      getSnapshot: () => activeMenuTarget,
+      subscribe(fn) {
+        activeMenuSubscribers.add(fn);
+        return () => activeMenuSubscribers.delete(fn);
+      },
+    },
     register(provider) {
       menuProviders.set(`${provider.target}/${provider.id}`, provider);
       return () => menuProviders.delete(`${provider.target}/${provider.id}`);
     },
     open(target, point) {
+      activeMenuTarget = target;
       openedMenus.push({ target, point });
+      for (const fn of activeMenuSubscribers) fn();
+    },
+    close() {
+      activeMenuTarget = null;
+      for (const fn of activeMenuSubscribers) fn();
     },
     notify(label, ok) {
       notifications.push({ label, ok });
@@ -1113,6 +1128,7 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   assert.equal(selectionItems.length, 2);
   assert.equal(selectionItems[0].id, "copy");
   assert.equal(selectionItems[1].id, "search");
+  assert.equal(selectionItems[1].separatorBefore, undefined, "selection menu must not render a horizontal divider between copy and search");
   const searchedUrls = [];
   window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__ = (url) => {
     searchedUrls.push(url);
@@ -1155,11 +1171,36 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   assert.equal(openedMenus.length, 0, "blank area must not open a custom menu");
   assert.equal(blankPrevented, true, "blank non-editable area must preventDefault to suppress WebView native Reload menu");
 
-  // 3. Text selection opens official contextMenus with target "selection"
+  // 3. Text selection opens official contextMenus with target "selection" and retains visual selection highlight
+  const highlightMap = new Map();
+  window.CSS = { highlights: highlightMap };
+  window.Highlight = class MockHighlight {
+    constructor(range) {
+      this.range = range;
+    }
+  };
+  const addedRanges = [];
+  const mockRange = {
+    toString: () => "测试冲突，并同步",
+    getClientRects: () => [{ left: 10, right: 200, top: 10, bottom: 40 }],
+    cloneRange() {
+      return mockRange;
+    },
+  };
+  let paneFocused = 0;
+  document.activeElement = {
+    focus() {
+      paneFocused += 1;
+    },
+  };
   window.getSelection = () => ({
     toString: () => "测试冲突，并同步",
     rangeCount: 1,
-    getRangeAt: () => ({ getClientRects: () => [{ left: 10, right: 200, top: 10, bottom: 40 }] }),
+    getRangeAt: () => mockRange,
+    removeAllRanges() {},
+    addRange(r) {
+      addedRanges.push(r);
+    },
   });
   let prevented = false;
   onDocContextMenu({
@@ -1176,6 +1217,13 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
     target: { kind: "selection", value: { text: "测试冲突，并同步", sessionId: "session-ctx-1" } },
     point: { x: 50, y: 25 },
   });
+  assert.ok(highlightMap.has("dsh-desktop-selection"), "CSS.highlights must lock selection highlight while context menu steals focus");
+  assert.ok(addedRanges.length >= 1, "native DOM Selection Range must be preserved on menu open");
+
+  // Closing the selection context menu restores focus + native Selection and cleans up CSS.highlights
+  mockContextMenus.close();
+  assert.ok(paneFocused >= 1, "closing selection menu must restore focus to the selection container so native ::selection renders");
+  assert.ok(addedRanges.length >= 1, "closing selection menu must restore native DOM Selection Range");
 
   // 4. Unhandled external link opens official contextMenus with target "url"
   window.getSelection = () => ({ toString: () => "" });
