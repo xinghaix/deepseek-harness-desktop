@@ -115,5 +115,14 @@
   "error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé.",
   "sidebar.toggleLabel": "Afficher l’entrée dans la barre latérale",
   "sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion.",
-  "migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}"
+  "migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}",
+  "tag.prompt": "Invite",
+  "field.prompt": "Invite d’appel (facultatif)",
+  "field.promptPlaceholder": "ex. Accès en lecture seule ; n’exécutez aucune écriture…",
+  "field.promptHint": "Injectée à la demande uniquement lors de l’appel aux outils de ce serveur MCP (dédupliquée par lot) ; n’utilise aucun jeton au repos.",
+  "field.promptPresetReadonly": "Lecture seule",
+  "field.promptPresetReadonlyText": "L’accès actuel est en lecture seule. Seules les opérations de lecture ou de requête sont autorisées ; n’effectuez aucune écriture, modification ou suppression.",
+  "field.promptPresetLimit": "Limiter les lignes",
+  "field.promptPresetLimitText": "Spécifiez explicitement les colonnes et ajoutez un LIMIT lors des requêtes ; agrégez côté serveur plutôt que de récupérer de grands volumes.",
+  "field.promptClear": "Effacer"
 }

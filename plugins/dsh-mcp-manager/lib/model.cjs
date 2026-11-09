@@ -73,6 +73,31 @@ function normalizeTimeoutMs(value) {
   return num;
 }
 
+// 规范化可选的按需调用提示词，去除首尾空白并统一换行符
+function normalizePrompt(value) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\r\n/g, "\n").trim();
+}
+
+// 解析 MCP 工具公有名称 mcp__<serverName>__<toolName>，提取所属 serverName
+function parseMcpToolServerName(toolName) {
+  const raw = typeof toolName === "string" ? toolName : "";
+  if (!raw.startsWith("mcp__")) return null;
+  const sep = raw.indexOf("__", 5);
+  if (sep <= 5 || sep + 2 >= raw.length) return null;
+  const serverName = raw.slice(5, sep);
+  const localToolName = raw.slice(sep + 2);
+  if (!NAME_RE.test(serverName) || !localToolName) return null;
+  return { serverName, toolName: localToolName };
+}
+
+// 组装在调用 MCP 工具后注入给模型的提示词文本
+function formatCallPromptText(serverName, prompt) {
+  const cleanPrompt = normalizePrompt(prompt);
+  if (!cleanPrompt) return "";
+  return `<system-reminder>\n[MCP server: ${serverName}]\n${cleanPrompt}\n</system-reminder>`;
+}
+
 /**
  * Official config-bundle files for one server. `origin` (optional) records
  * where an approved project entry came from; it is metadata in package.json,
@@ -262,6 +287,7 @@ function maskServer(server) {
     args: Array.isArray(server.args) ? server.args.slice() : [],
     cwd: server.cwd || "",
     url: maskUrl(server.url || ""),
+    prompt: normalizePrompt(server.prompt),
     env: (server.env || []).map((row) => ({ name: row.name, set: !!(row.set || row.value || row.ref), ref: row.ref || "" })),
     headers: (server.headers || []).map((row) => ({ name: row.name, set: !!(row.set || row.value || row.ref), ref: row.ref || "" })),
   };
@@ -322,7 +348,7 @@ function parseImport(text, existingNames) {
     if (type === "http" || type === "streamable-http") transport = "streamable-http";
     else if (type === "stdio" || (!type && typeof entry.command === "string")) transport = "stdio";
     else { pushSkip(rows, name, "noType"); continue; }
-    const server = { serverName: name, transport, enabled: false, command: "", args: [], cwd: "", url: "", env: [], headers: [] };
+    const server = { serverName: name, transport, enabled: false, command: "", args: [], cwd: "", url: "", prompt: normalizePrompt(entry.prompt ?? entry.instructions), env: [], headers: [] };
     if (transport === "stdio") {
       if (typeof entry.command !== "string" || !entry.command.trim()) { pushSkip(rows, name, "noCommand"); continue; }
       server.command = entry.command;
@@ -407,6 +433,7 @@ function templateDraft(id) {
     env: (t.env || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     headers: (t.headers || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     toolCallTimeoutMs: DEFAULT_TOOL_CALL_TIMEOUT_MS,
+    prompt: "",
     enabled: false,
   };
 }
@@ -444,6 +471,9 @@ module.exports = {
   nameIssue,
   nameMessage,
   normalizeTimeoutMs,
+  normalizePrompt,
+  parseMcpToolServerName,
+  formatCallPromptText,
   bundleFiles,
   secretView,
   mergeSecrets,

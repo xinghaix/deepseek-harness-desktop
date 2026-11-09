@@ -115,5 +115,14 @@
   "error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
   "sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
   "sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an.",
-  "migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}"
+  "migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}",
+  "tag.prompt": "Prompt",
+  "field.prompt": "Aufruf-Prompt (optional)",
+  "field.promptPlaceholder": "z. B. Nur-Lese-Zugriff; keine Schreiboperationen ausführen…",
+  "field.promptHint": "Wird nur bei Bedarf injiziert, wenn Werkzeuge dieses MCP-Servers aufgerufen werden (pro Batch dedupliziert); verbraucht im Leerlauf keine Tokens.",
+  "field.promptPresetReadonly": "Schreibgeschützt",
+  "field.promptPresetReadonlyText": "Aktuell besteht nur Lesezugriff. Es sind nur Abfrage- oder Leseoperationen erlaubt; keine Schreib-, Änderungs- oder Löschoperationen ausführen.",
+  "field.promptPresetLimit": "Zeilenlimit",
+  "field.promptPresetLimitText": "Bei Abfragen explizite Spalten und LIMIT angeben; serverseitig aggregieren statt große Rohdatenmengen abzurufen.",
+  "field.promptClear": "Leeren"
 }

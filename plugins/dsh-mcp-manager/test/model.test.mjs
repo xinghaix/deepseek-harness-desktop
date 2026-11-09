@@ -12,6 +12,23 @@ const require = createRequire(import.meta.url);
 const model = require("../lib/model.cjs");
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+test("normalizePrompt, parseMcpToolServerName, and formatCallPromptText handle MCP call-time prompts", () => {
+  assert.equal(model.normalizePrompt("  当前为只读权限\r\n请勿写入  "), "当前为只读权限\n请勿写入");
+  assert.equal(model.normalizePrompt("   "), "");
+  assert.equal(model.normalizePrompt(null), "");
+  assert.deepEqual(model.parseMcpToolServerName("mcp__clickhouse-mcp__run_query"), {
+    serverName: "clickhouse-mcp",
+    toolName: "run_query",
+  });
+  assert.equal(model.parseMcpToolServerName("bash"), null);
+  assert.equal(model.parseMcpToolServerName("mcp__bad name__tool"), null);
+  assert.equal(model.parseMcpToolServerName("mcp__onlyserver__"), null);
+  assert.equal(
+    model.formatCallPromptText("clickhouse-mcp", " 当前为只读权限 "),
+    "<system-reminder>\n[MCP server: clickhouse-mcp]\n当前为只读权限\n</system-reminder>",
+  );
+});
+
 test("rejects an illegal or duplicate serverName", () => {
   assert.equal(model.nameIssue("", []), "empty");
   assert.equal(model.nameIssue("bad name", []), "invalid");
@@ -636,6 +653,39 @@ test("Client UI hides empty project workspaces on main view and shows workspace 
     assert.ok(existingNameInput);
     assert.equal(existingNameInput.props.value, "alpha");
     assert.equal(existingNameInput.props.readOnly, false);
+
+    // 6) Prompt textarea and quick preset buttons work in Editor, and ServerRow shows prompt badge + preview
+    const promptTextarea = findAll(treeEditingExisting, (n) => n.props?.["data-field"] === "prompt")[0];
+    assert.ok(promptTextarea, "Editor must render prompt textarea");
+    assert.equal(promptTextarea.props.value, "");
+    const readonlyPresetBtn = findAll(treeEditingExisting, (n) => n.props?.["data-prompt-preset"] === "readonly")[0];
+    assert.ok(readonlyPresetBtn, "Editor must render readonly preset button");
+    readonlyPresetBtn.props.onClick();
+    cursor = 0;
+    const treeWithPreset = expand(registeredPage({ t: (k) => k }));
+    const promptAfterPreset = findAll(treeWithPreset, (n) => n.props?.["data-field"] === "prompt")[0];
+    assert.match(promptAfterPreset.props.value, /read-only/i);
+    const clearPromptBtn = findAll(treeWithPreset, (n) => n.props && "data-prompt-clear" in n.props)[0];
+    assert.ok(clearPromptBtn, "Clear button must appear when prompt is non-empty");
+    clearPromptBtn.props.onClick();
+    cursor = 0;
+    const treeClearedPrompt = expand(registeredPage({ t: (k) => k }));
+    assert.equal(findAll(treeClearedPrompt, (n) => n.props?.["data-field"] === "prompt")[0].props.value, "");
+
+    // Simulate server with configured prompt in state
+    states[0] = {
+      ...statePayload,
+      servers: [{ ...statePayload.servers[0], prompt: "当前为只读权限" }],
+    };
+    const cancelEditBtn = findAll(treeClearedPrompt, (n) => n.type === "button" && n.props?.children === "Cancel")[0];
+    cancelEditBtn.props.onClick();
+    cursor = 0;
+    const treeWithServerPrompt = expand(registeredPage({ t: (k) => k }));
+    const promptBadge = findAll(treeWithServerPrompt, (n) => n.props?.["data-prompt-badge"] === "alpha")[0];
+    assert.ok(promptBadge, "ServerRow header must show prompt badge when server.prompt is configured");
+    assert.equal(promptBadge.props.title, "当前为只读权限");
+    const promptPreview = findAll(treeWithServerPrompt, (n) => n.props?.["data-prompt-preview"] === "alpha")[0];
+    assert.ok(promptPreview, "Expanded ServerRow must show prompt preview");
   } finally {
     globalThis.window = prevWindow;
   }

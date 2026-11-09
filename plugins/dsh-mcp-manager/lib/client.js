@@ -85,6 +85,31 @@ function normalizeTimeoutMs(value) {
   return num;
 }
 
+// 规范化可选的按需调用提示词，去除首尾空白并统一换行符
+function normalizePrompt(value) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\r\n/g, "\n").trim();
+}
+
+// 解析 MCP 工具公有名称 mcp__<serverName>__<toolName>，提取所属 serverName
+function parseMcpToolServerName(toolName) {
+  const raw = typeof toolName === "string" ? toolName : "";
+  if (!raw.startsWith("mcp__")) return null;
+  const sep = raw.indexOf("__", 5);
+  if (sep <= 5 || sep + 2 >= raw.length) return null;
+  const serverName = raw.slice(5, sep);
+  const localToolName = raw.slice(sep + 2);
+  if (!NAME_RE.test(serverName) || !localToolName) return null;
+  return { serverName, toolName: localToolName };
+}
+
+// 组装在调用 MCP 工具后注入给模型的提示词文本
+function formatCallPromptText(serverName, prompt) {
+  const cleanPrompt = normalizePrompt(prompt);
+  if (!cleanPrompt) return "";
+  return `<system-reminder>\n[MCP server: ${serverName}]\n${cleanPrompt}\n</system-reminder>`;
+}
+
 /**
  * Official config-bundle files for one server. `origin` (optional) records
  * where an approved project entry came from; it is metadata in package.json,
@@ -274,6 +299,7 @@ function maskServer(server) {
     args: Array.isArray(server.args) ? server.args.slice() : [],
     cwd: server.cwd || "",
     url: maskUrl(server.url || ""),
+    prompt: normalizePrompt(server.prompt),
     env: (server.env || []).map((row) => ({ name: row.name, set: !!(row.set || row.value || row.ref), ref: row.ref || "" })),
     headers: (server.headers || []).map((row) => ({ name: row.name, set: !!(row.set || row.value || row.ref), ref: row.ref || "" })),
   };
@@ -334,7 +360,7 @@ function parseImport(text, existingNames) {
     if (type === "http" || type === "streamable-http") transport = "streamable-http";
     else if (type === "stdio" || (!type && typeof entry.command === "string")) transport = "stdio";
     else { pushSkip(rows, name, "noType"); continue; }
-    const server = { serverName: name, transport, enabled: false, command: "", args: [], cwd: "", url: "", env: [], headers: [] };
+    const server = { serverName: name, transport, enabled: false, command: "", args: [], cwd: "", url: "", prompt: normalizePrompt(entry.prompt ?? entry.instructions), env: [], headers: [] };
     if (transport === "stdio") {
       if (typeof entry.command !== "string" || !entry.command.trim()) { pushSkip(rows, name, "noCommand"); continue; }
       server.command = entry.command;
@@ -419,6 +445,7 @@ function templateDraft(id) {
     env: (t.env || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     headers: (t.headers || []).map((row) => ({ name: row.name, ref: row.ref || "", value: "", set: !!row.ref, keep: false })),
     toolCallTimeoutMs: DEFAULT_TOOL_CALL_TIMEOUT_MS,
+    prompt: "",
     enabled: false,
   };
 }
@@ -456,6 +483,9 @@ module.exports = {
   nameIssue,
   nameMessage,
   normalizeTimeoutMs,
+  normalizePrompt,
+  parseMcpToolServerName,
+  formatCallPromptText,
   bundleFiles,
   secretView,
   mergeSecrets,
@@ -595,7 +625,16 @@ module.exports = {
 		"error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
 		"sidebar.toggleLabel": "Show entry in sidebar",
 		"sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly.",
-		"migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}"
+		"migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}",
+		"tag.prompt": "Prompt",
+		"field.prompt": "Call-time prompt (optional)",
+		"field.promptPlaceholder": "e.g. Read-only access; do not execute any write operations…",
+		"field.promptHint": "Injected on demand only when tools of this MCP server are called (deduplicated per batch); uses zero system prompt tokens when idle.",
+		"field.promptPresetReadonly": "Read-only",
+		"field.promptPresetReadonlyText": "Current access is read-only. Only query or read operations are allowed; do not run any write, update, or delete operations.",
+		"field.promptPresetLimit": "Limit query rows",
+		"field.promptPresetLimitText": "Specify explicit columns and include a LIMIT when querying; aggregate on the server rather than fetching large raw row sets.",
+		"field.promptClear": "Clear"
 	},
 	"zh": {
 		"title": "MCP 服务器",
@@ -714,7 +753,16 @@ module.exports = {
 		"error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
 		"sidebar.toggleLabel": "在侧边栏显示入口",
 		"sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。",
-		"migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}"
+		"migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}",
+		"tag.prompt": "提示词",
+		"field.prompt": "调用提示词（可选）",
+		"field.promptPlaceholder": "例如：当前为只读权限，请勿执行任何写操作…",
+		"field.promptHint": "仅在模型实际调用此 MCP 工具时按需注入上下文（同批次自动去重），平时不占用系统提示词 Token。",
+		"field.promptPresetReadonly": "只读权限",
+		"field.promptPresetReadonlyText": "当前为只读权限，仅允许执行查询或读取操作，请勿执行任何写入、修改或删除操作。",
+		"field.promptPresetLimit": "限制查询行数",
+		"field.promptPresetLimitText": "查询时请显式指定所需列并带上 LIMIT，优先在服务端聚合，避免一次性返回大量原始行。",
+		"field.promptClear": "清空"
 	},
 	"de": {
 		"title": "MCP-Server",
@@ -833,7 +881,16 @@ module.exports = {
 		"error.editDisabled": "Dieser Server stammt aus einer fremden Konfiguration und kann nur im aktivierten Zustand bearbeitet werden.",
 		"sidebar.toggleLabel": "Eintrag in der Seitenleiste anzeigen",
 		"sidebar.toggleHint": "Zeigt in der linken Navigationsleiste einen „MCP-Server“-Kurzzugriff zum direkten Öffnen der Verwaltung an.",
-		"migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}"
+		"migration.warning": "Einige alte MCP-Verbindungen konnten nicht migriert werden. Ihre Konfigurationspakete bleiben erhalten: {message}",
+		"tag.prompt": "Prompt",
+		"field.prompt": "Aufruf-Prompt (optional)",
+		"field.promptPlaceholder": "z. B. Nur-Lese-Zugriff; keine Schreiboperationen ausführen…",
+		"field.promptHint": "Wird nur bei Bedarf injiziert, wenn Werkzeuge dieses MCP-Servers aufgerufen werden (pro Batch dedupliziert); verbraucht im Leerlauf keine Tokens.",
+		"field.promptPresetReadonly": "Schreibgeschützt",
+		"field.promptPresetReadonlyText": "Aktuell besteht nur Lesezugriff. Es sind nur Abfrage- oder Leseoperationen erlaubt; keine Schreib-, Änderungs- oder Löschoperationen ausführen.",
+		"field.promptPresetLimit": "Zeilenlimit",
+		"field.promptPresetLimitText": "Bei Abfragen explizite Spalten und LIMIT angeben; serverseitig aggregieren statt große Rohdatenmengen abzurufen.",
+		"field.promptClear": "Leeren"
 	},
 	"fr": {
 		"title": "Serveurs MCP",
@@ -952,7 +1009,16 @@ module.exports = {
 		"error.editDisabled": "Ce serveur provient d'une configuration externe ; il ne peut être modifié que lorsqu'il est activé.",
 		"sidebar.toggleLabel": "Afficher l’entrée dans la barre latérale",
 		"sidebar.toggleHint": "Affiche un raccourci « Serveurs MCP » dans la navigation de gauche pour ouvrir directement le panneau de gestion.",
-		"migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}"
+		"migration.warning": "Certaines anciennes connexions MCP n’ont pas pu être migrées. Leurs paquets de configuration sont conservés : {message}",
+		"tag.prompt": "Invite",
+		"field.prompt": "Invite d’appel (facultatif)",
+		"field.promptPlaceholder": "ex. Accès en lecture seule ; n’exécutez aucune écriture…",
+		"field.promptHint": "Injectée à la demande uniquement lors de l’appel aux outils de ce serveur MCP (dédupliquée par lot) ; n’utilise aucun jeton au repos.",
+		"field.promptPresetReadonly": "Lecture seule",
+		"field.promptPresetReadonlyText": "L’accès actuel est en lecture seule. Seules les opérations de lecture ou de requête sont autorisées ; n’effectuez aucune écriture, modification ou suppression.",
+		"field.promptPresetLimit": "Limiter les lignes",
+		"field.promptPresetLimitText": "Spécifiez explicitement les colonnes et ajoutez un LIMIT lors des requêtes ; agrégez côté serveur plutôt que de récupérer de grands volumes.",
+		"field.promptClear": "Effacer"
 	},
 	"es": {
 		"title": "Servidores MCP",
@@ -1071,7 +1137,16 @@ module.exports = {
 		"error.editDisabled": "Este servidor proviene de una configuración externa; solo se puede editar mientras está activado.",
 		"sidebar.toggleLabel": "Mostrar acceso en la barra lateral",
 		"sidebar.toggleHint": "Muestra un acceso directo a «Servidores MCP» en la navegación izquierda para abrir el panel directamente.",
-		"migration.warning": "No se pudieron migrar algunas conexiones MCP antiguas. Se conservaron sus paquetes de configuración: {message}"
+		"migration.warning": "No se pudieron migrar algunas conexiones MCP antiguas. Se conservaron sus paquetes de configuración: {message}",
+		"tag.prompt": "Prompt",
+		"field.prompt": "Prompt al invocar (opcional)",
+		"field.promptPlaceholder": "p. ej., Permiso de solo lectura; no ejecutes operaciones de escritura…",
+		"field.promptHint": "Se inyecta bajo demanda solo cuando se invocan herramientas de este servidor MCP (deduplicado por lote); no consume tokens en reposo.",
+		"field.promptPresetReadonly": "Solo lectura",
+		"field.promptPresetReadonlyText": "El acceso actual es de solo lectura. Solo se permiten consultas o lecturas; no ejecutes operaciones de escritura, modificación o eliminación.",
+		"field.promptPresetLimit": "Limitar filas",
+		"field.promptPresetLimitText": "Especifica columnas explícitas e incluye LIMIT al consultar; agrega en el servidor en lugar de traer grandes volúmenes de filas.",
+		"field.promptClear": "Limpiar"
 	},
 	"ja": {
 		"title": "MCP サーバー",
@@ -1190,7 +1265,16 @@ module.exports = {
 		"error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。",
 		"sidebar.toggleLabel": "サイドバーにショートカットを表示",
 		"sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。",
-		"migration.warning": "一部の既存 MCP 接続を移行できませんでした。元の設定バンドルは保持されています：{message}"
+		"migration.warning": "一部の既存 MCP 接続を移行できませんでした。元の設定バンドルは保持されています：{message}",
+		"tag.prompt": "プロンプト",
+		"field.prompt": "呼び出し時プロンプト（任意）",
+		"field.promptPlaceholder": "例：現在は読み取り専用権限です。書き込み操作は行わないでください…",
+		"field.promptHint": "この MCP サーバーのツールが実際に呼び出された時のみオンデマンドで注入されます（バッチごとに重複排除）。待機中はトークンを消費しません。",
+		"field.promptPresetReadonly": "読み取り専用",
+		"field.promptPresetReadonlyText": "現在は読み取り専用権限です。クエリや読み取り操作のみ許可されており、書き込み・更新・削除操作は実行しないでください。",
+		"field.promptPresetLimit": "取得件数を制限",
+		"field.promptPresetLimitText": "クエリ時は必要な列を明示して LIMIT を付与し、大量の生データを取得する代わりにサーバー側で集計してください。",
+		"field.promptClear": "クリア"
 	},
 	"ko": {
 		"title": "MCP 서버",
@@ -1309,7 +1393,16 @@ module.exports = {
 		"error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
 		"sidebar.toggleLabel": "사이드바에 바로가기 표시",
 		"sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다.",
-		"migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}"
+		"migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}",
+		"tag.prompt": "프롬프트",
+		"field.prompt": "호출 프롬프트(선택)",
+		"field.promptPlaceholder": "예: 현재 읽기 전용 권한입니다. 쓰기 작업을 수행하지 마세요…",
+		"field.promptHint": "이 MCP 서버의 도구가 실제로 호출될 때만 온디맨드로 주입되며(배치당 중복 제거), 유휴 시에는 시스템 프롬프트 토큰을 소모하지 않습니다.",
+		"field.promptPresetReadonly": "읽기 전용",
+		"field.promptPresetReadonlyText": "현재 읽기 전용 권한입니다. 조회 또는 읽기 작업만 허용되며 쓰기, 수정, 삭제 작업은 실행하지 마세요.",
+		"field.promptPresetLimit": "결과 행 제한",
+		"field.promptPresetLimitText": "쿼리 시 필요한 열을 명시하고 LIMIT를 포함하며, 대량의 원본 행을 가져오는 대신 서버 측에서 집계하세요.",
+		"field.promptClear": "지우기"
 	},
 	"pt": {
 		"title": "Servidores MCP",
@@ -1428,7 +1521,16 @@ module.exports = {
 		"error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado.",
 		"sidebar.toggleLabel": "Mostrar atalho na barra lateral",
 		"sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente.",
-		"migration.warning": "Não foi possível migrar algumas conexões MCP antigas. Os pacotes de configuração foram mantidos: {message}"
+		"migration.warning": "Não foi possível migrar algumas conexões MCP antigas. Os pacotes de configuração foram mantidos: {message}",
+		"tag.prompt": "Prompt",
+		"field.prompt": "Prompt de chamada (opcional)",
+		"field.promptPlaceholder": "ex.: Acesso somente leitura; não execute operações de escrita…",
+		"field.promptHint": "Injetado sob demanda apenas quando as ferramentas deste servidor MCP são chamadas (desduplicado por lote); não consome tokens em repouso.",
+		"field.promptPresetReadonly": "Somente leitura",
+		"field.promptPresetReadonlyText": "O acesso atual é somente leitura. Apenas consultas ou leituras são permitidas; não execute operações de escrita, atualização ou exclusão.",
+		"field.promptPresetLimit": "Limitar linhas",
+		"field.promptPresetLimitText": "Especifique colunas explícitas e inclua LIMIT ao consultar; agregue no servidor em vez de buscar grandes volumes de linhas.",
+		"field.promptClear": "Limpar"
 	}
 };
 		// END EMBEDDED LOCALES
@@ -1971,6 +2073,86 @@ module.exports = {
 	border-color: transparent;
 	color: var(--dsw-alias-state-business-primary, #4d6bfe);
 	font-family: inherit;
+}
+.dsh-mcp-badge[data-tone="prompt"] {
+	background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 10%, transparent);
+	border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 26%, transparent);
+	color: var(--dsw-alias-state-business-primary, #4d6bfe);
+	font-family: inherit;
+}
+.dsh-mcp-prompt-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.dsh-mcp-prompt-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-prompt-presets {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.dsh-mcp-prompt-preset {
+	font: inherit;
+	font-size: 11.5px;
+	line-height: 16px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 0.5px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.25));
+	background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.06)));
+	color: var(--dsw-alias-label-secondary, #61666b);
+	cursor: pointer;
+	transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.dsh-mcp-prompt-preset:hover {
+	border-color: var(--dsw-alias-state-business-primary, #4d6bfe);
+	color: var(--dsw-alias-state-business-primary, #4d6bfe);
+	background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 8%, transparent);
+}
+.dsh-mcp-prompt-textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 58px;
+	padding: 8px 10px;
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 18px;
+	border-radius: var(--dsw-radius-md, 8px);
+	border: 0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-border-l2, rgba(128,128,128,0.24)));
+	background: var(--dsw-alias-bg-layer-1, transparent);
+	color: var(--dsw-alias-label-primary, inherit);
+	resize: vertical;
+	outline: none;
+}
+.dsh-mcp-prompt-textarea:focus {
+	border-color: var(--dsw-alias-state-business-primary, #4d6bfe);
+}
+.dsh-mcp-prompt-hint {
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 16px;
+	color: var(--dsw-alias-label-tertiary, #81858c);
+}
+.dsh-mcp-prompt-preview {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding-top: 2px;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-secondary, #61666b);
+}
+.dsh-mcp-prompt-preview-text {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	flex: 1;
+	min-width: 0;
 }
 .dsh-mcp-status {
 	display: inline-flex;
@@ -2853,6 +3035,7 @@ module.exports = {
 					server.transport,
 					server.command,
 					server.url,
+					server.prompt,
 					...(server.tools || []),
 				].some((text) => String(text || "").toLowerCase().includes(normalizedQuery)));
 
@@ -2901,6 +3084,7 @@ module.exports = {
 					env: (source?.env || []).map((row) => ({ name: row.name, set: !!row.set, ref: row.ref || "", value: "", keep: !!server })),
 					headers: (source?.headers || []).map((row) => ({ name: row.name, set: !!row.set, ref: row.ref || "", value: "", keep: !!server })),
 					toolCallTimeoutMs: source?.toolCallTimeoutMs || model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
+					prompt: source?.prompt || "",
 					external: server?.external === true,
 					enabled: server?.enabled === true,
 				});
@@ -3181,6 +3365,7 @@ module.exports = {
 			return {
 				...server,
 				toolCallTimeoutMs: server.toolCallTimeoutMs,
+				prompt: model.normalizePrompt(server.prompt),
 				env: (server.env || []).map((row) => ({ name: row.name, value: row.value || "", ref: row.ref || "", keep: !!row.keep })),
 				headers: (server.headers || []).map((row) => ({ name: row.name, value: row.value || "", ref: row.ref || "", keep: !!row.keep })),
 			};
@@ -3264,6 +3449,13 @@ module.exports = {
 												"data-tone": "info",
 												title: wsInfo.path,
 												children: tr("tag.project") + (wsInfo.title ? " · " + wsInfo.title : ""),
+											}) : null,
+											server.prompt ? jsx("span", {
+												className: "dsh-mcp-badge",
+												"data-tone": "prompt",
+												"data-prompt-badge": server.serverName,
+												title: server.prompt,
+												children: tr("tag.prompt"),
 											}) : null,
 										],
 									}),
@@ -3374,6 +3566,14 @@ module.exports = {
 															className: "dsh-mcp-badge",
 															children: sec.name + ": " + (sec.ref ? "env:" + sec.ref : tr(sec.set ? "field.secretSet" : "field.secretUnset")),
 														}, sec.name)),
+													],
+												}) : null,
+												server.prompt ? jsxs("div", {
+													className: "dsh-mcp-prompt-preview",
+													"data-prompt-preview": server.serverName,
+													children: [
+														jsx("span", { className: "dsh-mcp-badge", "data-tone": "prompt", children: tr("tag.prompt") }),
+														jsx("span", { className: "dsh-mcp-prompt-preview-text", children: server.prompt }),
 													],
 												}) : null,
 											],
@@ -3724,6 +3924,63 @@ module.exports = {
 								],
 							}),
 							jsx(Secrets, { tr, title: tr("field.headers"), rows: draft.headers, onChange: (headers) => set({ headers }) }),
+						],
+					}),
+					jsxs("div", {
+						className: "dsh-mcp-prompt-field",
+						children: [
+							jsxs("div", {
+								className: "dsh-mcp-prompt-head",
+								children: [
+									jsx("span", { className: "dsh-mcp-label", children: tr("field.prompt") }),
+									jsxs("div", {
+										className: "dsh-mcp-prompt-presets",
+										children: [
+											jsx("button", {
+												type: "button",
+												className: "dsh-mcp-prompt-preset",
+												"data-prompt-preset": "readonly",
+												onClick: () => {
+													const preset = tr("field.promptPresetReadonlyText");
+													const cur = String(draft.prompt || "").trim();
+													if (!cur.includes(preset)) set({ prompt: cur ? cur + "\n" + preset : preset });
+												},
+												children: "+ " + tr("field.promptPresetReadonly"),
+											}),
+											jsx("button", {
+												type: "button",
+												className: "dsh-mcp-prompt-preset",
+												"data-prompt-preset": "limit",
+												onClick: () => {
+													const preset = tr("field.promptPresetLimitText");
+													const cur = String(draft.prompt || "").trim();
+													if (!cur.includes(preset)) set({ prompt: cur ? cur + "\n" + preset : preset });
+												},
+												children: "+ " + tr("field.promptPresetLimit"),
+											}),
+											draft.prompt ? jsx("button", {
+												type: "button",
+												className: "dsh-mcp-prompt-preset",
+												"data-prompt-clear": "",
+												onClick: () => set({ prompt: "" }),
+												children: tr("field.promptClear"),
+											}) : null,
+										],
+									}),
+								],
+							}),
+							jsx("textarea", {
+								"data-field": "prompt",
+								className: "dsh-mcp-prompt-textarea",
+								rows: 2,
+								placeholder: tr("field.promptPlaceholder"),
+								value: draft.prompt || "",
+								onChange: (event) => set({ prompt: event.target.value }),
+							}),
+							jsx("p", {
+								className: "dsh-mcp-prompt-hint",
+								children: tr("field.promptHint"),
+							}),
 						],
 					}),
 					launchModified ? jsxs("p", {

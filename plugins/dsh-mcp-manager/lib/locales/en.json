@@ -115,5 +115,14 @@
   "error.editDisabled": "This server comes from a config not managed here; it can only be edited while it is enabled.",
   "sidebar.toggleLabel": "Show entry in sidebar",
   "sidebar.toggleHint": "Display an “MCP servers” shortcut in the left navigation bar to open the management panel directly.",
-  "migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}"
+  "migration.warning": "Some old MCP connections could not be migrated. Their configuration packages were retained: {message}",
+  "tag.prompt": "Prompt",
+  "field.prompt": "Call-time prompt (optional)",
+  "field.promptPlaceholder": "e.g. Read-only access; do not execute any write operations…",
+  "field.promptHint": "Injected on demand only when tools of this MCP server are called (deduplicated per batch); uses zero system prompt tokens when idle.",
+  "field.promptPresetReadonly": "Read-only",
+  "field.promptPresetReadonlyText": "Current access is read-only. Only query or read operations are allowed; do not run any write, update, or delete operations.",
+  "field.promptPresetLimit": "Limit query rows",
+  "field.promptPresetLimitText": "Specify explicit columns and include a LIMIT when querying; aggregate on the server rather than fetching large raw row sets.",
+  "field.promptClear": "Clear"
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -27,27 +28,61 @@ function prefsFilePath(ctx) {
   return join(profileDir(ctx), "mcp-bundles", ".preferences.json");
 }
 
-async function readManagerPrefs(ctx) {
+async function readRawPrefsFile(ctx) {
   try {
     const raw = JSON.parse(await readFile(prefsFilePath(ctx), "utf8"));
-    return {
-      showSidebarEntry: raw?.showSidebarEntry !== false,
-    };
+    return raw && typeof raw === "object" ? raw : {};
   } catch {
-    return { showSidebarEntry: true };
+    return {};
   }
 }
 
+async function readManagerPrefs(ctx) {
+  const raw = await readRawPrefsFile(ctx);
+  return {
+    showSidebarEntry: raw?.showSidebarEntry !== false,
+  };
+}
+
 async function writeManagerPrefs(ctx, patch) {
-  const current = await readManagerPrefs(ctx);
+  const raw = await readRawPrefsFile(ctx);
   const next = {
-    ...current,
-    ...(typeof patch?.showSidebarEntry === "boolean" ? { showSidebarEntry: patch.showSidebarEntry } : {}),
+    ...raw,
+    showSidebarEntry: typeof patch?.showSidebarEntry === "boolean" ? patch.showSidebarEntry : raw?.showSidebarEntry !== false,
   };
   const file = prefsFilePath(ctx);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(next, null, 2) + "\n", "utf8");
-  return next;
+  return { showSidebarEntry: next.showSidebarEntry };
+}
+
+async function loadExternalPrompts(ctx, externalPrompts) {
+  const raw = await readRawPrefsFile(ctx);
+  externalPrompts.clear();
+  if (raw?.prompts && typeof raw.prompts === "object") {
+    for (const [serverName, value] of Object.entries(raw.prompts)) {
+      const normalized = model.normalizePrompt(value);
+      if (normalized) externalPrompts.set(serverName, normalized);
+    }
+  }
+}
+
+async function writeExternalPrompt(ctx, serverName, prompt, previousName, externalPrompts) {
+  const normalized = model.normalizePrompt(prompt);
+  if (previousName && previousName !== serverName) externalPrompts?.delete(previousName);
+  if (normalized) externalPrompts?.set(serverName, normalized);
+  else externalPrompts?.delete(serverName);
+  const raw = await readRawPrefsFile(ctx);
+  const prompts = raw?.prompts && typeof raw.prompts === "object" ? { ...raw.prompts } : {};
+  if (previousName && previousName !== serverName) delete prompts[previousName];
+  if (normalized) prompts[serverName] = normalized;
+  else delete prompts[serverName];
+  const next = { ...raw };
+  if (Object.keys(prompts).length > 0) next.prompts = prompts;
+  else delete next.prompts;
+  const file = prefsFilePath(ctx);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(next, null, 2) + "\n", "utf8");
 }
 
 // 单次扫描 ctx.tools.schemas()，避免多台服务器重复触发 dsh-tools 全量 schema 克隆
@@ -104,7 +139,7 @@ async function readOrigin(dir) {
   }
 }
 
-async function servers(ctx, lastErrors, connections) {
+async function servers(ctx, lastErrors, connections, externalPrompts) {
   const [plugins, bundles] = await Promise.all([ctx.pluginManager.listPlugins(), ctx.pluginManager.listBundles()]);
   const records = connections.records().filter((record) => !record.legacy?.pending);
   const ids = new Set(records.map((record) => record.id));
@@ -162,6 +197,7 @@ async function servers(ctx, lastErrors, connections) {
       env: model.secretView(config.env),
       headers: model.secretView(config.headers),
       toolCallTimeoutMs: config.toolCallTimeoutMs || model.DEFAULT_TOOL_CALL_TIMEOUT_MS,
+      prompt: model.normalizePrompt(config.prompt ?? externalPrompts?.get(serverName)),
       status,
       lastError: status === "failed" ? row.lastError : "",
       tools: toolDetails.map((tool) => tool.name),
@@ -309,7 +345,7 @@ function resultError(result, fallback) {
   return new Error(text);
 }
 
-async function saveServer(ctx, server, origin, lastErrors, connections) {
+async function saveServer(ctx, server, origin, lastErrors, connections, externalPrompts) {
   const patchId = server.patchId || "";
   const trimmedName = String(server.serverName ?? "").trim();
   const issue = model.nameIssue(server.serverName, serverNames(ctx, patchId, connections), "");
@@ -318,7 +354,12 @@ async function saveServer(ctx, server, origin, lastErrors, connections) {
   const timeoutMs = model.normalizeTimeoutMs(server.toolCallTimeoutMs);
   const managed = patchId ? connections.get(patchId) : null;
   if (!patchId || managed && !managed.legacy?.pending) {
-    return connections.save(server, origin);
+    const prevName = managed?.config?.serverName;
+    const result = await connections.save(server, origin);
+    if (prevName && prevName !== trimmedName && externalPrompts?.has(prevName)) {
+      await writeExternalPrompt(ctx, trimmedName, "", prevName, externalPrompts);
+    }
+    return result;
   }
   const existing = findEntry(ctx, patchId);
   if (!existing) throw new CodedError("noEntry");
@@ -386,11 +427,13 @@ async function saveServer(ctx, server, origin, lastErrors, connections) {
       const result = await ctx.pluginManager.setPluginEnabled(refreshedRow.entryId, enabled);
       const error = resultError(result, "reload failed");
       if (error) throw error;
+      await writeExternalPrompt(ctx, trimmedName, server.prompt, currentName, externalPrompts);
       lastErrors?.delete(currentName);
       return result?.application || "applied";
     }
     if (existing.fiber === undefined) throw new CodedError("editDisabled");
     await ctx.configEditor.edit(existing, () => next);
+    await writeExternalPrompt(ctx, trimmedName, server.prompt, currentName, externalPrompts);
     lastErrors?.delete(currentName);
     lastErrors?.delete(trimmedName);
     return "applied";
@@ -402,13 +445,16 @@ async function saveServer(ctx, server, origin, lastErrors, connections) {
   }
 }
 
-async function runJob(ctx, job, listWorkspaces, lastErrors, connections) {
+async function runJob(ctx, job, listWorkspaces, lastErrors, connections, externalPrompts) {
   if (!job || typeof job !== "object") throw new CodedError("badRequest");
-  if (job.op === "save") return { notice: "", application: await saveServer(ctx, job.server || {}, undefined, lastErrors, connections) };
+  if (job.op === "save") return { notice: "", application: await saveServer(ctx, job.server || {}, undefined, lastErrors, connections, externalPrompts) };
   const managed = job.patchId ? connections.get(job.patchId) : null;
   if (managed && !managed.legacy?.pending && ["remove", "enable", "reconnect"].includes(job.op)) {
     if (job.op === "remove") {
       await connections.remove(managed);
+      if (managed.config?.serverName && externalPrompts?.has(managed.config.serverName)) {
+        await writeExternalPrompt(ctx, managed.config.serverName, "", null, externalPrompts);
+      }
       return { notice: "removed", noticeParams: { name: managed.config.serverName }, application: "applied" };
     }
     if (job.op === "reconnect" && !managed.enabled) throw new CodedError("noEntry");
@@ -435,6 +481,9 @@ async function runJob(ctx, job, listWorkspaces, lastErrors, connections) {
       const error = resultError(result, "remove failed");
       if (error) throw error;
       await rm(join(profileDir(ctx), "mcp-bundles", name), { recursive: true, force: true });
+      if (externalPrompts?.has(name)) {
+        await writeExternalPrompt(ctx, name, "", null, externalPrompts);
+      }
       lastErrors?.delete(name);
       return { notice: "removed", noticeParams: { name: job.serverName || job.bundleName }, application: result?.application || "applied" };
     } catch (error) {
@@ -485,7 +534,7 @@ async function runJob(ctx, job, listWorkspaces, lastErrors, connections) {
     let added = 0;
     for (const server of job.servers || []) {
       if (names.includes(String(server.serverName || "").trim())) continue;
-      await saveServer(ctx, { ...server, enabled: false, patchId: "" }, undefined, lastErrors, connections);
+      await saveServer(ctx, { ...server, enabled: false, patchId: "" }, undefined, lastErrors, connections, externalPrompts);
       names.push(String(server.serverName).trim());
       added += 1;
     }
@@ -502,7 +551,7 @@ async function runJob(ctx, job, listWorkspaces, lastErrors, connections) {
     for (const file of scan[0].files) {
       for (const row of file.rows) {
         if (row.skip || !wanted.has(row.name)) continue;
-        await saveServer(ctx, { ...row.server, enabled: false, patchId: "" }, { scope: "project", workspace: ws.path, file: file.file }, lastErrors, connections);
+        await saveServer(ctx, { ...row.server, enabled: false, patchId: "" }, { scope: "project", workspace: ws.path, file: file.file }, lastErrors, connections, externalPrompts);
         added += 1;
       }
     }
@@ -522,6 +571,8 @@ function json(value, status = 200) {
 export async function apply(ctx) {
   const listWorkspaces = workspaceSource(ctx);
   const lastErrors = new Map();
+  const externalPrompts = new Map();
+  await loadExternalPrompts(ctx, externalPrompts);
   const runtime = new ConnectionRuntime(ctx);
   let connections;
   let closing = false;
@@ -544,9 +595,48 @@ export async function apply(ctx) {
   });
   busy = busy.catch((error) => connections.migrationErrors.set(name, model.redactText(String(error.message || error))));
 
+  // 记录已注入过提示词的调用批次（按 rootCallId/callId + serverName + prompt 去重）
+  const injectedBatchPrompts = new Set();
+  if (typeof ctx.on === "function") ctx.on("tools/post-execute", async (exec, _result, next) => {
+    const decision = await next();
+    if (!decision || decision.kind !== "accept") return decision;
+    const parsed = model.parseMcpToolServerName(exec?.name);
+    if (!parsed) return decision;
+    const managed = connections?.records().find((item) => item.config?.serverName === parsed.serverName);
+    const prompt = model.normalizePrompt(managed?.config?.prompt ?? externalPrompts.get(parsed.serverName));
+    if (!prompt) return decision;
+    const batchId = String(exec?.rootCallId || exec?.callId || "");
+    if (batchId) {
+      const dedupKey = `${batchId}\0${parsed.serverName}\0${prompt}`;
+      if (injectedBatchPrompts.has(dedupKey)) return decision;
+      injectedBatchPrompts.add(dedupKey);
+      if (injectedBatchPrompts.size > 512) {
+        const oldest = injectedBatchPrompts.values().next().value;
+        if (oldest !== undefined) injectedBatchPrompts.delete(oldest);
+      }
+    }
+    const contextMsg = Object.freeze({
+      id: randomUUID(),
+      role: "user",
+      content: Object.freeze([Object.freeze({
+        type: "text",
+        text: model.formatCallPromptText(parsed.serverName, prompt),
+      })]),
+      source: Object.freeze({
+        kind: "plugin",
+        plugin: "dsh-mcp-manager",
+        form: "instructions",
+      }),
+    });
+    return {
+      ...decision,
+      additionalContexts: [...(decision.additionalContexts ?? []), contextMsg],
+    };
+  });
+
   async function state() {
     const [list, workspaces, prefs] = await Promise.all([
-      servers(ctx, lastErrors, connections),
+      servers(ctx, lastErrors, connections, externalPrompts),
       listWorkspaces(),
       readManagerPrefs(ctx),
     ]);
@@ -588,7 +678,7 @@ export async function apply(ctx) {
       // 迁移、持久化和实例切换共享同一条串行队列。
       const run = busy.then(() => {
         if (closing) throw new CodedError("badRequest");
-        return runJob(ctx, job, listWorkspaces, lastErrors, connections);
+        return runJob(ctx, job, listWorkspaces, lastErrors, connections, externalPrompts);
       });
       busy = run.catch(() => {});
       try {

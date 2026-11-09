@@ -47,6 +47,8 @@ export function connectionDomain(profilePath) {
 
 export function resolveConnectionConfig(config, env = process.env) {
   const next = structuredClone(config);
+  // 剥离管理器自有的调用提示词字段，确保传给官方 dsh-mcp-client 的配置严格符合其 Schema。
+  delete next.prompt;
   // 仅识别旧包生成的环境变量引用，绝不 eval 任意 !!js 表达式。
   for (const key of ["env", "headers"]) {
     if (!next[key]) continue;
@@ -73,6 +75,9 @@ export function connectionConfig(server, current = {}) {
   if (model.hasPlaceholder(server)) throw new Error("请先替换模板里的 <占位符>。");
   const config = { ...current, serverName, transport: server.transport === "streamable-http" ? "streamable-http" : "stdio" };
   config.toolCallTimeoutMs = model.normalizeTimeoutMs(server.toolCallTimeoutMs);
+  const prompt = model.normalizePrompt(server.prompt);
+  if (prompt) config.prompt = prompt;
+  else delete config.prompt;
   if (config.transport === "stdio") {
     if (!String(server.command || "").trim()) throw new Error("stdio 需要 command。");
     if (!Array.isArray(server.args || []) || (server.args || []).some((arg) => typeof arg !== "string")) throw new Error("args 必须是字符串数组。");
@@ -333,8 +338,17 @@ export class Connections {
       ...(origin ? { origin } : {}),
     };
     await this.table.put(record.id, record);
+    // 若仅修改了调用提示词而底层连接参数与启用状态未变，且运行时已就绪，则无需重启 MCP 进程
+    const sameRuntime = Boolean(
+      old
+      && old.enabled === record.enabled
+      && JSON.stringify(resolveConnectionConfig(old.config)) === JSON.stringify(resolveConnectionConfig(record.config))
+      && (record.enabled ? (this.runtime.entry(record.id)?.fiber?.state === 2 && !this.errors.has(record.id)) : !this.runtime.entry(record.id)),
+    );
     try {
-      await this.runtime.put(record);
+      if (!sameRuntime) {
+        await this.runtime.put(record);
+      }
       this.errors.delete(record.id);
     } catch (error) {
       // 新建或编辑后的连接启动失败时保留已持久化的新配置，方便用户修正参数或稍后重连，不丢弃刚保存的改动。

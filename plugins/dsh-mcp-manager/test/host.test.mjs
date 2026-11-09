@@ -100,6 +100,62 @@ test("Host 路由使用真实 Cordis 与 JSON 数据域：跨重载持久化，�
   assert.equal(edited.state.servers[0].serverName, "persisted-renamed");
   assert.equal(edited.state.servers[0].patchId, first.patchId);
   assert.doesNotMatch(JSON.stringify(edited), /test-private-value/);
+
+  // 保存自定义调用提示词并验证 tools/post-execute 按需注入与同批次去重
+  const withPrompt = await h.action({ op: "save", server: {
+    ...edited.state.servers[0],
+    prompt: "当前为只读权限，禁止执行写操作",
+    env: edited.state.servers[0].env.map((row) => ({ ...row, keep: true })),
+  } });
+  assert.equal(withPrompt.ok, true, withPrompt.message);
+  assert.equal(withPrompt.state.servers[0].prompt, "当前为只读权限，禁止执行写操作");
+
+  const decision1 = await h.ctx.waterfall(
+    h.ctx.tools,
+    "tools/post-execute",
+    { callId: "call-1", rootCallId: "batch-1", name: "mcp__persisted-renamed__run_query" },
+    { isError: false },
+    () => Promise.resolve({ kind: "accept" }),
+  );
+  assert.equal(decision1.additionalContexts?.length, 1);
+  assert.equal(decision1.additionalContexts[0].role, "user");
+  assert.deepEqual(decision1.additionalContexts[0].source, {
+    kind: "plugin",
+    plugin: "dsh-mcp-manager",
+    form: "instructions",
+  });
+  assert.match(decision1.additionalContexts[0].content[0].text, /\[MCP server: persisted-renamed\]/);
+  assert.match(decision1.additionalContexts[0].content[0].text, /当前为只读权限，禁止执行写操作/);
+
+  // 同一批次（相同 rootCallId）再次调用该 MCP 的其它工具不会重复注入
+  const decisionDup = await h.ctx.waterfall(
+    h.ctx.tools,
+    "tools/post-execute",
+    { callId: "call-2", rootCallId: "batch-1", name: "mcp__persisted-renamed__list_tables" },
+    { isError: false },
+    () => Promise.resolve({ kind: "accept" }),
+  );
+  assert.equal(decisionDup.additionalContexts, undefined);
+
+  // 新批次（不同 rootCallId）再次调用时会注入，非 MCP 工具不注入
+  const decisionNewBatch = await h.ctx.waterfall(
+    h.ctx.tools,
+    "tools/post-execute",
+    { callId: "call-3", rootCallId: "batch-2", name: "mcp__persisted-renamed__run_query" },
+    { isError: false },
+    () => Promise.resolve({ kind: "accept" }),
+  );
+  assert.equal(decisionNewBatch.additionalContexts?.length, 1);
+
+  const decisionNonMcp = await h.ctx.waterfall(
+    h.ctx.tools,
+    "tools/post-execute",
+    { callId: "call-4", rootCallId: "batch-3", name: "bash" },
+    { isError: false },
+    () => Promise.resolve({ kind: "accept" }),
+  );
+  assert.equal(decisionNonMcp.additionalContexts, undefined);
+
   const deleted = await h.action({ op: "remove", patchId: first.patchId });
   assert.equal(deleted.ok, true, deleted.message);
   assert.deepEqual(deleted.state.servers, []);

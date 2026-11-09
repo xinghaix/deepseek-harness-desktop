@@ -115,5 +115,14 @@
   "error.editDisabled": "这台服务器来自其它配置，只能在启用状态下编辑。",
   "sidebar.toggleLabel": "在侧边栏显示入口",
   "sidebar.toggleHint": "开启后在左侧导航栏显示「MCP 服务器」快捷入口，点击可直接打开管理面板。",
-  "migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}"
+  "migration.warning": "部分旧 MCP 连接未能迁移，已保留原配置包：{message}",
+  "tag.prompt": "提示词",
+  "field.prompt": "调用提示词（可选）",
+  "field.promptPlaceholder": "例如：当前为只读权限，请勿执行任何写操作…",
+  "field.promptHint": "仅在模型实际调用此 MCP 工具时按需注入上下文（同批次自动去重），平时不占用系统提示词 Token。",
+  "field.promptPresetReadonly": "只读权限",
+  "field.promptPresetReadonlyText": "当前为只读权限，仅允许执行查询或读取操作，请勿执行任何写入、修改或删除操作。",
+  "field.promptPresetLimit": "限制查询行数",
+  "field.promptPresetLimitText": "查询时请显式指定所需列并带上 LIMIT，优先在服务端聚合，避免一次性返回大量原始行。",
+  "field.promptClear": "清空"
 }

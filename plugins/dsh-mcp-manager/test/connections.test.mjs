@@ -199,6 +199,41 @@ test("编辑已有连接但重连失败时保留用户最新保存的配置并�
   assert.doesNotMatch(manager.errors.get(saved.id) || "", /secret-value/);
 });
 
+test("connectionConfig 保存与清理 prompt，resolveConnectionConfig 剥离 prompt，且仅编辑 prompt 不重启运行中的连接", async () => {
+  const cfg = connectionConfig({
+    serverName: "clickhouse-mcp",
+    transport: "stdio",
+    command: "node",
+    args: ["server.js"],
+    prompt: "  当前为只读权限  ",
+  });
+  assert.equal(cfg.prompt, "当前为只读权限");
+  const resolved = resolveConnectionConfig(cfg);
+  assert.equal("prompt" in resolved, false, "传给官方 dsh-mcp-client 的配置不应包含 prompt 字段");
+  const cleared = connectionConfig({
+    serverName: "clickhouse-mcp",
+    transport: "stdio",
+    command: "node",
+    args: ["server.js"],
+    prompt: "   ",
+  }, cfg);
+  assert.equal("prompt" in cleared, false, "清空 prompt 后应从配置对象中移除该键");
+
+  const events = [];
+  const domain = memoryDomain();
+  const runtime = fakeRuntime(events);
+  const manager = new Connections({ pluginManager: { listBundles: async () => [], listPlugins: async () => [] } }, domain, runtime, "/test/profile");
+  await manager.save({ serverName: "clickhouse-mcp", command: "node", args: ["srv.js"], enabled: true, prompt: "只读 v1" });
+  const saved = manager.records()[0];
+  assert.equal(saved.config.prompt, "只读 v1");
+  assert.equal(events.filter((e) => e[0] === "put").length, 1);
+
+  // 仅更新 prompt，底层连接配置未变，不应触发 runtime.put 重启进程
+  await manager.save({ patchId: saved.id, serverName: "clickhouse-mcp", command: "node", args: ["srv.js"], enabled: true, prompt: "只读 v2" });
+  assert.equal(manager.get(saved.id).config.prompt, "只读 v2");
+  assert.equal(events.filter((e) => e[0] === "put").length, 1, "仅修改 prompt 时不应重启已就绪的 MCP 进程");
+});
+
 test("伪装成旧包的外部配置与任意 !!js 表达式不被自动接管", async (t) => {
   const f = await legacyFixture(t);
   await writeFile(join(f.dir, "mcp-bundles/alpha/package.json"), JSON.stringify({ name: f.bundle.name, private: true }));

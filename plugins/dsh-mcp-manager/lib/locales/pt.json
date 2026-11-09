@@ -115,5 +115,14 @@
   "error.editDisabled": "Este servidor vem de uma configuração externa; só pode ser editado enquanto estiver ativado.",
   "sidebar.toggleLabel": "Mostrar atalho na barra lateral",
   "sidebar.toggleHint": "Exibe um atalho «Servidores MCP» na barra de navegação esquerda para abrir o painel diretamente.",
-  "migration.warning": "Não foi possível migrar algumas conexões MCP antigas. Os pacotes de configuração foram mantidos: {message}"
+  "migration.warning": "Não foi possível migrar algumas conexões MCP antigas. Os pacotes de configuração foram mantidos: {message}",
+  "tag.prompt": "Prompt",
+  "field.prompt": "Prompt de chamada (opcional)",
+  "field.promptPlaceholder": "ex.: Acesso somente leitura; não execute operações de escrita…",
+  "field.promptHint": "Injetado sob demanda apenas quando as ferramentas deste servidor MCP são chamadas (desduplicado por lote); não consome tokens em repouso.",
+  "field.promptPresetReadonly": "Somente leitura",
+  "field.promptPresetReadonlyText": "O acesso atual é somente leitura. Apenas consultas ou leituras são permitidas; não execute operações de escrita, atualização ou exclusão.",
+  "field.promptPresetLimit": "Limitar linhas",
+  "field.promptPresetLimitText": "Especifique colunas explícitas e inclua LIMIT ao consultar; agregue no servidor em vez de buscar grandes volumes de linhas.",
+  "field.promptClear": "Limpar"
 }

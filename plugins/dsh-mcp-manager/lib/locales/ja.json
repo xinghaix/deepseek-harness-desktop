@@ -115,5 +115,14 @@
   "error.editDisabled": "このサーバーは外部の設定に由来するため、有効な間だけ編集できます。",
   "sidebar.toggleLabel": "サイドバーにショートカットを表示",
   "sidebar.toggleHint": "オンにすると左ナビゲーションに「MCP サーバー」入口を表示し、直接管理パネルを開けます。",
-  "migration.warning": "一部の既存 MCP 接続を移行できませんでした。元の設定バンドルは保持されています：{message}"
+  "migration.warning": "一部の既存 MCP 接続を移行できませんでした。元の設定バンドルは保持されています：{message}",
+  "tag.prompt": "プロンプト",
+  "field.prompt": "呼び出し時プロンプト（任意）",
+  "field.promptPlaceholder": "例：現在は読み取り専用権限です。書き込み操作は行わないでください…",
+  "field.promptHint": "この MCP サーバーのツールが実際に呼び出された時のみオンデマンドで注入されます（バッチごとに重複排除）。待機中はトークンを消費しません。",
+  "field.promptPresetReadonly": "読み取り専用",
+  "field.promptPresetReadonlyText": "現在は読み取り専用権限です。クエリや読み取り操作のみ許可されており、書き込み・更新・削除操作は実行しないでください。",
+  "field.promptPresetLimit": "取得件数を制限",
+  "field.promptPresetLimitText": "クエリ時は必要な列を明示して LIMIT を付与し、大量の生データを取得する代わりにサーバー側で集計してください。",
+  "field.promptClear": "クリア"
 }

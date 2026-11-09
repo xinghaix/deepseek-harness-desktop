@@ -115,5 +115,14 @@
   "error.editDisabled": "이 서버는 외부 설정에서 왔으므로 활성화된 상태에서만 편집할 수 있습니다.",
   "sidebar.toggleLabel": "사이드바에 바로가기 표시",
   "sidebar.toggleHint": "켜면 왼쪽 탐색줄에 ‘MCP 서버’ 바로가기를 표시하여 관리 패널을 바로 열 수 있습니다.",
-  "migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}"
+  "migration.warning": "일부 기존 MCP 연결을 이전하지 못했습니다. 원래 구성 번들은 유지되었습니다: {message}",
+  "tag.prompt": "프롬프트",
+  "field.prompt": "호출 프롬프트(선택)",
+  "field.promptPlaceholder": "예: 현재 읽기 전용 권한입니다. 쓰기 작업을 수행하지 마세요…",
+  "field.promptHint": "이 MCP 서버의 도구가 실제로 호출될 때만 온디맨드로 주입되며(배치당 중복 제거), 유휴 시에는 시스템 프롬프트 토큰을 소모하지 않습니다.",
+  "field.promptPresetReadonly": "읽기 전용",
+  "field.promptPresetReadonlyText": "현재 읽기 전용 권한입니다. 조회 또는 읽기 작업만 허용되며 쓰기, 수정, 삭제 작업은 실행하지 마세요.",
+  "field.promptPresetLimit": "결과 행 제한",
+  "field.promptPresetLimitText": "쿼리 시 필요한 열을 명시하고 LIMIT를 포함하며, 대량의 원본 행을 가져오는 대신 서버 측에서 집계하세요.",
+  "field.promptClear": "지우기"
 }
