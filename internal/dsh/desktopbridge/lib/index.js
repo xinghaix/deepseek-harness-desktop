@@ -22,7 +22,6 @@ const routes = Object.freeze({
 	reloadChat: Object.freeze({ method: "POST", path: "/v1/reload-chat" }),
 	openManagement: Object.freeze({ method: "POST", path: "/v1/open-management" }),
 	chatWindowAction: Object.freeze({ method: "POST", path: "/v1/chat-window-action" }),
-	showChatContextMenu: Object.freeze({ method: "POST", path: "/v1/chat-context-menu" }),
 	openExternalURL: Object.freeze({ method: "POST", path: "/v1/open-external-url" }),
 	chooseExecutable: Object.freeze({ method: "POST", path: "/v1/choose-executable" }),
 	chooseHome: Object.freeze({ method: "POST", path: "/v1/choose-home" }),

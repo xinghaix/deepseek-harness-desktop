@@ -105,22 +105,21 @@ func TestEscapeWailsCSS(t *testing.T) {
 	}
 }
 
-func TestDesktopExternalJSOpensLinksAndStashesContext(t *testing.T) {
+func TestDesktopExternalJSOpensLinksWithoutLegacyContextMenuHook(t *testing.T) {
 	mac := desktopChromeScript(true)
 	other := desktopChromeScript(false)
 	for _, script := range []string{mac, other} {
-		if !strings.Contains(script, "main.DSH.") || !strings.Contains(script, "OpenExternalURL") || !strings.Contains(script, "window.__DSH_CTX__") || !strings.Contains(script, "contextmenu") {
-			t.Fatal("Chat must stash right-click context and open external links in the default browser")
+		if !strings.Contains(script, "main.DSH.") || !strings.Contains(script, "OpenExternalURL") {
+			t.Fatal("Chat must open external links in the default browser")
 		}
 		if !strings.Contains(script, "window.open") || !strings.Contains(script, "preventDefault") {
 			t.Fatal("Chat must keep loopback navigation protection")
 		}
-	}
-	if !strings.Contains(mac, "const useCustomMenu = false") {
-		t.Fatal("macOS must keep the native WKWebView menu")
-	}
-	if !strings.Contains(other, "const useCustomMenu = true") || !strings.Contains(other, "--custom-contextmenu") {
-		t.Fatal("Windows/Linux must opt into the Wails context menu for search/open-link")
+		for _, legacy := range []string{"window.__DSH_CTX__", "dshContextMenu", "--custom-contextmenu", "__DSH_DESKTOP_CONTEXT_MENU__"} {
+			if strings.Contains(script, legacy) {
+				t.Fatalf("Chat chrome must not inject legacy context menu hook %q", legacy)
+			}
+		}
 	}
 	if !strings.Contains(other, "__DSH_DESKTOP_SET_CHROME_TITLES__") || !strings.Contains(other, ".dsh-desktop-config .dsh-desktop-chrome__drag") {
 		t.Fatal("Windows/Linux chrome must expose dynamic title updater and management drag inset")

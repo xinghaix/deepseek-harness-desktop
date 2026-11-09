@@ -2749,7 +2749,7 @@
                 if (!name || seenFiles.has(node)) return;
                 seenFiles.add(node);
                 const path = previewAttr(node, "data-file-path") || previewAttr(node, "data-path");
-                parts.push({ kind: "file", value: name, path });
+                parts.push({ kind: "file", value: name, path, node });
             };
             const visit = (node, isRoot = false) => {
                 if (!node) return;
@@ -2896,6 +2896,20 @@
                             try { native.click(); } catch (_) { /* fail closed after an upstream rerender */ }
                         };
                         media.addEventListener?.("click", openNative);
+                        media.addEventListener?.("contextmenu", (event) => {
+                            const native = nativeMediaTarget(source, part.node);
+                            if (!native || typeof native.dispatchEvent !== "function" || typeof MouseEvent !== "function") return;
+                            const forwarded = new MouseEvent("contextmenu", {
+                                bubbles: true,
+                                cancelable: true,
+                                clientX: Number(event?.clientX) || 0,
+                                clientY: Number(event?.clientY) || 0
+                            });
+                            if (native.dispatchEvent(forwarded) === false || forwarded.defaultPrevented) {
+                                event.preventDefault?.();
+                                event.stopPropagation?.();
+                            }
+                        });
                         media.addEventListener?.("keydown", (event) => {
                             if (event.key === "Enter" || event.key === " ") openNative(event);
                         });
@@ -2904,6 +2918,7 @@
                     }
                     const file = document.createElement("span");
                     file.setAttribute(PROMPT_OVERLAY_ITEM_ATTR, "");
+                    if (part.path) file.setAttribute("data-dsh-desktop-file-path", part.path);
                     const fullLabel = safePreviewFileLabel(part.path || part.value);
                     const index = (occurrences.get(fullLabel) || 0) + 1;
                     occurrences.set(fullLabel, index);
@@ -2917,6 +2932,27 @@
                         file.appendChild(ordinal);
                     }
                     file.setAttribute("title", fullLabel);
+                    file.addEventListener?.("click", (event) => {
+                        const native = nativeMediaTarget(source, part.node);
+                        if (!native || typeof native.click !== "function") return;
+                        event.preventDefault?.();
+                        event.stopPropagation?.();
+                        try { native.click(); } catch (_) {}
+                    });
+                    file.addEventListener?.("contextmenu", (event) => {
+                        const native = nativeMediaTarget(source, part.node);
+                        if (!native || typeof native.dispatchEvent !== "function" || typeof MouseEvent !== "function") return;
+                        const forwarded = new MouseEvent("contextmenu", {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: Number(event?.clientX) || 0,
+                            clientY: Number(event?.clientY) || 0
+                        });
+                        if (native.dispatchEvent(forwarded) === false || forwarded.defaultPrevented) {
+                            event.preventDefault?.();
+                            event.stopPropagation?.();
+                        }
+                    });
                     row.appendChild(file);
                 }
                 if (hiddenCount > 0) row.appendChild(createAttachmentMore(hiddenCount));
@@ -4657,10 +4693,11 @@
 		}
 
 
-		// 复制会话 ID 使用官方入口，桌面只通过官方槽补充删除会话。
+		// 复制会话 ID 使用官方入口，桌面通过官方 contextMenus 服务（兼容旧槽）补充删除会话与选中文本菜单。
 		const SESSION_MENU_ITEM_SLOT = "sidebar.workspaces.session.menu.item";
-		const DELETE_SESSION_MENU_ORDER = 600;
+		const DELETE_SESSION_MENU_ORDER = 700;
 		const DELETE_SESSION_MENU_LABELS = Object.freeze({ zh: "删除会话", en: "Delete session", de: "Sitzung löschen", fr: "Supprimer la session", es: "Eliminar sesión", ja: "セッションを削除", ko: "세션 삭제", pt: "Excluir sessão" });
+		const COPIED_MENU_LABELS = Object.freeze({ zh: "已复制", en: "Copied", de: "Kopiert", fr: "Copié", es: "Copiado", ja: "コピーしました", ko: "복사됨", pt: "Copiado" });
 		const DELETE_SESSION_CONFIRM_ATTRIBUTE = "data-dsh-delete-session-confirm";
 		const DELETE_SESSION_CONFIRM_PANEL_ATTRIBUTE = "data-dsh-delete-session-confirm-panel";
 		const DELETE_SESSION_CONFIRM_TITLE_ATTRIBUTE = "data-dsh-delete-session-confirm-title";
@@ -4816,8 +4853,111 @@
 			return enabled;
 		}
 
+		function resolveContextMenus(scope) {
+			if (!scope) return null;
+			if (typeof scope.get === "function") {
+				try {
+					const byGet = scope.get("contextMenus");
+					if (byGet && typeof byGet.register === "function") return byGet;
+				} catch (_) {}
+			}
+			try {
+				if (scope.contextMenus && typeof scope.contextMenus.register === "function") return scope.contextMenus;
+			} catch (_) {}
+			return null;
+		}
+
+		function createDesktopMenuObservable(eventNames = []) {
+			return {
+				subscribe(listener) {
+					if (typeof listener !== "function") return () => {};
+					const offLocale = onLocaleChange(() => listener());
+					if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+						return () => offLocale();
+					}
+					const onEvent = () => listener();
+					for (const name of eventNames) window.addEventListener(name, onEvent);
+					return () => {
+						offLocale();
+						for (const name of eventNames) window.removeEventListener(name, onEvent);
+					};
+				}
+			};
+		}
+
+		function copiedMenuLabel() {
+			return COPIED_MENU_LABELS[sessionMenuLocaleKey()] || COPIED_MENU_LABELS.en;
+		}
+
+		function buildDesktopSearchURL(rawQuery) {
+			const trimmed = String(rawQuery || "").trim();
+			if (!trimmed) return "";
+			const clipped = Array.from(trimmed).slice(0, 512).join("");
+			return "https://www.google.com/search?q=" + encodeURIComponent(clipped);
+		}
+
+		function DesktopMenuTrashIcon() {
+			const primitives = loadSessionMenuPrimitives();
+			if (typeof primitives?.IconTrashOutlineRegular === "function") {
+				return jsx(primitives.IconTrashOutlineRegular, {});
+			}
+			return jsx("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				"aria-hidden": true,
+				children: jsx("path", {
+					d: "M6 2.5h4M2.75 4h10.5M4.25 4l.5 8.5a1.25 1.25 0 0 0 1.25 1.18h4a1.25 1.25 0 0 0 1.25-1.18L11.75 4M6.75 6.75v4.25M9.25 6.75v4.25",
+					stroke: "currentColor",
+					strokeWidth: "1.3",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				})
+			});
+		}
+
+		function DesktopMenuCopyIcon() {
+			const primitives = loadSessionMenuPrimitives();
+			if (typeof primitives?.IconCopyOutlineRegular === "function") {
+				return jsx(primitives.IconCopyOutlineRegular, {});
+			}
+			return jsx("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				"aria-hidden": true,
+				children: jsx("path", {
+					d: "M5.5 5.5h6.25a1.25 1.25 0 0 1 1.25 1.25v6.25a1.25 1.25 0 0 1-1.25 1.25H5.5a1.25 1.25 0 0 1-1.25-1.25V6.75A1.25 1.25 0 0 1 5.5 5.5Zm-2.5 5V3.25A1.25 1.25 0 0 1 4.25 2h7.25",
+					stroke: "currentColor",
+					strokeWidth: "1.3",
+					strokeLinecap: "round",
+					strokeLinejoin: "round"
+				})
+			});
+		}
+
+		function DesktopMenuSearchIcon() {
+			const primitives = loadSessionMenuPrimitives();
+			if (typeof primitives?.IconSearchOutlineRegular === "function") {
+				return jsx(primitives.IconSearchOutlineRegular, {});
+			}
+			return jsxs("svg", {
+				width: 16,
+				height: 16,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				"aria-hidden": true,
+				children: [
+					jsx("circle", { cx: "7.25", cy: "7.25", r: "4.5", stroke: "currentColor", strokeWidth: "1.3" }),
+					jsx("path", { d: "M10.6 10.6 13.5 13.5", stroke: "currentColor", strokeWidth: "1.3", strokeLinecap: "round" })
+				]
+			});
+		}
+
 		function installSessionMenuSlots(ctx) {
-			if (typeof ctx?.slots?.inject !== "function" || typeof ctx?.slots?.register !== "function") return () => {};
+			const cleanups = [];
 			const primitives = loadSessionMenuPrimitives();
 			const MenuItemButton = primitives?.MenuItemButton;
 			const IconTrashOutlineRegular = primitives?.IconTrashOutlineRegular;
@@ -4855,22 +4995,275 @@
 				});
 			}
 
-			try {
-				const dispose = ctx.slots.inject(SESSION_MENU_ITEM_SLOT, function* () {
-					yield ctx.slots.register({
-						name: SESSION_MENU_ITEM_SLOT,
-						id: "deepseek-harness-desktop.delete-session",
-						order: DELETE_SESSION_MENU_ORDER
-					}, DeleteSessionMenuItem);
-				});
-				return () => {
-					try { if (typeof dispose === "function") dispose(); } catch (_) {}
-					closeDeleteSessionConfirmation();
-				};
-			} catch (error) {
-				console.warn("[desktop-bridge] session menu slot registration failed", error);
-				return () => {};
+			if (typeof ctx?.slots?.inject === "function" && typeof ctx?.slots?.register === "function") {
+				try {
+					const disposeIcons = ctx.slots.inject("contextMenu.icon", function* () {
+						yield ctx.slots.register({ name: "contextMenu.icon", key: "deepseek-harness-desktop.delete" }, DesktopMenuTrashIcon);
+						yield ctx.slots.register({ name: "contextMenu.icon", key: "deepseek-harness-desktop.copy" }, DesktopMenuCopyIcon);
+						yield ctx.slots.register({ name: "contextMenu.icon", key: "deepseek-harness-desktop.search" }, DesktopMenuSearchIcon);
+					});
+					if (typeof disposeIcons === "function") cleanups.push(disposeIcons);
+				} catch (_) {}
 			}
+
+			const deleteSessionObservable = createDesktopMenuObservable([DELETE_SESSION_ACTIONS_EVENT]);
+			let registeredNativeSessionMenu = false;
+			const bindSessionContextMenu = (menus) => {
+				if (!menus || registeredNativeSessionMenu) return;
+				registeredNativeSessionMenu = true;
+				try {
+					const disposeMenu = menus.register({
+						id: "deepseek-harness-desktop.delete-session",
+						target: "session",
+						order: DELETE_SESSION_MENU_ORDER,
+						observe: () => [
+							deleteSessionObservable,
+							...(ctx?.locale && typeof ctx.locale.subscribe === "function" ? [ctx.locale] : [])
+						],
+						resolve: ({ sessionId }) => {
+							const enabled = typeof window === "undefined" || window[DELETE_SESSION_ACTIONS_GLOBAL] !== false;
+							if (!enabled || !sessionId) return [];
+							return [{
+								id: "delete",
+								label: deleteSessionMenuLabel(),
+								icon: { key: "deepseek-harness-desktop.delete" },
+								danger: true,
+								afterContent: true,
+								run: () => {
+									void deleteSessionById(sessionId, ctx);
+								}
+							}];
+						}
+					});
+					if (typeof disposeMenu === "function") cleanups.push(disposeMenu);
+				} catch (error) {
+					registeredNativeSessionMenu = false;
+					console.warn("[desktop-bridge] session contextMenu registration failed", error);
+				}
+			};
+
+			bindSessionContextMenu(resolveContextMenus(ctx));
+			if (!registeredNativeSessionMenu && typeof ctx?.inject === "function") {
+				try {
+					const stopInject = ctx.inject(["contextMenus"], (scope) => {
+						bindSessionContextMenu(resolveContextMenus(scope) || resolveContextMenus(ctx));
+					});
+					if (typeof stopInject === "function") cleanups.push(stopInject);
+				} catch (_) {}
+			}
+
+			if (!registeredNativeSessionMenu && typeof ctx?.slots?.inject === "function" && typeof ctx?.slots?.register === "function") {
+				try {
+					const disposeSlot = ctx.slots.inject(SESSION_MENU_ITEM_SLOT, function* () {
+						yield ctx.slots.register({
+							name: SESSION_MENU_ITEM_SLOT,
+							id: "deepseek-harness-desktop.delete-session",
+							order: DELETE_SESSION_MENU_ORDER
+						}, DeleteSessionMenuItem);
+					});
+					if (typeof disposeSlot === "function") cleanups.push(disposeSlot);
+				} catch (error) {
+					console.warn("[desktop-bridge] session menu slot registration failed", error);
+				}
+			}
+
+			return () => {
+				for (const fn of cleanups.splice(0, cleanups.length)) {
+					try { if (typeof fn === "function") fn(); } catch (_) {}
+				}
+				closeDeleteSessionConfirmation();
+			};
+		}
+
+		function isEditableMenuTarget(element) {
+			if (!element) return false;
+			if (element.isContentEditable) return true;
+			return Boolean(element.closest?.("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
+		}
+
+		function resolveExternalMenuHref(rawHref) {
+			if (!rawHref || rawHref.charAt(0) === "#" || rawHref.indexOf("javascript:") === 0) return "";
+			try {
+				const URLCtor = (typeof URL === "function" && URL) || (typeof window !== "undefined" && typeof window.URL === "function" && window.URL);
+				if (!URLCtor) {
+					return /^https?:\/\/(?!127\.0\.0\.1(?:[:/]|$)|localhost(?:[:/]|$))/i.test(rawHref) ? rawHref : "";
+				}
+				const base = typeof location !== "undefined" && location?.href ? location.href : "http://127.0.0.1/";
+				const parsed = new URLCtor(rawHref, base);
+				if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+				if (typeof location !== "undefined" && parsed.protocol === "http:" && parsed.hostname === "127.0.0.1" && parsed.port === location.port) {
+					return "";
+				}
+				return parsed.href;
+			} catch (_) {
+				return "";
+			}
+		}
+
+		function readContextMenuSelection(event) {
+			if (typeof window === "undefined" || typeof window.getSelection !== "function") return "";
+			const selection = window.getSelection();
+			const text = String(selection?.toString?.() || "").trim();
+			if (!text) return "";
+			const keyboard = (Number(event?.clientX) || 0) === 0 && (Number(event?.clientY) || 0) === 0;
+			if (keyboard || typeof selection.rangeCount !== "number" || selection.rangeCount < 1 || typeof selection.getRangeAt !== "function") {
+				return text.slice(0, 2048);
+			}
+			try {
+				const range = selection.getRangeAt(0);
+				const rects = typeof range?.getClientRects === "function" ? [...range.getClientRects()] : [];
+				if (rects.length === 0) return text.slice(0, 2048);
+				const x = Number(event.clientX) || 0;
+				const y = Number(event.clientY) || 0;
+				const pad = 4;
+				const inside = rects.some((r) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad);
+				return inside ? text.slice(0, 2048) : "";
+			} catch (_) {
+				return text.slice(0, 2048);
+			}
+		}
+
+		function activeMenuSessionId(ctx) {
+			try {
+				const uiWorkspace = typeof ctx?.get === "function" ? ctx.get("uiWorkspace") : ctx?.uiWorkspace;
+				const mainId = uiWorkspace?.mainReference?.sessionId || uiWorkspace?.selection?.getSnapshot?.()?.sessionId;
+				if (typeof mainId === "string" && mainId) return mainId;
+				const current = ctx?.sessions?.list?.getSnapshot?.()?.current;
+				if (typeof current === "string" && current) return current;
+			} catch (_) {}
+			return "";
+		}
+
+		function installDesktopContextMenus(ctx) {
+			const cleanups = [];
+			const selectionObservable = createDesktopMenuObservable();
+			let boundMenus = null;
+
+			const bindMenus = (menus) => {
+				if (!menus || boundMenus === menus) return;
+				boundMenus = menus;
+				try {
+					const disposeSelection = menus.register({
+						id: "deepseek-harness-desktop.selection",
+						target: "selection",
+						order: 100,
+						observe: () => [
+							selectionObservable,
+							...(ctx?.locale && typeof ctx.locale.subscribe === "function" ? [ctx.locale] : [])
+						],
+						resolve: ({ text }) => {
+							const query = String(text || "").trim();
+							if (!query) return [];
+							const copyLabel = t("chrome.copy") || "Copy";
+							const browserName = t("chrome.default_browser") || "Default Browser";
+							const searchLabel = t("chrome.search_in_browser", browserName);
+							return [
+								{
+									id: "copy",
+									label: copyLabel,
+									icon: { key: "deepseek-harness-desktop.copy" },
+									run: async () => {
+										if (typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function") {
+											await navigator.clipboard.writeText(query);
+										} else if (typeof window !== "undefined" && typeof window.__DSH_DESKTOP_COPY_TEXT__ === "function") {
+											await window.__DSH_DESKTOP_COPY_TEXT__(query);
+										}
+										if (typeof menus.notify === "function") {
+											menus.notify(copiedMenuLabel(), true);
+										}
+									}
+								},
+								{
+									id: "search",
+									label: searchLabel,
+									icon: { key: "deepseek-harness-desktop.search" },
+									separatorBefore: true,
+									run: async () => {
+										const url = buildDesktopSearchURL(query);
+										if (!url) return;
+										if (typeof window !== "undefined" && typeof window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__ === "function") {
+											await window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__(url);
+										} else {
+											await callDesktopRPC(ctx?.connection, "openExternalURL", { url });
+										}
+									}
+								}
+							];
+						}
+					});
+					if (typeof disposeSelection === "function") cleanups.push(disposeSelection);
+				} catch (error) {
+					console.warn("[desktop-bridge] selection contextMenu registration failed", error);
+				}
+			};
+
+			bindMenus(resolveContextMenus(ctx));
+			if (!boundMenus && typeof ctx?.inject === "function") {
+				try {
+					const stopInject = ctx.inject(["contextMenus"], (scope) => {
+						bindMenus(resolveContextMenus(scope) || resolveContextMenus(ctx));
+					});
+					if (typeof stopInject === "function") cleanups.push(stopInject);
+				} catch (_) {}
+			}
+
+			if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+				const onContextMenu = (event) => {
+					if (!event || event.defaultPrevented) return;
+					const rawTarget = event.target;
+					const element = rawTarget?.nodeType === 3 ? rawTarget.parentElement : rawTarget;
+					if (!element || isEditableMenuTarget(element)) return;
+					if (element.closest?.('[role="menu"]')) {
+						event.preventDefault?.();
+						return;
+					}
+					const menus = boundMenus || resolveContextMenus(ctx);
+					if (menus && typeof menus.open === "function") {
+						const point = {
+							x: Math.max(0, Math.round(Number(event.clientX) || 0)),
+							y: Math.max(0, Math.round(Number(event.clientY) || 0))
+						};
+						const sessionId = activeMenuSessionId(ctx);
+						const fileChip = element.closest?.("[data-dsh-desktop-file-path]");
+						if (fileChip) {
+							const filePath = fileChip.getAttribute?.("data-dsh-desktop-file-path") || "";
+							if (filePath && sessionId) {
+								event.preventDefault?.();
+								event.stopPropagation?.();
+								menus.open({ kind: "file", value: { sessionId, path: filePath } }, point);
+								return;
+							}
+						}
+						const selectedText = readContextMenuSelection(event);
+						if (selectedText) {
+							event.preventDefault?.();
+							event.stopPropagation?.();
+							menus.open({ kind: "selection", value: { text: selectedText, sessionId } }, point);
+							return;
+						}
+						const anchor = element.closest?.("a[href]");
+						if (anchor) {
+							const externalUrl = resolveExternalMenuHref(anchor.getAttribute?.("href") || "");
+							if (externalUrl) {
+								event.preventDefault?.();
+								event.stopPropagation?.();
+								menus.open({ kind: "url", value: { sessionId, url: externalUrl } }, point);
+								return;
+							}
+						}
+					}
+					// 空白区域（顶栏、会话标题栏、设置侧边栏等非输入控件）阻止 WebView 默认的 Reload 原生菜单
+					event.preventDefault?.();
+				};
+				document.addEventListener("contextmenu", onContextMenu);
+				cleanups.push(() => document.removeEventListener("contextmenu", onContextMenu));
+			}
+
+			return () => {
+				for (const fn of cleanups.splice(0, cleanups.length)) {
+					try { if (typeof fn === "function") fn(); } catch (_) {}
+				}
+			};
 		}
 
 		const ARCHIVED_SESSIONS_NS = "settings.archivedSessions";
@@ -7963,7 +8356,6 @@
 				const actions = {
 					__DSH_DESKTOP_OPEN_EXTERNAL_URL__: (url) => invokeNative("openExternalURL", { url }),
 					__DSH_DESKTOP_WINDOW_ACTION__: (action) => invokeNative("chatWindowAction", { action }),
-					__DSH_DESKTOP_CONTEXT_MENU__: (payload) => invokeNative("showChatContextMenu", payload),
 					__DSH_DESKTOP_COPY_TEXT__: (text) => invokeNative("writeClipboard", { text }),
 				};
 				for (const [name, handler] of Object.entries(actions)) window[name] = handler;
@@ -8053,6 +8445,7 @@
 			})();
 			const stopNavIcon = installDesktopNavIcon();
 			const stopSessionMenuSlots = installSessionMenuSlots(ctx);
+			const stopDesktopContextMenus = installDesktopContextMenus(ctx);
 			const stopArchivedSessionDelete = installArchivedSessionDelete(ctx);
 			const stopArchivedSessionBatch = installArchivedSessionBatch(ctx);
 			const stopHoverMessageActions = installHoverMessageActions(ctx);
@@ -8064,6 +8457,7 @@
 					stopDesktopShortcuts();
 					stopNavIcon();
 					stopSessionMenuSlots();
+					stopDesktopContextMenus();
 					stopArchivedSessionDelete();
 					stopArchivedSessionBatch();
 					stopHoverMessageActions();

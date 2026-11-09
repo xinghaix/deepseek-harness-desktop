@@ -26,10 +26,11 @@ func ManagementWindowOptions(url string) application.WebviewWindowOptions {
 		MinWidth:           760,
 		MinHeight:          620,
 		URL:                url,
-		BackgroundColour:   currentManagementBackgroundRGBA(),
-		UseApplicationMenu: true,
-		DevToolsEnabled:    false,
-		Permissions:        deniedWebviewPermissions(),
+		BackgroundColour:           currentManagementBackgroundRGBA(),
+		UseApplicationMenu:         true,
+		DefaultContextMenuDisabled: true,
+		DevToolsEnabled:            false,
+		Permissions:                deniedWebviewPermissions(),
 	}
 	return applyDesktopWindowChrome(options)
 }
@@ -54,10 +55,11 @@ func ConfigModalWindowOptions(url string, locale string) application.WebviewWind
 		CloseButtonState:      application.ButtonHidden,
 		MinimiseButtonState:   application.ButtonHidden,
 		MaximiseButtonState:   application.ButtonHidden,
-		FullscreenButtonState: application.ButtonHidden,
-		UseApplicationMenu:    true,
-		DevToolsEnabled:       false,
-		Permissions:           deniedWebviewPermissions(),
+		FullscreenButtonState:      application.ButtonHidden,
+		UseApplicationMenu:         true,
+		DefaultContextMenuDisabled: true,
+		DevToolsEnabled:            false,
+		Permissions:                deniedWebviewPermissions(),
 		JS:                    desktopModalChromeJS,
 	}
 	if runtime.GOOS == "darwin" {
@@ -78,10 +80,11 @@ func ChatWindowOptions(url string) application.WebviewWindowOptions {
 		MinWidth:           MinChatWidth,
 		MinHeight:          MinChatHeight,
 		URL:                url,
-		BackgroundColour:   currentChatBackgroundRGBA(),
-		UseApplicationMenu: true,
-		DevToolsEnabled:    false,
-		Permissions:        chatWebviewPermissions(),
+		BackgroundColour:           currentChatBackgroundRGBA(),
+		UseApplicationMenu:         true,
+		DefaultContextMenuDisabled: true,
+		DevToolsEnabled:            false,
+		Permissions:                chatWebviewPermissions(),
 	}
 	// applyDesktopWindowChrome already sets MacTitleBarHiddenInsetUnified, traffic
 	// lights, and InvisibleTitleBarHeight = desktopNativeTopInset (Wails macOS

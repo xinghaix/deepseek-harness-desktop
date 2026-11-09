@@ -17,7 +17,6 @@ type bridgeHostAdapter struct {
 var _ dsh.BridgeHost = bridgeHostAdapter{}
 var _ dsh.ExternalURLHost = bridgeHostAdapter{}
 var _ dsh.ChatWindowActionHost = bridgeHostAdapter{}
-var _ dsh.ChatContextMenuHost = bridgeHostAdapter{}
 var _ dsh.ClipboardHost = bridgeHostAdapter{}
 var _ dsh.ThemePreferenceHost = bridgeHostAdapter{}
 var _ dsh.ShortcutBridgeHost = bridgeHostAdapter{}

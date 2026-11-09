@@ -44,26 +44,6 @@ type ChatWindowActionHost interface {
 	ChatWindowAction(action string) error
 }
 
-// ChatContextMenuHost is optional and accepts content and coordinates, not menu IDs.
-type ChatContextMenuHost interface {
-	ShowChatContextMenu(request ChatContextMenuRequest) error
-}
-
-type ChatContextMenuRequest struct {
-	X    int    `json:"x"`
-	Y    int    `json:"y"`
-	Text string `json:"text"`
-	Href string `json:"href"`
-}
-
-// Validate bounds both authenticated HTTP and native callers before menu handling.
-func (r ChatContextMenuRequest) Validate() error {
-	if r.X < 0 || r.Y < 0 || r.X > 100000 || r.Y > 100000 || len(r.Text) > 8192 || len(r.Href) > 8192 {
-		return i18n.ErrorfActive("bridge.err_not_allowed")
-	}
-	return nil
-}
-
 type PathHost interface {
 	ChooseExecutable() (string, error)
 	ChooseHome() (string, error)
@@ -485,31 +465,6 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
-	case "/v1/chat-context-menu":
-		if r.Method != http.MethodPost {
-			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
-			return
-		}
-		request, err := decodeChatContextMenu(r)
-		if err != nil {
-			writeBridgeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		host, err := b.owner.getBridgeHost()
-		if err != nil {
-			writeBridgeError(w, http.StatusConflict, err.Error())
-			return
-		}
-		menus, ok := host.(ChatContextMenuHost)
-		if !ok {
-			writeBridgeError(w, http.StatusConflict, i18n.TActive("bridge.err_not_allowed"))
-			return
-		}
-		if err := menus.ShowChatContextMenu(request); err != nil {
-			writeBridgeError(w, http.StatusConflict, err.Error())
-			return
-		}
-		writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "/v1/chat-window-action":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
@@ -1323,27 +1278,6 @@ func (b *desktopBridge) handleOpenPath(w http.ResponseWriter, r *http.Request, f
 		return
 	}
 	writeBridgeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-func decodeChatContextMenu(r *http.Request) (ChatContextMenuRequest, error) {
-	var request ChatContextMenuRequest
-	var body map[string]json.RawMessage
-	if err := decodeBridgeJSON(r, &body); err != nil {
-		return request, err
-	}
-	if len(body) != 4 {
-		return request, i18n.ErrorfActive("bridge.err_not_allowed")
-	}
-	for key, dest := range map[string]any{"x": &request.X, "y": &request.Y, "text": &request.Text, "href": &request.Href} {
-		raw := body[key]
-		if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
-			return request, i18n.ErrorfActive("bridge.err_not_allowed")
-		}
-		if err := json.Unmarshal(raw, dest); err != nil {
-			return request, err
-		}
-	}
-	return request, request.Validate()
 }
 
 func decodeBridgeJSON(r *http.Request, dest any) error {

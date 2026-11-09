@@ -476,7 +476,7 @@ console.log("ok - tray navigation preserves intent across late claims and same-I
 
 // Load both production scripts with the real remote-page shape: NO Wails Call API.
 const chromeSource = fs.readFileSync(new URL("../../desktop/chrome.go", import.meta.url), "utf8")
-  .split("const desktopExternalJSTemplate = `")[1].split("\n`")[0].replace("@@USE_CUSTOM_MENU@@", "false");
+  .split("const desktopExternalJSTemplate = `")[1].split("\n`")[0];
 document.addEventListener = () => {};
 window.wails = {};
 const externalCalls = [], externalAlerts = [];
@@ -504,15 +504,13 @@ console.log("ok - actual chrome and bridge client integrate without Wails Call r
 const windowCalls = [];
 ctx.connection.rpc.call = (channel, method, payload) => {windowCalls.push({channel,method,payload});return Promise.resolve({ok:true,value:{}});};
 assert.equal(typeof window.__DSH_DESKTOP_WINDOW_ACTION__, "function", "window actions need authenticated transport without Wails runtime");
-assert.equal(typeof window.__DSH_DESKTOP_CONTEXT_MENU__, "function", "custom menu needs authenticated transport without full runtime");
+assert.equal(window.__DSH_DESKTOP_CONTEXT_MENU__, undefined, "legacy native context menu global must not be installed");
 for (const action of ["minimize","maximize","close","settings","dismiss-config"]) await window.__DSH_DESKTOP_WINDOW_ACTION__(action);
-await window.__DSH_DESKTOP_CONTEXT_MENU__({x:10,y:20,text:"selected",href:"https://example.com/"});
-assert.equal(windowCalls.length,6);
-assert.deepEqual(windowCalls.map(c=>c.method),["chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction","showChatContextMenu"]);
+assert.equal(windowCalls.length,5);
+assert.deepEqual(windowCalls.map(c=>c.method),["chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction","chatWindowAction"]);
 assert.equal(windowCalls[4].payload.action,"dismiss-config");
-assert.equal(windowCalls[5].payload.x,10);
 assert.ok(windowCalls.every(c=>c.channel==="/desktop-bridge"));
-console.log("ok - remote controls and context menu use authenticated client transport");
+console.log("ok - remote window controls use authenticated client transport");
 
 // Test currentSessionId reporting and fallback
 const directSessionReports = [];
@@ -1040,6 +1038,163 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
     );
   }
   void mockSvc;
+
+  // Verify official DSH ctx.contextMenus integration for session delete, text selection, external URL, and file chip
+  const menuProviders = new Map();
+  const openedMenus = [];
+  const notifications = [];
+  const docListeners = new Map();
+  document.addEventListener = (type, fn) => {
+    docListeners.set(type, fn);
+  };
+  document.removeEventListener = (type, fn) => {
+    if (docListeners.get(type) === fn) docListeners.delete(type);
+  };
+  const mockContextMenus = {
+    register(provider) {
+      menuProviders.set(`${provider.target}/${provider.id}`, provider);
+      return () => menuProviders.delete(`${provider.target}/${provider.id}`);
+    },
+    open(target, point) {
+      openedMenus.push({ target, point });
+    },
+    notify(label, ok) {
+      notifications.push({ label, ok });
+    },
+  };
+  const menuSlots = [];
+  const menuCtx = {
+    ...ctx,
+    contextMenus: mockContextMenus,
+    get(key) {
+      if (key === "contextMenus") return mockContextMenus;
+      if (key === "uiWorkspace") return { mainReference: { sessionId: "session-ctx-1" } };
+      return undefined;
+    },
+    slots: {
+      inject(_slot, fn) {
+        const res = fn();
+        if (res && typeof res[Symbol.iterator] === "function") {
+          for (const _ of res) { /* drain generator */ }
+        }
+        return () => {};
+      },
+      register(options, component) {
+        menuSlots.push({ options, component });
+        return () => {};
+      },
+    },
+  };
+  window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = true;
+  themeClient.apply(menuCtx);
+
+  const iconKeys = menuSlots.filter((s) => s.options?.name === "contextMenu.icon").map((s) => s.options.key);
+  assert.ok(iconKeys.includes("deepseek-harness-desktop.delete"), "contextMenu.icon must register delete icon");
+  assert.ok(iconKeys.includes("deepseek-harness-desktop.copy"), "contextMenu.icon must register copy icon");
+  assert.ok(iconKeys.includes("deepseek-harness-desktop.search"), "contextMenu.icon must register search icon");
+
+  const sessionProvider = menuProviders.get("session/deepseek-harness-desktop.delete-session");
+  assert.ok(sessionProvider, "session delete must register on official ctx.contextMenus");
+  assert.equal(sessionProvider.order, 700, "session delete must sort after built-in session.archive (600)");
+  const sessionItems = sessionProvider.resolve({ sessionId: "session-ctx-1" });
+  assert.equal(sessionItems.length, 1);
+  assert.equal(sessionItems[0].id, "delete");
+  assert.equal(sessionItems[0].danger, true);
+  assert.equal(sessionItems[0].afterContent, true);
+  assert.equal(sessionItems[0].icon?.key, "deepseek-harness-desktop.delete");
+
+  window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = false;
+  assert.equal(sessionProvider.resolve({ sessionId: "session-ctx-1" }).length, 0, "disabling deleteSessionActions must hide session delete action");
+  window.__DSH_DESKTOP_DELETE_SESSION_ACTIONS__ = true;
+
+  const selectionProvider = menuProviders.get("selection/deepseek-harness-desktop.selection");
+  assert.ok(selectionProvider, "text selection menu must register on official ctx.contextMenus");
+  const selectionItems = selectionProvider.resolve({ text: "  测试冲突，并同步  ", sessionId: "session-ctx-1" });
+  assert.equal(selectionItems.length, 2);
+  assert.equal(selectionItems[0].id, "copy");
+  assert.equal(selectionItems[1].id, "search");
+  const searchedUrls = [];
+  window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__ = (url) => {
+    searchedUrls.push(url);
+    return Promise.resolve();
+  };
+  await selectionItems[1].run();
+  assert.equal(searchedUrls.length, 1);
+  assert.ok(searchedUrls[0].startsWith("https://www.google.com/search?q="), "search action must open encoded search query in default browser");
+
+  const onDocContextMenu = docListeners.get("contextmenu");
+  assert.equal(typeof onDocContextMenu, "function", "bubble contextmenu delegate must be attached to document");
+
+  // 1. DSH-handled contextmenu (defaultPrevented = true) must not be intercepted
+  openedMenus.length = 0;
+  onDocContextMenu({ defaultPrevented: true, clientX: 20, clientY: 30, target: {} });
+  assert.equal(openedMenus.length, 0, "already handled official contextmenu must not be reopened");
+
+  // 2. Editable target must preserve native input menu (preventDefault not called)
+  let editablePrevented = false;
+  onDocContextMenu({
+    defaultPrevented: false,
+    clientX: 20,
+    clientY: 30,
+    preventDefault() { editablePrevented = true; },
+    target: { closest: (sel) => (sel.includes("input") ? {} : null) },
+  });
+  assert.equal(openedMenus.length, 0, "editable targets must keep native OS context menu");
+  assert.equal(editablePrevented, false, "editable targets must not call preventDefault");
+
+  // 2b. Blank non-editable area (titlebar, header strip, settings sidebar) must call preventDefault to suppress WebView "Reload" menu
+  window.getSelection = () => ({ toString: () => "" });
+  let blankPrevented = false;
+  onDocContextMenu({
+    defaultPrevented: false,
+    clientX: 120,
+    clientY: 18,
+    preventDefault() { blankPrevented = true; },
+    target: { closest: () => null },
+  });
+  assert.equal(openedMenus.length, 0, "blank area must not open a custom menu");
+  assert.equal(blankPrevented, true, "blank non-editable area must preventDefault to suppress WebView native Reload menu");
+
+  // 3. Text selection opens official contextMenus with target "selection"
+  window.getSelection = () => ({
+    toString: () => "测试冲突，并同步",
+    rangeCount: 1,
+    getRangeAt: () => ({ getClientRects: () => [{ left: 10, right: 200, top: 10, bottom: 40 }] }),
+  });
+  let prevented = false;
+  onDocContextMenu({
+    defaultPrevented: false,
+    clientX: 50,
+    clientY: 25,
+    preventDefault() { prevented = true; },
+    stopPropagation() {},
+    target: { closest: () => null },
+  });
+  assert.equal(prevented, true);
+  assert.equal(openedMenus.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(openedMenus[0])), {
+    target: { kind: "selection", value: { text: "测试冲突，并同步", sessionId: "session-ctx-1" } },
+    point: { x: 50, y: 25 },
+  });
+
+  // 4. Unhandled external link opens official contextMenus with target "url"
+  window.getSelection = () => ({ toString: () => "" });
+  openedMenus.length = 0;
+  onDocContextMenu({
+    defaultPrevented: false,
+    clientX: 80,
+    clientY: 90,
+    preventDefault() {},
+    stopPropagation() {},
+    target: {
+      closest: (sel) => (sel === "a[href]" ? { getAttribute: () => "https://example.com/docs" } : null),
+    },
+  });
+  assert.equal(openedMenus.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(openedMenus[0])), {
+    target: { kind: "url", value: { sessionId: "session-ctx-1", url: "https://example.com/docs" } },
+    point: { x: 80, y: 90 },
+  });
 }
-console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and persistence verified");
+console.log("ok - IDEA low-contrast eye-care dark theme registration, slot rendering, and official contextMenus verified");
 

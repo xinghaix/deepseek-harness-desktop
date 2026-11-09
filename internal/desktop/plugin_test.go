@@ -37,6 +37,9 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if !strings.Contains(inject, "@deepseek-ai/dsh-client-ui-settings") {
 		t.Fatalf("client inject missing settings shell: %v", manifest.DSH.Client.Inject)
 	}
+	if !strings.Contains(inject, "@deepseek-ai/dsh-client-ui-context-menu") {
+		t.Fatalf("client inject missing context-menu service: %v", manifest.DSH.Client.Inject)
+	}
 	if !strings.Contains(inject, "@deepseek-ai/dsh-client-ui-workspace") {
 		t.Fatalf("client inject missing workspace UI (openSession): %v", manifest.DSH.Client.Inject)
 	}
@@ -157,6 +160,9 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 		"MenuItemButton",
 		"role='menuitem'",
 		"deepseek-harness-desktop.delete-session",
+		"installDesktopContextMenus",
+		"deepseek-harness-desktop.selection",
+		"contextMenu.icon",
 		"blank: Boolean(s.blank)",
 		"archivedSessionIds",
 		"archived: archived.has(sid)",
@@ -187,13 +193,16 @@ func TestDesktopBridgePluginContract(t *testing.T) {
 	if strings.Contains(client, "ctx.sessions.open(id)") {
 		t.Fatal("tray navigation must not bypass uiWorkspace.openSession")
 	}
-	for _, forbidden := range []string{"停止 DSH", `invoke("stop"`, "CopySessionIdMenuItem", "deepseek-harness-desktop.copy-session-id", "showCopySessionId", "setShowCopySessionId", "field.show_copy_session_id"} {
+	for _, forbidden := range []string{"停止 DSH", `invoke("stop"`, "CopySessionIdMenuItem", "deepseek-harness-desktop.copy-session-id", "showCopySessionId", "setShowCopySessionId", "field.show_copy_session_id", "__DSH_DESKTOP_CONTEXT_MENU__", "showChatContextMenu"} {
 		if strings.Contains(client, forbidden) {
 			t.Fatalf("客户端桥接不应包含已移除或禁止的入口：%q", forbidden)
 		}
 	}
 	if strings.Contains(host, "setShowCopySessionId") || strings.Contains(host, "/v1/set-show-copy-session-id") {
 		t.Fatal("宿主桥接不应再暴露复制会话 ID 设置接口")
+	}
+	if strings.Contains(host, "showChatContextMenu") || strings.Contains(host, "/v1/chat-context-menu") {
+		t.Fatal("宿主桥接不应再保留旧版原生右键菜单 RPC")
 	}
 	if strings.Contains(host, `stop: Object.freeze`) || strings.Contains(host, `path: "/v1/stop"`) {
 		t.Fatal("host Cordis allowlist must not expose stop")

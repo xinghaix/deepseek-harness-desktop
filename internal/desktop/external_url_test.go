@@ -58,10 +58,6 @@ func TestWebSearchURL(t *testing.T) {
 	if err != nil || got != "https://www.google.com/search?q=foo+bar" {
 		t.Fatalf("default search = %q %v", got, err)
 	}
-	got, err = webSearchURLWithHint("x", "Search with DuckDuckGo")
-	if err != nil || got != "https://duckduckgo.com/?q=x" {
-		t.Fatalf("ddg hint = %q %v", got, err)
-	}
 	if _, err := webSearchURL("   "); err == nil {
 		t.Fatal("empty query must be rejected")
 	}
@@ -69,33 +65,5 @@ func TestWebSearchURL(t *testing.T) {
 	got, err = webSearchURL(long)
 	if err != nil || !strings.Contains(got, "https://www.google.com/search?q=") {
 		t.Fatalf("long query: %v %q", err, got)
-	}
-}
-
-func TestParseContextPayload(t *testing.T) {
-	t.Parallel()
-	p := parseContextPayload(`{"text":"  hi  ","href":"https://example.com/a"}`)
-	if p.Text != "hi" || p.Href != "https://example.com/a" {
-		t.Fatalf("payload = %+v", p)
-	}
-	p = parseContextPayload(`{"text":"x","href":"javascript:alert(1)"}`)
-	if p.Href != "" {
-		t.Fatalf("javascript href leaked: %q", p.Href)
-	}
-}
-
-func TestBrowserNameMaps(t *testing.T) {
-	t.Parallel()
-	if got := browserNameFromProgID("ChromeHTML"); got != "Google Chrome" {
-		t.Fatalf("ChromeHTML = %q", got)
-	}
-	if got := browserNameFromProgID("FirefoxURL-308046B0AF4A39CB"); got != "Firefox" {
-		t.Fatalf("FirefoxURL = %q", got)
-	}
-	if got := browserNameFromDesktopFile("google-chrome.desktop"); got != "Google Chrome" {
-		t.Fatalf("desktop file = %q", got)
-	}
-	if got := browserNameFromProgID("unknown"); got != "" {
-		t.Fatalf("unknown progid = %q", got)
 	}
 }

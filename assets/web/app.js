@@ -880,3 +880,11 @@ if (!subscribeStatusEvents()) {
     if (subscribeStatusEvents() || ++tries > 40) clearInterval(timer);
   }, 50);
 }
+window.addEventListener("contextmenu", (event) => {
+  if (!event || event.defaultPrevented) return;
+  const el = event.target && (event.target.nodeType === 3 ? event.target.parentElement : event.target);
+  if (el && (el.isContentEditable || (el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")))) {
+    return;
+  }
+  event.preventDefault();
+});

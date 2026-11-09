@@ -12,8 +12,7 @@ func TestDesktopLinkRouting(t *testing.T) {
 	if err != nil {
 		t.Skip("node unavailable")
 	}
-	for _, custom := range []bool{false, true} {
-		cmd := exec.Command(node, "--input-type=commonjs", "-e", `
+	cmd := exec.Command(node, "--input-type=commonjs", "-e", `
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -104,9 +103,8 @@ delete window.__DSH_DESKTOP_OPEN_EXTERNAL_URL__;
 window.open(releaseURL);
 assert.equal(alerts.length, 1, "missing transport must show failure instead of silently dropping click");
 `)
-		cmd.Stdin = strings.NewReader(desktopExternalJS(custom))
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("custom=%v: %v\n%s", custom, err, out)
-		}
+	cmd.Stdin = strings.NewReader(desktopExternalJS())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }

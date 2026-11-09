@@ -80,18 +80,15 @@ func syncWindowThemeBackground(window application.Window) {
 // TuneNativeWebView applies platform WebView runtime tweaks that Wails does not
 // expose as window options. Safe to call more than once per window.
 func TuneNativeWebView(window application.Window) {
-	installNativeContextMenu()
 	if window == nil {
 		return
 	}
-	attached := attachNativeContextMenu(window)
 	unlockWebKitDisplayRefresh(window)
 	syncWindowThemeBackground(window)
-	if window.NativeWindow() != nil && attached {
+	if window.NativeWindow() != nil {
 		return
 	}
 	window.RegisterHook(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
-		attachNativeContextMenu(window)
 		unlockWebKitDisplayRefresh(window)
 		syncWindowThemeBackground(window)
 	})

@@ -386,7 +386,6 @@ const desktopChromeJS = `
 const desktopExternalJSTemplate = `
 (() => {
   if (document.querySelector("body > .app-shell")) return;
-  const useCustomMenu = @@USE_CUSTOM_MENU@@;
   const allowed = (value) => {
     try {
       const url = new URL(value, location.href);
@@ -426,23 +425,6 @@ const desktopExternalJSTemplate = `
       }
     } catch (_) { /* a synchronous bridge failure must be visible too */ }
     reportOpenFailure();
-  };
-  const contextPayload = (event) => {
-    const sel = ((window.getSelection() && window.getSelection().toString()) || "").trim();
-    let href = "";
-    const node = event.target && event.target.closest && event.target.closest("a[href]");
-    if (node) {
-      const raw = node.getAttribute("href") || "";
-      if (raw && raw.charAt(0) !== "#" && raw.indexOf("javascript:") !== 0) {
-        href = resolveExternal(raw);
-      }
-    }
-    return { text: sel.slice(0, 2048), href: href };
-  };
-  const isEditable = (el) => {
-    if (!el) return false;
-    if (el.isContentEditable) return true;
-    return Boolean(el.closest && el.closest("input, textarea, select, [contenteditable='true']"));
   };
   const originalOpen = window.open;
   window.open = function(url, target, features) {
@@ -607,56 +589,23 @@ const desktopExternalJSTemplate = `
       event.stopImmediatePropagation();
     }
   }, true);
-  document.addEventListener("contextmenu", (event) => {
-    const payload = contextPayload(event);
-    window.__DSH_CTX__ = payload;
-    // WKWebView no longer provides the old private synchronous JS reader.
-    // Send the current event context before WebKit constructs its native menu.
-    if (!useCustomMenu) {
-      const native = window.webkit?.messageHandlers?.dshContextMenu;
-      if (typeof native?.postMessage === "function") {
-        try { native.postMessage(payload); } catch (_) { /* preserve the system menu */ }
+  // 在 window 冒泡阶段（晚于 #root React useContextMenu 与 document desktop-bridge 委托）
+  // 拦截非可编辑空白区域的默认右键，防止 WebView 弹出原生 "Reload" 菜单。
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("contextmenu", (event) => {
+      if (!event || event.defaultPrevented) return;
+      const el = event.target && (event.target.nodeType === 3 ? event.target.parentElement : event.target);
+      if (el && (el.isContentEditable || (el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")))) {
+        return;
       }
-    }
-    const el = event.target instanceof Element ? event.target : (event.target && event.target.parentElement) || document.body;
-    if (!el || !el.style) return;
-    el.style.removeProperty("--custom-contextmenu");
-    el.style.removeProperty("--custom-contextmenu-data");
-    if (!useCustomMenu || isEditable(el)) return;
-    if (!payload.text && !payload.href) return;
-    const id = payload.text && payload.href ? "dsh-both" : payload.href ? "dsh-link" : "dsh-search";
-    el.style.setProperty("--custom-contextmenu", id);
-    el.style.setProperty("--custom-contextmenu-data", JSON.stringify(payload));
-  }, true);
-  // Core-only Chat has no Wails contextmenu.ts listener. Let DSH handlers win,
-  // then ask the authenticated bridge to show only our fixed native menu.
-  document.addEventListener("contextmenu", (event) => {
-    if (!useCustomMenu || event.defaultPrevented) return;
-    const el = event.target?.nodeType === 3 ? event.target.parentElement : event.target;
-    if (!el || isEditable(el)) return;
-    const payload = contextPayload(event);
-    if (!payload.text && !payload.href) return;
-    const show = window.__DSH_DESKTOP_CONTEXT_MENU__;
-    if (typeof show !== "function") { reportOpenFailure(); return; }
-    event.preventDefault();
-    event.stopPropagation();
-    try {
-      Promise.resolve(show({
-        x: Math.max(0, Math.round(event.clientX || 0)),
-        y: Math.max(0, Math.round(event.clientY || 0)),
-        text: payload.text, href: payload.href,
-      })).catch(reportOpenFailure);
-    } catch (_) { reportOpenFailure(); }
-  });
+      event.preventDefault();
+    });
+  }
 })();
 `
 
-func desktopExternalJS(useCustomMenu bool) string {
-	flag := "false"
-	if useCustomMenu {
-		flag = "true"
-	}
-	return strings.Replace(desktopExternalJSTemplate, "@@USE_CUSTOM_MENU@@", flag, 1)
+func desktopExternalJS() string {
+	return desktopExternalJSTemplate
 }
 
 func desktopChromeScript(nativeMac bool) string {
@@ -664,7 +613,7 @@ func desktopChromeScript(nativeMac bool) string {
 }
 
 func desktopChromeBodyScript(nativeMac bool) string {
-	external := desktopExternalJS(!nativeMac)
+	external := desktopExternalJS()
 	if nativeMac {
 		return fmt.Sprintf(desktopNativeWindowInsetJS, desktopNativeTopInset, desktopNativeContentInset, strconv.Quote(desktopSidebarTransitionCSS+desktopNativeWindowInsetCSS)) + external
 	}
