@@ -368,7 +368,7 @@ func revealExistingChatWindow(chat application.Window) {
 	if chat == nil {
 		return
 	}
-	if !chat.IsVisible() {
+	if !isNativeWindowShown(chat) {
 		chat.Show()
 	}
 	chat.Focus()

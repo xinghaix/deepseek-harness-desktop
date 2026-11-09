@@ -68,9 +68,8 @@ type Service struct {
 	lastSessionMu            sync.Mutex
 	lastSessionTimer         *time.Timer
 	cachedLastSessionID      string
-	memoryReliefMu           sync.Mutex
-	lastMemoryCachePurgeAt   time.Time
-	lastMemoryReliefReloadAt time.Time
+	memoryReliefMu         sync.Mutex
+	lastMemoryCachePurgeAt time.Time
 	healthyOnce              sync.Once
 }
 
@@ -606,13 +605,9 @@ func (d *Service) scheduleChatWindowStateRecord(window application.Window) {
 }
 
 const (
-	// WebContent 内存缓存与 JSC 堆主动回收水位（380 MiB）：窗口失焦/后台且空闲时释放缓存并触发 JSC GC。
-	webContentMemoryCachePurgeThresholdBytes = 380 << 20
-	// WebContent 进程后台静默重置水位（950 MiB）：窗口已隐藏或最小化且无运行中会话时，
-	// 提前在后台重置渲染进程与 512MB JIT 代码池，避免对话中途触顶崩溃。
-	webContentSilentReloadThresholdBytes = 950 << 20
-	webContentMemoryCachePurgeCooldown   = 2 * time.Minute
-	webContentSilentReloadCooldown       = 15 * time.Minute
+	// WebContent 内存缓存主动清理水位（700 MiB）：仅在窗口真正隐藏到托盘/后台或最小化且空闲时释放 WKWebsiteDataTypeMemoryCache。
+	webContentMemoryCachePurgeThresholdBytes = 700 << 20
+	webContentMemoryCachePurgeCooldown       = 5 * time.Minute
 )
 
 func (d *Service) monitorChatWindowGeometry(window application.Window) {
@@ -721,46 +716,32 @@ func (d *Service) maybeRelieveChatWebViewMemory(window application.Window) {
 	if window == nil || d.closing.Load() || d.quitStarted.Load() || d.isChatOrAnySessionBusy() {
 		return
 	}
-	footprint := maxWebContentPhysFootprint(window)
-	if footprint < webContentMemoryCachePurgeThresholdBytes {
-		return
-	}
+	// 仅在窗口不可见（macOS 含遮挡/切 Space/隐藏，Win/Linux 为隐藏）或最小化时执行轻量内存释压，
+	// 绝不在前台可见（仅失焦）时触发，也绝不主动调用 SetURL 同源重载（WKWebView 同源 SetURL 不会重启 WebContent 进程，反而泄漏 Document 与 JIT）。
 	visible := window.IsVisible()
 	minimised := window.IsMinimised()
-	focused := window.IsFocused()
-	if visible && !minimised && focused {
-		// 用户当前正在前台聚焦查看 Chat 窗口时绝不打断
+	if visible && !minimised {
+		return
+	}
+	footprint := maxWebContentPhysFootprint(window)
+	if footprint < webContentMemoryCachePurgeThresholdBytes {
 		return
 	}
 	now := time.Now()
 	d.memoryReliefMu.Lock()
 	canPurge := now.Sub(d.lastMemoryCachePurgeAt) >= webContentMemoryCachePurgeCooldown
-	canReload := footprint >= webContentSilentReloadThresholdBytes &&
-		(!visible || minimised) &&
-		now.Sub(d.lastMemoryReliefReloadAt) >= webContentSilentReloadCooldown
 	if canPurge {
 		d.lastMemoryCachePurgeAt = now
-	}
-	if canReload {
-		d.lastMemoryReliefReloadAt = now
 	}
 	d.memoryReliefMu.Unlock()
 
 	if canPurge {
 		purgeWebViewMemoryCache(window)
 	}
-	if canReload {
-		d.windowMu.Lock()
-		modalOpen := d.configIsModal
-		d.windowMu.Unlock()
-		if !modalOpen {
-			d.recoverChatWebView(window)
-		}
-	}
 }
 
 func (d *Service) recordChatWindowState(window application.Window) {
-	if d.closing.Load() || window == nil || !window.IsVisible() {
+	if d.closing.Load() || window == nil || !isNativeWindowShown(window) {
 		return
 	}
 	if window.IsMinimised() || window.IsFullscreen() {

@@ -46,10 +46,10 @@ func (d *Service) ConfirmQuitIfNeeded(busy bool) {
 	if chat, ok := app.Window.GetByName(chatWindowName); ok {
 		// macOS 的 AttachToWindow 会挂载 NSAlert Sheet 到目标窗口；若 Chat 处于隐藏到托盘或最小化状态，
 		// Sheet 将不可见并导致 quitPromptOpen 永久卡死，后续 Command+Q 全部失效。
-		if !chat.IsVisible() || chat.IsMinimised() {
+		if !isNativeWindowShown(chat) || chat.IsMinimised() {
 			revealExistingChatWindow(chat)
 		}
-		if chat.IsVisible() && !chat.IsMinimised() {
+		if isNativeWindowShown(chat) && !chat.IsMinimised() {
 			dialog.AttachToWindow(chat)
 		}
 	}
@@ -114,7 +114,7 @@ func (d *Service) HandleAppReopen() {
 		return
 	}
 	for _, name := range []string{configWindowName, chatWindowName, setupWindowName} {
-		if w, ok := app.Window.GetByName(name); ok && w != nil && w.IsVisible() && !w.IsMinimised() {
+		if w, ok := app.Window.GetByName(name); ok && w != nil && isNativeWindowShown(w) && !w.IsMinimised() {
 			w.Focus()
 			return
 		}

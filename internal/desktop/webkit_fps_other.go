@@ -26,5 +26,12 @@ func maxWebContentPhysFootprint(...application.Window) uint64 {
 	return 0
 }
 
+func isNativeWindowShown(window application.Window) bool {
+	if window == nil {
+		return false
+	}
+	return window.IsVisible()
+}
+
 func purgeWebViewMemoryCache(...application.Window) {}
 

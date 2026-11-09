@@ -19,17 +19,10 @@ package desktop
 @interface WKWebView (DSHWebKitPrivate)
 - (pid_t)_webProcessIdentifier;
 - (void)_close;
-- (void)_clearBackForwardCache;
-@end
-
-@interface WKProcessPool (DSHWebKitPrivate)
-- (void)_clearWebProcessCache;
-- (void)_garbageCollectJavaScriptObjectsForTesting;
 @end
 
 @interface WKPreferences (DSHWebKitPrivate)
 - (void)_setUsesPageCache:(BOOL)usesPageCache;
-- (void)_setPageVisibilityBasedProcessSuppressionEnabled:(BOOL)enabled;
 - (void)_setLowPowerVideoAudioBufferSizeEnabled:(BOOL)enabled;
 @end
 
@@ -394,13 +387,6 @@ static void dshApplyDisplayRefreshToWebView(WKWebView *webView) {
 	dshAttachWindowBridgeToWebView(webView);
 	dshInstallTerminateReloadGuard(webView);
 	dshExtractWebViewProcessID(webView);
-	WKProcessPool *pool = webView.configuration.processPool;
-	if (pool != nil && [pool respondsToSelector:@selector(_clearWebProcessCache)]) {
-		@try {
-			[pool _clearWebProcessCache];
-		} @catch (NSException *ex) {
-		}
-	}
 	WKPreferences *preferences = webView.configuration.preferences;
 	if (preferences == nil) {
 		return;
@@ -408,9 +394,6 @@ static void dshApplyDisplayRefreshToWebView(WKWebView *webView) {
 	@try {
 		if ([preferences respondsToSelector:@selector(_setUsesPageCache:)]) {
 			[preferences _setUsesPageCache:NO];
-		}
-		if ([preferences respondsToSelector:@selector(_setPageVisibilityBasedProcessSuppressionEnabled:)]) {
-			[preferences _setPageVisibilityBasedProcessSuppressionEnabled:YES];
 		}
 		if ([preferences respondsToSelector:@selector(_setLowPowerVideoAudioBufferSizeEnabled:)]) {
 			[preferences _setLowPowerVideoAudioBufferSizeEnabled:YES];
@@ -639,44 +622,33 @@ unsigned long long dshMaxWebContentPhysFootprint(void *nsWindow) {
 	return maxFootprint;
 }
 
-// 异步清理 WKWebsiteDataStore 的内存态资源缓存、前进后退页面快照并触发 JSC GC 归还空闲页（不触碰 Cookie 与存储）。
-void dshPurgeWebViewMemoryCache(void *nsWindow) {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		WKWebView *webView = nil;
-		WKWebsiteDataStore *store = nil;
-		if (nsWindow != NULL) {
+// 查询 NSWindow 真实的 [window isVisible] 状态（是否处于 orderOut/Hide 之外的已显示状态）。
+// 注意：Wails v3 在 macOS 上的 window.IsVisible() 实际检查的是 NSWindowOcclusionStateVisible，
+// 当窗口仅被其它全屏/最大化窗口遮挡或处于其它桌面空间时也会返回 false。
+bool dshIsWindowShown(void *nsWindow) {
+	if (nsWindow == NULL) {
+		return false;
+	}
+	__block BOOL shown = NO;
+	if ([NSThread isMainThread]) {
+		NSWindow *window = (NSWindow *)nsWindow;
+		shown = [window isVisible];
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), ^{
 			NSWindow *window = (NSWindow *)nsWindow;
-			webView = dshFindWebViewInView([window contentView]);
-			if (webView != nil) {
-				store = webView.configuration.websiteDataStore;
-			}
-		}
-		if (webView != nil) {
-			@try {
-				if ([webView respondsToSelector:@selector(_clearBackForwardCache)]) {
-					[webView _clearBackForwardCache];
-				}
-				WKProcessPool *pool = webView.configuration.processPool;
-				if (pool != nil) {
-					if ([pool respondsToSelector:@selector(_clearWebProcessCache)]) {
-						[pool _clearWebProcessCache];
-					}
-					if ([pool respondsToSelector:@selector(_garbageCollectJavaScriptObjectsForTesting)]) {
-						[pool _garbageCollectJavaScriptObjectsForTesting];
-					}
-				}
-			} @catch (NSException *ex) {
-			}
-		}
-		if (store == nil) {
-			store = [WKWebsiteDataStore defaultDataStore];
-		}
-		if (store != nil) {
-			NSSet *types = [NSSet setWithObject:WKWebsiteDataTypeMemoryCache];
-			[store removeDataOfTypes:types
-			           modifiedSince:[NSDate distantPast]
-			       completionHandler:^{}];
-		}
+			shown = [window isVisible];
+		});
+	}
+	return shown ? true : false;
+}
+
+// 异步向宿主进程 malloc zone 请求归还空闲物理页。
+// 注意：不对挂载中的 Chat WKWebsiteDataStore 调用 removeDataOfTypes:WKWebsiteDataTypeMemoryCache，
+// 因为在长生命周期 SPA 中清空 WebCore::MemoryCache 会导致已挂载 DOM 的内置图标/图片缓存失效，
+// 前台交互时触发海量 SubresourceLoader 重建与重复解码，反而推高 WebContent 峰值内存。
+void dshPurgeWebViewMemoryCache(void *nsWindow) {
+	(void)nsWindow;
+	dispatch_async(dispatch_get_main_queue(), ^{
 		malloc_zone_pressure_relief(NULL, 0);
 	});
 }
@@ -732,6 +704,20 @@ func maxWebContentPhysFootprint(window ...application.Window) uint64 {
 		ptr = window[0].NativeWindow()
 	}
 	return uint64(C.dshMaxWebContentPhysFootprint(ptr))
+}
+
+func isNativeWindowShown(window application.Window) bool {
+	if window == nil {
+		return false
+	}
+	if window.IsVisible() {
+		return true
+	}
+	ptr := window.NativeWindow()
+	if ptr == nil {
+		return false
+	}
+	return bool(C.dshIsWindowShown(ptr))
 }
 
 func purgeWebViewMemoryCache(window ...application.Window) {

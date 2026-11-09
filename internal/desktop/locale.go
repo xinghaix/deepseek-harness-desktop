@@ -253,11 +253,11 @@ func (d *Service) DispatchMenuCloseWindow() bool {
 	if app == nil {
 		return false
 	}
-	if cfg, ok := app.Window.GetByName(configWindowName); ok && cfg != nil && cfg.IsVisible() {
+	if cfg, ok := app.Window.GetByName(configWindowName); ok && cfg != nil && isNativeWindowShown(cfg) {
 		return false
 	}
 	chat, ok := app.Window.GetByName(chatWindowName)
-	if !ok || chat == nil || !chat.IsVisible() {
+	if !ok || chat == nil || !isNativeWindowShown(chat) {
 		return false
 	}
 	chat.ExecJS(`if (typeof window.__DSH_DESKTOP_MENU_COMMAND__ === "function") { window.__DSH_DESKTOP_MENU_COMMAND__("page.close"); }`)
