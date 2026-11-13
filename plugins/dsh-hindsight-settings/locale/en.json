@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Hindsight memory",
+    "description": "Control Hindsight memory in DSH and per repository, with safe configuration updates and clear restart guidance."
+  }
+}

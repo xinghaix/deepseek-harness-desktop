@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Hindsight 记忆",
+    "description": "管理 DSH 与仓库级记忆开关，安全保存配置并明确提示重启生效。"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "dsh-hindsight-settings",
+  "version": "0.1.0",
+  "description": "原生 Hindsight 记忆设置：DSH 总开关、仓库策略与安全配置保存。",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=20", "dsh": ">=0.2.2-rc.1" },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["lib/", "locale/", "icon.svg", "cordis.patch.yml", "README.md"],
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-ui-plugin-manager"]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node scripts/build-client.mjs --check && node --test test/*.test.mjs"
+  }
+}
