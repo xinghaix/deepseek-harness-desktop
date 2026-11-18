@@ -1330,6 +1330,39 @@
 			// The settings nav resolves its label once, possibly before the catalog arrives.
 			"tray.open_settings": "Desktop settings",
 			"bridge.cli_version": "CLI Version: {0}",
+			"bridge.cli_label": "CLI version",
+			"bridge.cli_history": "Version history",
+			"bridge.cli_tags": "Release tag",
+			"bridge.cli_tag_save_failed": "Could not save the release tag. Try again.",
+			"bridge.cli_checking": "Checking CLI versions…",
+			"bridge.cli_check_failed": "Could not check npm. Try again.",
+			"bridge.cli_disconnected": "Reconnect the desktop bridge to check versions.",
+			"bridge.cli_unsupported": "This desktop bridge does not support CLI version checks.",
+			"bridge.cli_available": "{0} available",
+			"bridge.cli_current": "Up to date for {0}",
+			"bridge.cli_ahead": "Local version is newer",
+			"bridge.cli_missing": "npm does not have a version for the {0} tag.",
+			"bridge.cli_no_downgrade": "The local CLI is newer than {0}. No downgrade is recommended.",
+			"bridge.cli_unknown": "The local CLI version could not be compared.",
+			"bridge.cli_count": "Versions: {0}",
+			"bridge.cli_pick": "Version",
+			"bridge.cli_installed": "Installed",
+			"bridge.cli_tag_target": "Tag target",
+			"bridge.cli_published": "Published {0}",
+			"bridge.cli_open_notes": "Read official notes",
+			"bridge.cli_open_npm": "View on npm",
+			"bridge.cli_notes_local": "This local version was not found on npm.",
+			"bridge.cli_notes_loading": "Loading release notes…",
+			"bridge.cli_notes_failed": "Could not load release notes. Try again.",
+			"bridge.cli_notes_missing": "No official release notes for this version.",
+			"bridge.cli_read_only": "Checks only. Does not install or restart DSH.",
+			"bridge.cli_guide": "Manual update guide",
+			"bridge.cli_guide_title": "Use your original installation method",
+			"bridge.cli_guide_npm": "If you installed DSH globally with npm, copy this command and run it yourself in a terminal.",
+			"bridge.cli_guide_other": "For Homebrew or other tools, check whether your original source offers this version.",
+			"bridge.cli_copy": "Copy command",
+			"bridge.cli_copied": "Command copied.",
+			"bridge.cli_copy_failed": "Could not copy. Select the command and copy it manually.",
 			"bridge.restart_open_chat": "Reopen",
 			"bridge.status_connected": "Connected to desktop",
 			"bridge.session_delete_menu": "Delete session",
@@ -4347,12 +4380,103 @@
 					min-width: 0;
 					flex-wrap: wrap;
 				}
-				.dshDesktopBridgeStatusHeaderRight {
+				.dshCLIInline, .dshCLICollapsed, .dshCLIReaderHead, .dshCLIControls, .dshCLIReaderFoot {
 					display: flex;
 					align-items: center;
-					gap: 10px;
-					flex: none;
+					flex-wrap: wrap;
+					gap: 6px 10px;
+					min-width: 0;
 				}
+				.dshCLICollapsed {
+					justify-content: space-between;
+					border-top: .5px solid var(--dsw-alias-border-l2);
+					padding: 7px 0 2px;
+				}
+				.dshCLILocal { color: var(--dsw-alias-label-secondary); font-size: 12px; overflow-wrap: anywhere; }
+				.dshCLILocal strong { color: var(--dsw-alias-label-primary); margin-inline-start: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+				.dshCLIInline svg, .dshCLIReader svg, .dshDesktopBridgeCardChevron > svg { display: block; width: 16px; height: 16px; flex: none; }
+				.dshCLIEntry, .dshCLIReader button:not(.dshDesktopBridgeSelector) {
+					background: transparent;
+					border: 0;
+					color: inherit;
+					font: inherit;
+					cursor: pointer;
+				}
+				.dshCLIInline .dshCLIEntry {
+					display: inline-flex;
+					align-items: center;
+					gap: 5px;
+					max-width: 100%;
+					min-height: 32px;
+					padding: 4px 9px;
+					border-radius: 18px;
+					background: var(--dsw-alias-bg-module-platform);
+					font-size: 12px;
+					text-align: start;
+					overflow-wrap: anywhere;
+				}
+				.dshCLIInline .dshCLIEntry[data-available] { color: var(--dsw-alias-label-link); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, var(--dsw-alias-bg-layer-2)); }
+				.dshCLIInline .dshCLIEntry:hover, .dshCLIReader button:not(.dshDesktopBridgeSelector):hover { background: var(--dsw-alias-interactive-bg-hover); }
+				.dshCLIEntry[aria-expanded=true] svg:last-child { transform: rotate(180deg); }
+				.dshCLIEntry:focus-visible, .dshCLIReader :is(button, a, select):focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+				.dshCLIReader { container-type: inline-size; min-width: 0; border: .5px solid var(--dsw-alias-border-l4); border-radius: 13px; background: var(--dsw-alias-bg-layer-2); }
+				.dshCLIReaderHead { justify-content: space-between; padding: 10px 12px; border-bottom: .5px solid var(--dsw-alias-border-l2); }
+				.dshCLIReaderHead h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; margin: 0; }
+				.dshCLIReaderHead h3 svg, .dshCLIControls > span { color: var(--dsw-alias-label-secondary); }
+				.dshCLIControls { gap: 7px; font-size: 12px; }
+				.dshCLITags { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--dsw-alias-bg-layer-3); border: .5px solid var(--dsw-alias-border-l2); }
+				.dshCLIReader .dshCLITags button { min-width: 53px; min-height: 29px; padding: 0 5px; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 3px; color: var(--dsw-alias-label-secondary); }
+				.dshCLIReader .dshCLITags button[aria-pressed=true] { background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font-weight: 650; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); }
+				.dshCLITags button svg { width: 11px; height: 11px; }
+				.dshCLITags button[aria-pressed=false] svg { visibility: hidden; }
+				.dshCLIReader button.dshCLIRefresh { display: grid; place-items: center; width: 35px; min-height: 35px; border: .5px solid var(--dsw-alias-border-l4); border-radius: 9px; color: var(--dsw-alias-label-secondary); }
+				.dshCLIRefresh[aria-disabled=true] { cursor: default !important; }
+				.dshCLIRefresh[data-loading] svg { animation: dshCLISpin .85s linear infinite; }
+				@keyframes dshCLISpin { to { transform: rotate(360deg); } }
+				@media (prefers-reduced-motion: reduce) { .dshCLIRefresh[data-loading] svg { animation: none; } }
+				.dshCLIGrid { display: grid; grid-template-columns: minmax(165px, .44fr) minmax(0, 1fr); }
+				.dshCLIRail { padding: 12px 8px 10px 10px; min-width: 0; border-inline-end: .5px solid var(--dsw-alias-border-l2); }
+				.dshCLIRailCaption, .dshCLINotes time, .dshCLIFeedback { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+				.dshCLIRailCaption { padding: 0 5px 4px; }
+				.dshCLIRail ol { margin: 0; padding: 2px; list-style: none; max-height: 252px; overflow: auto; scroll-padding: 4px; }
+				.dshCLIRail li { position: relative; }
+				.dshCLIRail li:not(:last-child)::before { content: ""; position: absolute; inset-inline-start: 12px; top: 50%; height: 100%; border-inline-start: 1px solid var(--dsw-alias-border-l3); pointer-events: none; }
+				.dshCLIReader .dshCLIRail button { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; min-height: 35px; padding: 4px 7px; border-radius: 7px; font-size: 12px; text-align: start; font-variant-numeric: tabular-nums; }
+				.dshCLIRail button > span { min-width: 0; overflow-wrap: anywhere; }
+				.dshCLIRail button small { margin-inline-start: auto; text-align: end; color: var(--dsw-alias-label-secondary); font-size: 11px; }
+				.dshCLIRail button i { flex: 0 0 9px; height: 9px; border: 1px solid var(--dsw-alias-label-secondary); border-radius: 50%; background: var(--dsw-alias-bg-layer-2); }
+				.dshCLIRail button[data-installed] i { border-width: 2px; }
+				.dshCLIReader .dshCLIRail button[aria-current=true] { color: var(--dsw-alias-label-link); font-weight: 650; background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, var(--dsw-alias-bg-layer-2)); box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
+				.dshCLIRail button[aria-current=true] i { background: var(--dsw-alias-label-link); border-color: var(--dsw-alias-label-link); }
+				.dshCLICompactPicker { display: none; }
+				.dshCLINotes { min-width: 0; padding: 13px 15px 14px; overflow-wrap: anywhere; }
+				.dshCLINotes header { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 4px 10px; }
+				.dshCLINotes h4 { font-size: 23px; font-weight: 650; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.25; margin: 0 0 3px; }
+				.dshCLINoteBody { margin-top: 9px; max-height: 252px; overflow: auto; font-size: 13px; line-height: 1.6; scroll-padding: 4px; }
+				.dshCLINoteBody h5, .dshCLINoteBody p, .dshCLINoteBody ul { margin: 0 0 6px; }
+				.dshCLINoteBody h5 { font-size: inherit; font-weight: 650; }
+				.dshCLINoteBody ul { padding-inline-start: 17px; }
+				.dshCLINoteBody li + li { margin-top: 4px; }
+				.dshCLIReader > .dshCLIFeedback { padding: 7px 12px; }
+				.dshCLIFeedback .dshCLIExternal, .dshCLIFeedback button { margin-inline-start: 8px; }
+				.dshCLIExternal, .dshCLIReader button.dshCLILinkButton { display: inline-flex; align-items: center; gap: 4px; min-height: 31px; font-size: 12px; color: var(--dsw-alias-label-link); text-decoration: none; }
+				.dshCLIExternal:hover, .dshCLIReader button.dshCLILinkButton:hover { text-decoration: underline; text-underline-offset: 3px; }
+				.dshCLIExternal svg, .dshCLILinkButton svg { width: 13px; height: 13px; }
+				.dshCLILinkButton[aria-expanded=true] svg { transform: rotate(90deg); }
+				.dshCLIReaderFoot { justify-content: space-between; padding: 5px 12px; border-top: .5px solid var(--dsw-alias-border-l2); }
+				.dshCLIReaderFoot > span { color: var(--dsw-alias-label-secondary); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+				.dshCLIGuide { padding: 10px 12px; border-top: .5px solid var(--dsw-alias-border-l2); font-size: 13px; }
+				.dshCLIGuide p { color: var(--dsw-alias-label-secondary); margin: 5px 0; }
+				.dshCLIGuide > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+				.dshCLIGuide code { overflow-wrap: anywhere; user-select: all; color: var(--dsw-alias-label-link); }
+				@container (max-width: 430px) {
+					.dshCLIGrid { grid-template-columns: minmax(0, 1fr); }
+					.dshCLIRail { border-inline-end: none; border-bottom: .5px solid var(--dsw-alias-border-l2); padding: 8px 12px; }
+					.dshCLIRail ol, .dshCLIRailCaption, .dshCLIControls > span { display: none; }
+					.dshCLICompactPicker { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+					.dshCLICompactPicker select { min-width: 0; max-width: 100%; min-height: 34px; border-radius: 7px; padding: 3px 6px; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary); border: .5px solid var(--dsw-alias-border-l4); font: inherit; }
+				}
+				@media (pointer: coarse) { .dshCLIInline .dshCLIEntry, .dshCLIReader :is(.dshCLIRail button, .dshCLITags button, button.dshCLIRefresh, button.dshCLILinkButton, select) { min-height: 44px; } }
 				.dshDesktopBridgePill {
 					display: inline-flex;
 					align-items: center;
@@ -6318,6 +6442,235 @@
 			return entry;
 		}
 
+		const CLI_RELEASE_NPM = "https://www.npmjs.com/package/@deepseek-ai/dsh";
+		const CLI_RELEASE_GITHUB = "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v";
+		const CLI_RELEASE_TAGS = ["latest", "next", "alpha"];
+		const CLI_ICON_PATHS = {
+			up: "M8 13V3m-4 4 4-4 4 4", chevron: "m4 6 4 4 4-4", check: "m3 8 3 3 7-7",
+			refresh: "M13 2v5H8m4.5-.5a5 5 0 1 0 .1 4", history: "M2 8a6 6 0 1 1 1.7 4.2M2 4v4h4m2-3v3l2.5 1.5",
+			external: "M9 2h5v5m0-5L7 9m6 0v5H2V3h5", right: "m6 4 4 4-4 4",
+			info: "M8 7.5v3.5m0-6v.1M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Z"
+		};
+		function cliIcon(name) {
+			return jsx("svg", { "aria-hidden": true, viewBox: "0 0 16 16", fill: "none", children: jsx("path", { d: CLI_ICON_PATHS[name], stroke: "currentColor", strokeWidth: 1.35, strokeLinecap: "round", strokeLinejoin: "round" }) });
+		}
+
+		function useCLIVersionCheck(call, connected, local) {
+			const [check, setCheck] = react.useState({});
+			const controllerRef = react.useRef(null);
+			const run = react.useCallback((force = false) => {
+				if (!connected) return;
+				controllerRef.current?.abort();
+				const controller = new AbortController();
+				controllerRef.current = controller;
+				setCheck((prev) => ({ local, loading: true, result: prev.local === local ? prev.result : undefined }));
+				void call("cliVersions", { refresh: force }, controller.signal).then((result) => {
+					if (!controller.signal.aborted) setCheck({ local, result, checked: force });
+				}, (error) => {
+					if (!controller.signal.aborted) setCheck({ local, error: error?.status === 404 ? "unsupported" : "failed" });
+				});
+			}, [call, connected, local]);
+			react.useEffect(() => {
+				if (local) run();
+				return () => controllerRef.current?.abort();
+			}, [run, local]);
+			return { ...(check.local === local ? check : {}), refresh: run };
+		}
+
+		function cliVersionLabel(check, channel, tag, connected) {
+			if (!connected) return t("bridge.cli_history");
+			if (check.loading) return t("bridge.cli_checking");
+			if (check.error) return t(check.error === "unsupported" ? "bridge.cli_history" : "bridge.cli_check_failed");
+			switch (channel?.state) {
+				case "available": return t("bridge.cli_available", channel.target);
+				case "current": return t("bridge.cli_current", tag);
+				case "ahead": return t("bridge.cli_ahead");
+				default: return t("bridge.cli_history");
+			}
+		}
+
+		function cliReleaseBlocks(body, locale) {
+			// 上游目前用带 cn/en 锚点的 HTML 标题区分语言；只提取文字，不解析或注入 HTML。
+			const lines = body.split(/\r?\n/);
+			const languageHeading = /^<h[1-6]\s+id="(cn|en)-[^"<>]+">([^<>]+)<\/h[1-6]>$/i;
+			const cn = lines.findIndex((line) => languageHeading.exec(line.trim())?.[1] === "cn");
+			const en = lines.findIndex((line) => languageHeading.exec(line.trim())?.[1] === "en");
+			const bilingual = cn >= 0 && en > cn;
+			const source = bilingual ? (locale.startsWith("zh") ? lines.slice(0, en) : lines.slice(en)) : lines;
+			const blocks = [];
+			for (const raw of source) {
+				const line = raw.trim();
+				if (!line || /^\[中文\]\(#.+\).*\[English\]\(#.+\)$/.test(line) || /^Full Changelog:/i.test(line)) continue;
+				const heading = languageHeading.exec(line)?.[2] || /^#{1,6}\s+(.+)$/.exec(line)?.[1];
+				const bullet = /^(?:[-*+]\s+|\d+\.\s+)(.+)$/.exec(line)?.[1];
+				const text = (heading || bullet || line).replace(/\[([^\[\]\n]+)\]\([^\s)]+\)/g, "$1").replace(/`([^`]+)`|\*\*([^*]+)\*\*/g, "$1$2");
+				if (bullet) {
+					const prev = blocks[blocks.length - 1];
+					if (prev?.kind === "ul") prev.items.push(text);
+					else blocks.push({ kind: "ul", items: [text] });
+				} else blocks.push({ kind: heading ? "h4" : "p", text });
+			}
+			return blocks;
+		}
+
+		function cliExternalLink(href, label) {
+			return jsxs("a", { className: "dshCLIExternal", href, target: "_blank", rel: "noopener noreferrer", children: [label, cliIcon("external")] });
+		}
+
+		function useCLIReleaseTag(call, connected, cache) {
+			const [tag, setTag] = react.useState(CLI_RELEASE_TAGS[0]);
+			const [ready, setReady] = react.useState(false);
+			const [saving, setSaving] = react.useState(false);
+			const [saveFailed, setSaveFailed] = react.useState(false);
+			react.useEffect(() => {
+				if (!connected) return;
+				const controller = new AbortController();
+				void (async () => {
+					try {
+						// 设置页关闭后仍让已有写入完成，重新打开时先等它落盘。
+						await cache.cliTagSave?.catch(() => {});
+						if (controller.signal.aborted) return;
+						const value = await call("cliReleaseTag", {}, controller.signal);
+						if (!controller.signal.aborted && !cache.cliTagSave && CLI_RELEASE_TAGS.includes(value?.tag)) setTag(value.tag);
+					} catch (_) { /* 旧桥联没有此端点，保留当前选择。 */ }
+					finally { if (!controller.signal.aborted) setReady(true); }
+				})();
+				return () => controller.abort();
+			}, [call, connected, cache]);
+
+			const canSelect = connected && ready && !saving;
+			const select = async (item) => {
+				if (!canSelect || cache.cliTagSave || item === tag || !CLI_RELEASE_TAGS.includes(item)) return false;
+				setSaving(true);
+				setSaveFailed(false);
+				const pending = call("setCLIReleaseTag", { tag: item });
+				cache.cliTagSave = pending;
+				try {
+					const value = await pending;
+					if (value?.tag !== item) throw new Error("Invalid CLI tag acknowledgement");
+					setTag(item);
+					return true;
+				} catch (_) {
+					setSaveFailed(true);
+					return false;
+				} finally {
+					delete cache.cliTagSave;
+					setSaving(false);
+				}
+			};
+			return { tag, ready, canSelect, select, saveFailed };
+		}
+
+		function CLIVersionReader({ call, connected, check, channel, tag, setTag, canSelectTag, tagSaveFailed, panelId, active }) {
+			const notesCache = react.useRef(new Map()).current;
+			const [chosen, setChosen] = react.useState("");
+			const [note, setNote] = react.useState({});
+			const [retry, setRetry] = react.useState(0);
+			const [guide, setGuide] = react.useState(false);
+			const [copy, setCopy] = react.useState("");
+			const versions = channel?.versions || [];
+			const selected = versions.find((row) => row.version === chosen) || versions[0];
+			const version = selected?.version;
+			const published = selected?.published;
+			react.useEffect(() => {
+				if (!active || !connected || !version || !published) return;
+				if (notesCache.has(version)) {
+					setNote({ version, body: notesCache.get(version) });
+					return;
+				}
+				const controller = new AbortController();
+				setNote({ version });
+				void call("cliReleaseNotes", { version }, controller.signal).then((payload) => {
+					if (controller.signal.aborted) return;
+					const body = typeof payload?.body === "string" ? payload.body : "";
+					if (body) {
+						if (notesCache.size >= 32) notesCache.delete(notesCache.keys().next().value);
+						notesCache.set(version, body);
+					}
+					setNote({ version, body });
+				}, () => {
+					if (!controller.signal.aborted) setNote({ version, error: true });
+				});
+				return () => controller.abort();
+			}, [call, active, connected, version, published, retry, notesCache]);
+
+			const statusKey = !connected ? "bridge.cli_disconnected"
+				: check.loading ? "bridge.cli_checking"
+				: check.error ? (check.error === "unsupported" ? "bridge.cli_unsupported" : "bridge.cli_check_failed")
+				: channel?.state === "missing" ? "bridge.cli_missing"
+				: channel?.state === "ahead" ? "bridge.cli_no_downgrade"
+				: channel?.state === "unknown" ? "bridge.cli_unknown"
+				: check.checked && channel?.state === "available" ? "bridge.cli_available"
+				: !channel ? "bridge.cli_checking" : "";
+			const canGuide = connected && channel?.state === "available";
+			const command = canGuide ? `npm install -g @deepseek-ai/dsh@${channel.target}` : "";
+			const formattedDate = selected?.publishedAt ? new Intl.DateTimeFormat(currentLocale() || "en", { dateStyle: "long" }).format(new Date(selected.publishedAt)) : "";
+			const noteBody = note.version === version ? note.body : undefined;
+			const noteError = note.version === version && note.error;
+			const blocks = noteBody ? cliReleaseBlocks(noteBody, currentLocale()) : [];
+			const noteStatus = !published ? "bridge.cli_notes_local" : noteError ? "bridge.cli_notes_failed"
+				: noteBody === undefined ? "bridge.cli_notes_loading" : blocks.length === 0 ? "bridge.cli_notes_missing" : "";
+			const rowLabel = (row) => row.current ? t("bridge.cli_installed") : row.version === channel.target ? t("bridge.cli_tag_target") : "";
+			const checkLabel = t("btn.check_update");
+			return jsxs("section", { className: "dshCLIReader", id: panelId, hidden: !active, "aria-labelledby": `${panelId}-title`, children: [
+				jsxs("div", { className: "dshCLIReaderHead", children: [
+					jsxs("h3", { id: `${panelId}-title`, children: [cliIcon("history"), t("bridge.cli_history")] }),
+					jsxs("div", { className: "dshCLIControls", children: [
+						jsx("span", { "aria-hidden": true, children: t("bridge.cli_tags") }),
+						jsx("div", { className: "dshCLITags", role: "group", "aria-label": t("bridge.cli_tags"), children: CLI_RELEASE_TAGS.map((item) => jsxs("button", {
+							type: "button", "aria-pressed": item === tag, "aria-disabled": !canSelectTag,
+							onClick: async () => { if (await setTag(item)) { setChosen(""); setGuide(false); setCopy(""); } }, children: [cliIcon("check"), item]
+						}, item)) }),
+						jsx("button", { type: "button", className: "dshCLIRefresh", title: checkLabel, "aria-label": checkLabel, "aria-disabled": !connected || Boolean(check.loading),
+							"data-loading": check.loading || undefined, onClick: () => { if (connected && !check.loading) check.refresh(true); }, children: cliIcon("refresh") })
+					] })
+				] }),
+				tagSaveFailed ? jsx("div", { className: "dshCLIFeedback", role: "status", children: t("bridge.cli_tag_save_failed") }) : null,
+				statusKey || check.error ? jsxs("div", { className: "dshCLIFeedback", role: "status", children: [
+					t(statusKey, statusKey === "bridge.cli_available" ? channel.target : tag),
+					check.error ? cliExternalLink(CLI_RELEASE_NPM, t("bridge.cli_open_npm")) : null
+				] }) : null,
+				connected && selected ? jsxs("div", { className: "dshCLIGrid", children: [
+					jsxs("nav", { className: "dshCLIRail", "aria-label": t("bridge.cli_history"), children: [
+						jsx("div", { className: "dshCLIRailCaption", children: t("bridge.cli_count", versions.length) }),
+						jsx("ol", { children: versions.map((row) => jsx("li", { children: jsxs("button", { type: "button", "aria-current": row.version === version ? "true" : undefined,
+							"data-installed": row.current || undefined, onClick: () => setChosen(row.version), children: [
+								jsx("i", { "aria-hidden": true }), jsx("span", { children: row.version }), rowLabel(row) ? jsx("small", { children: rowLabel(row) }) : null
+							] }) }, row.version)) }),
+						jsxs("label", { className: "dshCLICompactPicker", children: [t("bridge.cli_pick"), jsx("select", { value: version, onChange: (event) => setChosen(event.target.value), children: versions.map((row) => jsx("option", {
+							value: row.version, children: rowLabel(row) ? `${row.version} · ${rowLabel(row)}` : row.version
+						}, row.version)) })] })
+					] }),
+					jsxs("article", { className: "dshCLINotes", "aria-labelledby": `${panelId}-version`, children: [
+						jsxs("header", { children: [
+							jsxs("div", { children: [jsx("h4", { id: `${panelId}-version`, children: version }), formattedDate ? jsx("time", { dateTime: selected.publishedAt, children: t("bridge.cli_published", formattedDate) }) : null] }),
+							published && (blocks.length || noteError) ? cliExternalLink(CLI_RELEASE_GITHUB + encodeURIComponent(version), t("bridge.cli_open_notes")) : null
+						] }),
+						jsx("div", { className: "dshCLINoteBody", "aria-live": "polite", children: noteStatus ? jsxs("div", { className: "dshCLIFeedback", children: [
+							t(noteStatus), noteError ? jsx("button", { type: "button", className: "dshCLILinkButton", onClick: () => { setNote({ version }); setRetry((value) => value + 1); }, children: checkLabel }) : null,
+							published && !noteError && noteBody !== undefined ? cliExternalLink(`${CLI_RELEASE_NPM}/v/${encodeURIComponent(version)}`, t("bridge.cli_open_npm")) : null
+						] }) : blocks.map((block, index) => block.kind === "ul"
+							? jsx("ul", { children: block.items.map((item, i) => jsx("li", { children: item }, i)) }, index)
+							: jsx(block.kind === "h4" ? "h5" : "p", { children: block.text }, index)) })
+					] })
+				] }) : null,
+				jsxs("footer", { className: "dshCLIReaderFoot", children: [
+					jsxs("span", { children: [cliIcon("info"), t("bridge.cli_read_only")] }),
+					canGuide ? jsxs("button", { type: "button", className: "dshCLILinkButton", "aria-expanded": guide, "aria-controls": `${panelId}-guide`, onClick: () => { setGuide(!guide); setCopy(""); }, children: [t("bridge.cli_guide"), cliIcon("right")] }) : null
+				] }),
+				canGuide ? jsxs("div", { className: "dshCLIGuide", id: `${panelId}-guide`, hidden: !guide, children: [
+					jsx("strong", { children: t("bridge.cli_guide_title") }),
+					jsx("p", { children: t("bridge.cli_guide_npm") }),
+					jsxs("div", { children: [jsx("code", { children: command }), jsx("button", { type: "button", className: "dshDesktopBridgeSelector", onClick: async () => {
+						try { await navigator.clipboard.writeText(command); setCopy("bridge.cli_copied"); }
+						catch (_) { setCopy("bridge.cli_copy_failed"); }
+					}, children: t("bridge.cli_copy") })] }),
+					jsx("p", { children: t("bridge.cli_guide_other") }),
+					jsx("span", { role: "status", children: copy ? t(copy) : "" })
+				] }) : null
+			] });
+		}
+
 		function DesktopSettingsTab({ connection }) {
 			installStyle();
 			const cache = getDesktopSettingsCache(connection);
@@ -6332,6 +6685,10 @@
 			const [draft, setDraft] = react.useState(() => cache.draft || { executable: "", home: "", workspace: "" });
 			const [pathsOpen, setPathsOpen] = react.useState(false);
 			const [statusOpen, setStatusOpen] = react.useState(false);
+			const [cliOpen, setCLIOpen] = react.useState(false);
+			const cliPanelId = react.useId();
+			const cliButton = react.useRef(null);
+			const focusCLI = react.useRef(false);
 			const [, setCatalogTick] = react.useState(0);
 			const catalogShortcuts = desktopShortcutsController.getCatalogSnapshot();
 			const [transport, setTransport] = react.useState(typeof window !== "undefined" ? window[TRANSPORT_STATE_GLOBAL] : undefined);
@@ -6350,6 +6707,7 @@
 				if (!result.ok) {
 					const err = new Error(desktopErrorMessage(result.error));
 					err.code = result.error?.code;
+					err.status = result.error?.details?.status;
 					throw err;
 				}
 				return result.value;
@@ -6502,6 +6860,30 @@
 			// pending alone must not paint the page as process-busy (that was the flash).
 			const busy = state === "starting" || state === "stopping" || link === "reconnecting";
 			const connected = link === "connected";
+			const cliCheck = useCLIVersionCheck(call, connected, status?.cliVersion);
+			const cliTagPref = useCLIReleaseTag(call, connected, cache);
+			const cliTag = cliTagPref.tag;
+			const cliChannel = cliTagPref.ready ? cliCheck.result?.channels?.[cliTag] : undefined;
+			const cliVersion = status?.cliVersion && status.cliVersion !== "unknown" ? status.cliVersion : "—";
+			react.useEffect(() => {
+				if (!statusOpen || !focusCLI.current) return;
+				focusCLI.current = false;
+				cliButton.current?.focus();
+			}, [statusOpen]);
+			const renderCLILine = (compact) => {
+				const label = cliVersionLabel(cliCheck, cliChannel, cliTag, connected);
+				return jsxs("div", { className: "dshCLIInline", children: [
+					jsxs("span", { className: "dshCLILocal", children: [t("bridge.cli_label"), jsx("strong", { children: cliVersion })] }),
+					jsxs("button", { type: "button", className: "dshCLIEntry", ref: compact ? undefined : cliButton,
+						"data-available": connected && !cliCheck.loading && cliChannel?.state === "available" || undefined,
+						"aria-expanded": !compact && cliOpen, "aria-controls": compact ? `${cliPanelId}-status` : cliPanelId,
+						"aria-label": label === t("bridge.cli_history") ? label : `${label} — ${t("bridge.cli_history")}`,
+						onClick: () => {
+							if (compact) { focusCLI.current = true; setStatusOpen(true); setCLIOpen(true); }
+							else setCLIOpen((open) => !open);
+						}, children: [connected && !cliCheck.loading && cliChannel?.state === "available" ? cliIcon("up") : null, label, cliIcon("chevron")] })
+				] });
+			};
 			const enhancementDisabled = Boolean(transport && transport.compatible === false && transport.capabilities);
 			const transportLabel = !transport
 				? t("bridge.handshake_negotiating")
@@ -6562,20 +6944,14 @@
 					jsxs("div", {
 						className: "dshDesktopBridgeCard",
 						children: [
-						jsxs("div", {
-							role: "button",
-							tabIndex: 0,
+						jsxs("button", {
+							type: "button",
 							className: "dshDesktopBridgeCardTitleButton dshDesktopBridgeStatusHeader",
 							"aria-expanded": statusOpen,
+							"aria-controls": `${cliPanelId}-status`,
 							onClick: () => setStatusOpen((prev) => !prev),
-							onKeyDown: (e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									setStatusOpen((prev) => !prev);
-								}
-							},
 							children: [
-								jsxs("div", {
+								jsxs("span", {
 									className: "dshDesktopBridgeStatusHeaderLeft",
 									children: [
 										jsx("span", { children: t("bridge.card_status") }),
@@ -6595,46 +6971,19 @@
 										})
 									]
 								}),
-								jsxs("div", {
-									className: "dshDesktopBridgeStatusHeaderRight",
-									children: [
-										!statusOpen ? jsx("button", {
-											className: "dshDesktopBridgeSelector dshDesktopBridgeHeaderAction",
-											type: "button",
-											disabled: !connected || busy,
-											onClick: (e) => {
-												e.stopPropagation();
-												void invoke("reloadChat", {
-													executable: draft.executable,
-													home: draft.home,
-													workspace: draft.workspace
-												}, state === "running" ? t("bridge.msg_requested_restart") : t("bridge.msg_requested_start"), { heavy: true });
-											},
-											onKeyDown: (e) => {
-												e.stopPropagation();
-											},
-											children: state === "running" ? t("bridge.restart_open_chat") : t("btn.start_open_chat")
-										}) : null,
-										jsx("svg", {
-											className: "dshDesktopBridgeCardChevron",
-											"data-open": statusOpen ? "true" : "false",
-											viewBox: "0 0 16 16",
-											fill: "none",
-											"aria-hidden": true,
-											children: jsx("path", {
-												d: "M4 6.5L8 10.5L12 6.5",
-												stroke: "currentColor",
-												strokeWidth: "1.5",
-												strokeLinecap: "round",
-												strokeLinejoin: "round"
-											})
-										})
-									]
-								})
+								jsx("span", { className: "dshDesktopBridgeCardChevron", "data-open": statusOpen ? "true" : "false", children: cliIcon("chevron") })
 							]
 						}),
+						!statusOpen ? jsxs("div", { className: "dshCLICollapsed", children: [
+							renderCLILine(true),
+							jsx("button", { className: "dshDesktopBridgeSelector dshDesktopBridgeHeaderAction", type: "button", disabled: !connected || busy,
+								onClick: () => void invoke("reloadChat", { executable: draft.executable, home: draft.home, workspace: draft.workspace },
+									state === "running" ? t("bridge.msg_requested_restart") : t("btn.start_open_chat"), { heavy: true }),
+								children: state === "running" ? t("bridge.restart_open_chat") : t("btn.start_open_chat") }),
+						] }) : null,
 						jsxs("div", {
 							className: "dshDesktopBridgeCardBody",
+							id: `${cliPanelId}-status`,
 							hidden: !statusOpen,
 							children: [
 						jsxs("div", {
@@ -6695,7 +7044,7 @@
 											children: [
 												jsx("div", { className: "dshDesktopBridgeTitle", children: t("bridge.process_title") }),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: options.executable ? t("bridge.cli_configured", options.executable) : t("bridge.cli_unset") }),
-												jsx("div", { className: "dshDesktopBridgeDesc", children: t("bridge.cli_version", status?.cliVersion && status.cliVersion !== "unknown" ? status.cliVersion : "—") }),
+												renderCLILine(false),
 												jsx("div", { className: "dshDesktopBridgeDesc", children: appVersion ? t("bridge.desktop_version", appVersion) : t("bridge.desktop_version", "—") })
 											]
 										}),
@@ -6713,6 +7062,9 @@
 										})
 									]
 								}),
+								jsx(CLIVersionReader, { call, connected, check: cliCheck, channel: cliChannel, tag: cliTag,
+									setTag: cliTagPref.select, canSelectTag: cliTagPref.canSelect, tagSaveFailed: cliTagPref.saveFailed,
+									panelId: cliPanelId, active: statusOpen && cliOpen }),
 								jsxs("div", {
 									className: "dshDesktopBridgeActions",
 									children: [

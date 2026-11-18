@@ -14,6 +14,10 @@ const tokenHeader = "X-DSH-Desktop-Bridge-Token";
 
 const routes = Object.freeze({
 	status: Object.freeze({ method: "GET", path: "/v1/status" }),
+	cliReleaseTag: Object.freeze({ method: "GET", path: "/v1/cli-release-tag" }),
+	setCLIReleaseTag: Object.freeze({ method: "POST", path: "/v1/cli-release-tag" }),
+	cliVersions: Object.freeze({ method: "POST", path: "/v1/cli-versions" }),
+	cliReleaseNotes: Object.freeze({ method: "POST", path: "/v1/cli-release-notes" }),
 	ping: Object.freeze({ method: "GET", path: "/v1/ping" }),
 	capabilities: Object.freeze({ method: "GET", path: "/v1/capabilities" }),
 	handshake: Object.freeze({ method: "POST", path: "/v1/handshake" }),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"deepseek-harness-desktop/internal/desktopstate"
 	"deepseek-harness-desktop/internal/i18n"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -225,6 +227,7 @@ type BridgeUpdate struct {
 // whitelist of operations.
 type desktopBridge struct {
 	owner        *Manager
+	cliReleases  cliReleases
 	mu           sync.Mutex
 	listener     net.Listener
 	server       *http.Server
@@ -416,6 +419,71 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeBridgeJSON(w, http.StatusOK, b.owner.Status())
+	case "/v1/cli-release-tag":
+		var body struct {
+			Tag string `json:"tag"`
+		}
+		switch r.Method {
+		case http.MethodGet:
+			file, err := desktopstate.Load()
+			if err != nil {
+				writeBridgeError(w, http.StatusInternalServerError, i18n.TActive("bridge.err_read_status"))
+				return
+			}
+			body.Tag = file.Prefs.CLIReleaseTag
+			if !slices.Contains(cliDistTags[:], body.Tag) {
+				body.Tag = cliDistTags[0]
+			}
+		case http.MethodPost:
+			if err := decodeBridgeJSON(r, &body); err != nil || !slices.Contains(cliDistTags[:], body.Tag) {
+				writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+				return
+			}
+			if err := desktopstate.Update(func(file *desktopstate.File) { file.Prefs.CLIReleaseTag = body.Tag }); err != nil {
+				writeBridgeError(w, http.StatusInternalServerError, i18n.TActive("bridge.cli_tag_save_failed"))
+				return
+			}
+		default:
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, body)
+	case "/v1/cli-versions":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Refresh bool `json:"refresh"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil {
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		result, err := b.cliReleases.check(r.Context(), b.owner.Status().CLIVersion, body.Refresh)
+		if err != nil {
+			writeBridgeError(w, http.StatusBadGateway, i18n.TActive("bridge.cli_check_failed"))
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, result)
+	case "/v1/cli-release-notes":
+		if r.Method != http.MethodPost {
+			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))
+			return
+		}
+		var body struct {
+			Version string `json:"version"`
+		}
+		if err := decodeBridgeJSON(r, &body); err != nil || fullCLISemver(body.Version) == "" {
+			writeBridgeError(w, http.StatusBadRequest, i18n.TActive("bridge.err_not_allowed"))
+			return
+		}
+		notes, err := b.cliReleases.notes(r.Context(), body.Version)
+		if err != nil {
+			writeBridgeError(w, http.StatusBadGateway, i18n.TActive("bridge.cli_notes_failed"))
+			return
+		}
+		writeBridgeJSON(w, http.StatusOK, notes)
 	case "/v1/start":
 		if r.Method != http.MethodPost {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

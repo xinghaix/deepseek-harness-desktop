@@ -54,6 +54,7 @@ type Prefs struct {
 	EyeCareTheme          *bool             `json:"eyeCareTheme,omitempty"`
 	FullAgentPresets      *bool             `json:"fullAgentPresets,omitempty"`
 	PromptOverlayMaxLines *int              `json:"promptOverlayMaxLines,omitempty"`
+	CLIReleaseTag         string            `json:"cliReleaseTag,omitempty"`
 	RestoreLastSession    *bool             `json:"restoreLastSession,omitempty"`
 	RememberWindowSize    *bool             `json:"rememberWindowSize,omitempty"`
 	ThemePreference       *string           `json:"themePreference,omitempty"`

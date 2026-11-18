@@ -483,6 +483,7 @@ const react = {
   useState: (value) => [value, () => {}],
   useRef: (value) => ({ current: value }),
   useCallback: (fn) => fn,
+  useId: () => "test-cli-versions",
   // Effects are skipped: this harness inspects static structure, not data flow.
   useEffect: () => {},
 };
@@ -1926,6 +1927,26 @@ function collectElements(node, predicate, out = []) {
   if (node.props) collectElements(node.props.children, predicate, out);
   return out;
 }
+const collapsedCLI = findElement(tabTree, (node) => node.props?.className === "dshCLICollapsed");
+assert.ok(collapsedCLI, "状态卡折叠时仍显示 CLI 摘要");
+const compactCLIEntry = findElement(collapsedCLI, (node) => node.props?.className === "dshCLIEntry");
+assert.equal(compactCLIEntry?.props["aria-controls"], "test-cli-versions-status");
+assert.equal(compactCLIEntry?.props["aria-expanded"], false);
+const reader = findElement(tabTree, (node) => node.props?.panelId === "test-cli-versions");
+assert.equal(reader?.props.active, false, "收起时不读取发布说明");
+const emptyReader = reader.type(reader.props);
+assert.equal(emptyReader.props.hidden, true);
+const tagButtons = collectElements(emptyReader, (node) => node.type === "button" && typeof node.props?.["aria-pressed"] === "boolean");
+assert.deepEqual(tagButtons.map((node) => [collectText(node).join(""), node.props["aria-pressed"]]), [["latest", true], ["next", false], ["alpha", false]]);
+assert.ok(tagButtons.every((node) => node.props["aria-disabled"]), "读取标签偏好前不接受写入");
+const writes = [];
+const restoredReader = reader.type({ ...reader.props, active: true, tag: "next", canSelectTag: true,
+  setTag: async (tag) => { writes.push(tag); return true; } });
+const restoredTags = collectElements(restoredReader, (node) => node.type === "button" && typeof node.props?.["aria-pressed"] === "boolean");
+assert.deepEqual(restoredTags.map((node) => node.props["aria-pressed"]), [false, true, false], "显示已保存的 next 标签");
+await restoredTags[2].props.onClick();
+assert.deepEqual(writes, ["alpha"], "点击后立即尝试保存，无需额外确认");
+
 const isStacked = (node) => String(node.props && node.props.className || "").includes("dshDesktopBridgeRowStacked");
 const stackedGroups = collectElements(tabTree, isStacked);
 assert.equal(stackedGroups.length, 2, "the panel groups exactly two settings");
