@@ -13,7 +13,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const releases = JSON.parse(readFileSync(new URL('./releases.json', import.meta.url), 'utf8'));
 const repo = 'https://github.com/xinghaix/deepseek-harness-desktop';
 const initialPlugins = [
-  'dsh-enhancements', 'dsh-hindsight-settings', 'dsh-mattpocock-skills', 'dsh-mcp-manager',
+  'dsh-hindsight-settings', 'dsh-mattpocock-skills', 'dsh-mcp-manager',
   'dsh-prompts', 'dsh-plugin-sandbox-escalation-fix', 'dsh-web-fetch-allowlist',
 ];
 
@@ -35,7 +35,7 @@ test('生成双版本可读的原生索引，仅包含清单中的 bundle 及图
   assert.deepEqual(disk, JSON.parse(JSON.stringify(expected)));
   assert.deepEqual(parseEarliest(disk, INDEX_URL), parseMarketIndex(disk, INDEX_URL));
   for (const name of initialPlugins) assert.ok(disk.plugins.some(plugin => plugin.name === name), name);
-  assert.ok(disk.plugins.every(plugin => !/(?:desktop-bridge|webview-boot)/u.test(plugin.name)));
+  assert.ok(disk.plugins.every(plugin => !/(?:dsh-enhancements|desktop-bridge|webview-boot)/u.test(plugin.name)), '桌面专用组件不得进入公开索引');
   assert.deepEqual(readdirSync(out).sort(), ['icons', 'index.json']);
   assert.deepEqual(readdirSync(join(out, 'icons')).sort(), disk.plugins.map(plugin => plugin.icon.slice('icons/'.length)).sort());
 
@@ -71,7 +71,7 @@ test('生成双版本可读的原生索引，仅包含清单中的 bundle 及图
 test('拒绝提交与清单版本不符、目录越界或重复发布', t => {
   const out = scratch(t);
   const { commit } = releases[0];
-  assert.throws(() => buildIndex(root, [{ commit, plugins: { 'dsh-enhancements': '999.0.0' } }], out), /版本.*不一致/u);
+  assert.throws(() => buildIndex(root, [{ commit, plugins: { 'dsh-hindsight-settings': '999.0.0' } }], out), /版本.*不一致/u);
   assert.throws(() => buildIndex(root, [{ commit, plugins: { '../internal/dsh/desktopbridge': '1.0.0' } }], out), /非法插件目录/u);
   assert.throws(() => buildIndex(root, [releases[0], releases[0]], out), /duplicate/u);
   assert.deepEqual(readdirSync(out), []);

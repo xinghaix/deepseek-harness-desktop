@@ -9,10 +9,6 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const REPOSITORY = 'https://github.com/xinghaix/deepseek-harness-desktop';
 export const INDEX_URL = 'https://xinghaix.github.io/deepseek-harness-desktop/index.json';
 const TITLE = { en: 'DSH Desktop Community Plugins', zh: 'DSH 桌面端社区插件' };
-const ARCHIVE_NOTE = {
-  en: 'Desktop builds with a built-in archive page do not need this plugin.',
-  zh: '桌面端已内置归档页时，无需安装此插件。',
-};
 
 function git(root, ...args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -51,10 +47,6 @@ function displayAt(root, commit, directory, pkg) {
     const { meta } = JSON.parse(fileAt(root, commit, directory, relative));
     if (meta?.title) title[language] = meta.title;
     if (meta?.description) description[language] = meta.description;
-  }
-  if (pkg.name === 'dsh-enhancements') {
-    description.en += ` ${ARCHIVE_NOTE.en}`;
-    description.zh = `${description.zh ? `${description.zh} ` : ''}${ARCHIVE_NOTE.zh}`;
   }
   return { title, description };
 }

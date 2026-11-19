@@ -2,7 +2,6 @@
   {
     "commit": "8491d0c1227979a495b9225607b416aa256997dd",
     "plugins": {
-      "dsh-enhancements": "0.1.1",
       "dsh-hindsight-settings": "0.1.0",
       "dsh-mattpocock-skills": "1.3.4",
       "dsh-mcp-manager": "0.2.4",
