@@ -390,7 +390,7 @@ assert.deepEqual(
     name: entry.options.name,
   })),
   [
-    { id: "deepseek-harness-desktop.delete-session", order: 600, name: "sidebar.workspaces.session.menu.item" },
+    { id: "deepseek-harness-desktop.delete-session", order: 700, name: "sidebar.workspaces.session.menu.item" },
   ],
   "删除会话应排在官方菜单项之后",
 );

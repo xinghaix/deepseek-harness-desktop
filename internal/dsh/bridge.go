@@ -103,8 +103,11 @@ type PrefsHost interface {
 // OpenSessionRequest identifies one native tray click across event and claim delivery.
 // RequestID is optional for compatibility with older bridge hosts and clients.
 type OpenSessionRequest struct {
-	SessionID string `json:"sessionId"`
-	RequestID uint64 `json:"requestId,omitempty"`
+	SessionID    string   `json:"sessionId"`
+	RequestID    uint64   `json:"requestId,omitempty"`
+	Notification string   `json:"notification,omitempty"`
+	SessionIDs   []string `json:"sessionIds,omitempty"`
+	Settled      bool     `json:"settled,omitempty"`
 }
 
 // SessionRequestHost adds sequenced claims without widening the legacy host contract.
@@ -205,6 +208,8 @@ type BridgeSession struct {
 	// Origin mirrors SessionSummary.origin. The Chat sidebar keeps subagent
 	// children in their parent catalog instead of the main session list.
 	Origin string `json:"origin,omitempty"`
+	// ExplicitTitle 区分会话标题与可能来自本地目录的显示回退。
+	ExplicitTitle bool `json:"explicitTitle,omitempty"`
 }
 
 // BridgeUpdate mirrors update.Snapshot for the bridge JSON surface.
@@ -390,6 +395,8 @@ func (b *desktopBridge) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.URL.Path {
+	case "/v1/notification-config", "/v1/notification-settings", "/v1/notification-action", "/v1/notification-event", "/v1/notification-view":
+		b.serveNotifications(w, r)
 	case "/v1/ping":
 		if r.Method != http.MethodGet {
 			writeBridgeError(w, http.StatusMethodNotAllowed, i18n.TActive("err.bridge_method"))

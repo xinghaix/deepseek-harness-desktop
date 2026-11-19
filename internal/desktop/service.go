@@ -60,6 +60,7 @@ type Service struct {
 	sessions            []dsh.BridgeSession
 	trayErrorAcks       map[string]struct{} // local ack after tray click
 	pendingOpen         pendingOpenSession
+	notifications       notificationState
 	statusEmitMu        sync.Mutex
 	statusEmitTimer     *time.Timer
 	windowStateMu       sync.Mutex
@@ -93,6 +94,7 @@ func New(icon []byte) *Service {
 	i18n.SetActive(i18n.Resolve(s.prefs.getLanguage(), i18n.SystemTag()))
 	s.SetBridgeHost(bridgeHostAdapter{service: s})
 	s.SetStatusListener(s.emitStatusChanged)
+	s.SetProcessExitListener(s.handleNotificationProcessExit)
 	go s.updater.RunPeriodic(ctx)
 	return s
 }

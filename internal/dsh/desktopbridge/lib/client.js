@@ -1394,6 +1394,8 @@
 			"bridge.theme_system": "System",
 			"field.eye_care_theme": "Add Eye-Care Dark theme",
 			"field.eye_care_theme_hint": "Provide a neutral soft-charcoal “Eye-Care Dark” option under General → Appearance and persist it across restarts; falls back to the official Dark theme when disabled or opened outside this desktop app.",
+			"notifications.nav": "Notifications",
+			"notifications.loading": "Loading notification settings…",
 			"field.full_agent_presets": "Show all Agent preset modes",
 			"field.full_agent_presets_hint": "Always display the complete list of Agent presets (including PTC mode, Minimal mode, and any future presets) in the new-task switcher and Agent presets settings, regardless of whether “Show coding view” is turned off.",
 		});
@@ -4060,6 +4062,15 @@
 					flex: 0 1 auto;
 					padding-right: 16px;
 				}
+				.dshDesktopNotificationSettings { padding-block-end: 16px; }
+				.dshDesktopNotificationSettings .dshDesktopBridgeCardTitle { margin: 0; }
+				.dshDesktopNotificationSettings .dshDesktopBridgeRowText { padding-inline: 0 8px; overflow-wrap: anywhere; }
+				.dshDesktopNotificationSettings label:has(+ :enabled) { cursor: pointer; }
+				.dshDesktopNotificationStatus { flex-wrap: wrap; gap: 8px 16px; }
+				.dshDesktopNotificationStatus.dshDesktopBridgeRow .dshDesktopBridgeRowText { flex: 1 1 160px; padding-inline: 0; }
+				.dshDesktopNotificationStatus .dshDesktopBridgeActions { margin-inline-start: auto; justify-content: flex-end; }
+				.dshDesktopNotificationStatus .dshDesktopBridgeSelector { min-height: 36px; height: auto; max-width: 100%; padding-block: 6px; overflow-wrap: anywhere; text-align: start; }
+				.dshDesktopNotificationError { color: var(--dsw-alias-state-error-primary); }
 				.dshDesktopBridgePathRow {
 					display: flex;
 					align-items: center;
@@ -7734,6 +7745,7 @@
 				out.push({
 					id: sid,
 					title,
+					...(typeof s.title === "string" && s.title.trim() ? { explicitTitle: true } : {}),
 					updatedAt: typeof s.updatedAt === "number" ? s.updatedAt : 0,
 					running,
 					error: !running && stickySessionErrors.has(sid),
@@ -8949,6 +8961,116 @@
 			};
 		}
 
+		const NOTIFICATION_SECTION = "deepseek-harness-desktop-notifications";
+		const NOTIFICATION_OPEN_GLOBAL = "__DSH_DESKTOP_OPEN_NOTIFICATION__";
+		const notificationNoticeCSS = `
+			.dsh-notification-notice {box-sizing:border-box; position:fixed; inset-inline-end:16px; inset-block-end:24px; inline-size:min(360px,calc(100% - 32px)); max-block-size:60vh; overflow:auto; padding:14px; display:grid; gap:10px; border:1px solid var(--dsw-alias-border-l2); border-radius:12px; background:var(--dsw-alias-bg-overlay); color:var(--dsw-alias-label-primary); pointer-events:auto;}
+			.dsh-notification-choice {display:grid; gap:6px;}
+			.dsh-notification-notice .dshDesktopBridgeSelector {min-height:36px; height:auto; padding-block:6px; text-align:start; overflow-wrap:anywhere;}
+		`;
+
+		function NotificationsSettings({ connection }) {
+			const [settings, setSettings] = react.useState(null);
+			const [busy, setBusy] = react.useState("");
+			const [feedback, setFeedback] = react.useState(null);
+			const [loading, setLoading] = react.useState(true);
+			const run = async (endpoint, payload = {}) => {
+				const result = await callDesktopRPC(connection, endpoint, payload);
+				if (!result?.ok) throw new Error(desktopErrorMessage(result?.error));
+				return result.value;
+			};
+			react.useEffect(() => {
+				let active = true;
+				const refresh = () => {
+					void run("notificationSettings").then(value => { if (active) setSettings(value); }, () => {}).finally(() => { if (active) setLoading(false); });
+				};
+				refresh();
+				const off = onLocaleChange(() => { if (active) setSettings(value => value ? { ...value } : value); });
+				window.addEventListener("focus", refresh);
+				return () => { active = false; off(); window.removeEventListener("focus", refresh); };
+			}, [connection]);
+			react.useEffect(() => {
+				if (settings?.system !== "authorizing") return;
+				let disposed = false;
+				const timer = setInterval(() => {
+					void run("notificationSettings").then(value => { if (!disposed) setSettings(value); }, () => {});
+				}, 1200);
+				return () => { disposed = true; clearInterval(timer); };
+			}, [settings?.system, connection]);
+			const update = async (key, value) => {
+				if (!settings || busy || (key !== "enabled" && !settings.enabled)) return;
+				setBusy(key); setFeedback(null);
+				try { setSettings(await run("setNotificationSettings", { key, value })); }
+				catch (error) { setFeedback({ error: true, text: error.message }); }
+				finally { setBusy(""); }
+			};
+			const act = async (action) => {
+				if (busy) return;
+				setBusy(action); setFeedback(null);
+				try {
+					await run("notificationAction", { action });
+					if (action === "authorize") setSettings(await run("notificationSettings"));
+					if (action === "test") setFeedback({ text: t("notifications.test_sent") });
+				} catch (error) { setFeedback({ error: true, text: error.message }); }
+				finally { setBusy(""); }
+			};
+			const row = (key) => {
+				const id = `dsh-notification-${key}`;
+				const disabled = !settings || (key !== "enabled" && !settings.enabled);
+				return jsxs("div", { className: "dshDesktopBridgeRow", children: [
+					jsxs("label", { htmlFor: id, className: "dshDesktopBridgeRowText", children: [
+						jsx("span", { id: id + "-name", className: "dshDesktopBridgeTitle", children: t(`notifications.${key}`) }),
+						jsx("span", { id: id + "-hint", className: "dshDesktopBridgeDesc", children: key === "enabled"
+							? [t("notifications.intro"), " ", t("notifications.enabled_hint")]
+							: t(`notifications.${key}_hint`) }),
+					] }),
+					jsx("input", { id, type: "checkbox", role: "switch", className: "dshDesktopBridgeToggle", checked: Boolean(settings?.[key]),
+						"aria-labelledby": id + "-name", "aria-describedby": id + "-hint", "aria-disabled": disabled || Boolean(busy),
+						disabled, onChange: (event) => void update(key, event.target.checked),
+					}),
+				]}, key);
+			};
+			const button = (key, action, disabled = false) => jsx("button", { type: "button", className: "dshDesktopBridgeSelector",
+				"aria-disabled": disabled || Boolean(busy), disabled, onClick: () => void act(action), children: t(`notifications.${key}`),
+			});
+			const group = (key, rows) => jsxs("section", { className: "dshDesktopBridgeCard", "aria-labelledby": `dsh-notification-group-${key}`, children: [
+				jsx("h3", { id: `dsh-notification-group-${key}`, className: "dshDesktopBridgeCardTitle", children: t(`notifications.${key}`) }),
+				...rows.map(row),
+			] });
+			const state = settings?.system;
+			const status = settings ? t(`notifications.${settings.enabled ? state : "disabled"}`)
+				: t(loading ? "notifications.loading" : "notifications.unavailable");
+			return jsxs("section", { className: "dshDesktopBridge dshDesktopNotificationSettings", "aria-label": t("notifications.nav"), "aria-busy": loading, children: [
+				jsxs("section", { className: "dshDesktopBridgeCard", "aria-labelledby": "dsh-notification-enabled-name", children: [row("enabled"),
+					jsxs("div", { className: "dshDesktopBridgeRow dshDesktopNotificationStatus", children: [
+						jsxs("div", { className: "dshDesktopBridgeRowText", role: "status", children: [
+							jsx("span", { className: "dshDesktopBridgeDesc", children: status }),
+							feedback ? jsx("span", { className: "dshDesktopBridgeDesc" + (feedback.error ? " dshDesktopNotificationError" : ""), children: feedback.text }) : null,
+						] }),
+						settings ? jsxs("div", { className: "dshDesktopBridgeActions", children: [
+							state === "permission" && settings.enabled ? button("authorize", "authorize") : null,
+							settings.canOpenSettings && (state === "denied" || state === "unknown") ? button("system_settings", "open-system-settings") : null,
+							button("test", "test", !settings.enabled || !["available", "unknown"].includes(state)),
+						] }) : null,
+					] }),
+				] }),
+				group("attention", ["question", "approval"]), group("results", ["completed", "interrupted", "error"]), group("privacy", ["showTitle"]),
+			] });
+		}
+
+		function NotificationNavigationNotice({ subscribe, getNotice, clear, choose }) {
+			const [notice, setNotice] = react.useState(getNotice);
+			react.useEffect(() => { setNotice(getNotice()); return subscribe(setNotice); }, [subscribe]);
+			if (!notice) return null;
+			return jsxs("aside", { className:"dsh-notification-notice", children:[
+				jsx("style", {children:notificationNoticeCSS}),
+				jsx("strong", {role:"status", children:t(`notifications.${notice.message}`)}),
+				notice.choices?.length ? jsx("div", {className:"dsh-notification-choice", children:notice.choices.map(item => jsx("button", {type:"button", className:"dshDesktopBridgeSelector", onClick:() => choose(item.id), children:item.label}, item.id))}) : null,
+				notice.action ? jsx("button", {type:"button", className:"dshDesktopBridgeSelector", onClick:notice.action, children:t(`notifications.${notice.actionLabel}`)}) : null,
+				jsx("button", {type:"button", className:"dshDesktopBridgeSelector", onClick:clear, children:t("notifications.dismiss")}),
+			]});
+		}
+
 		const inject = ["slots", "connection", "sessions", "remote", "uiWorkspace", "workspaces", "layout", "locale"];
 		const OPEN_SESSION_EVENT = "dsh-desktop-open-session";
 		const OPEN_SESSION_PENDING_GLOBAL = "__DSH_DESKTOP_OPEN_SESSION_PENDING__";
@@ -9105,6 +9227,24 @@
 			};
 
 			registerDesktopNav();
+			let disposeNotificationNav;
+			const registerNotificationNav = () => {
+				disposeNotificationNav?.();
+				disposeNotificationNav = ctx.slots.inject("settings.section", () => ctx.slots.register({
+					name: "settings.section", id: NOTIFICATION_SECTION, order: -9,
+					label: () => t("notifications.nav"),
+				}, () => jsx(NotificationsSettings, { connection: ctx.connection })));
+			};
+			registerNotificationNav();
+			const offNotificationLocale = onLocaleChange(registerNotificationNav);
+			ctx.effect(() => () => { offNotificationLocale(); disposeNotificationNav?.(); });
+			ctx.slots.inject("settings.section.icon", () => ctx.slots.register({
+				name: "settings.section.icon", id: NOTIFICATION_SECTION,
+			}, ({ size = 16 }) => jsx("svg", {
+				width:size, height:size, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:1.7,
+				strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":true,
+				children:jsx("path", { d:"M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 20a2 2 0 0 0 4 0" }),
+			})));
 			const offDesktopNavLocale = onLocaleChange(() => registerDesktopNav());
 
 			// First-class 「已归档会话」— replaces dropped dsh-client-ui-settings-unarchive-sessions
@@ -9229,6 +9369,103 @@
 					}
 				} catch (_) { /* overlay dismiss is best-effort */ }
 			};
+			let pendingNotification = null;
+			let navigationNotice = null;
+			const noticeListeners = new Set();
+			const setNavigationNotice = (notice) => {
+				navigationNotice = notice;
+				for (const listener of noticeListeners) listener(notice);
+			};
+			// 读 SettingsRoot 自己的根 store；不替换 launcher，也不合成审批可能消费的按键。
+			const settingsShell = () => {
+				try {
+					const handle = ctx.slots.entries("sidebar.settings")?.find(entry => typeof entry.options?.store?.create === "function")?.options.store;
+					return handle?.create();
+				} catch (_) { return undefined; }
+			};
+			const openNotificationSettings = (id) => {
+				const shell = settingsShell();
+				if (typeof shell?.actions?.openSection !== "function") return false;
+				shell.actions.openSection(id);
+				return true;
+			};
+			const flushNotification = () => {
+				const target = pendingNotification;
+				if (!target) return;
+				const snap = ctx.sessions?.list?.getSnapshot?.();
+				const expired = Date.now() >= target.deadline;
+				if (target.notification === "test") {
+					if (openNotificationSettings(NOTIFICATION_SECTION)) pendingNotification = null;
+					else if (expired) {
+						pendingNotification = null;
+						setNavigationNotice({message:"test_open_fallback"});
+					}
+					return;
+				}
+				const archived = new Set(archivedSessionIds());
+				const available = (id) => {
+					const row = snap?.byId?.[id];
+					return row && !archived.has(id) && !row.archived && !row.isArchived && row.origin !== "subagent";
+				};
+				if (target.sessionIds?.length) {
+					if (snap?.phase !== "ready" && !expired) return;
+					pendingNotification = null;
+					settingsShell()?.actions?.close?.();
+					const choices = target.sessionIds.filter(available).map((id) => ({id, label:snap.byId[id].displayTitle || snap.byId[id].title || id}));
+					setNavigationNotice(choices.length ? {message:"choose_session", choices} : {message:"session_missing"});
+					return;
+				}
+				const id = target.sessionId;
+				if (available(id)) {
+					const workspace = ctx.get?.("uiWorkspace") || ctx.uiWorkspace;
+					if (typeof workspace?.openSession !== "function" && !expired) return;
+					pendingNotification = null;
+					try {
+						settingsShell()?.actions?.close?.();
+						if (workspace?.mainReference?.sessionId === id || snap.current === id) layoutOf()?.selectPanel?.(null);
+						else workspace.openSession(id);
+						markOpened(id);
+						if (target.settled) setNavigationNotice({message:"settled"});
+						return;
+					} catch (_) {
+						if (!expired) {
+							if (!pendingNotification && (!target.requestId || target.requestId === latestOpenRequestId)) pendingNotification = target;
+							return;
+						}
+					}
+				}
+				if (snap?.phase !== "ready" && !expired) return;
+				pendingNotification = null;
+				settingsShell()?.actions?.close?.();
+				if (archived.has(id) || snap?.byId?.[id]?.archived || snap?.byId?.[id]?.isArchived) {
+					setNavigationNotice({message:"session_archived", actionLabel:"open_archive", action:() => {
+						if (openNotificationSettings(ARCHIVED_SESSIONS_SECTION_ID)) setNavigationNotice(null);
+					}});
+				} else setNavigationNotice({message:"session_missing"});
+			};
+			const receiveNotification = (target) => {
+				const sequence = target?.requestId;
+				if (!Number.isSafeInteger(sequence) || sequence <= latestOpenRequestId || !target?.notification) return;
+				latestOpenRequestId = sequence;
+				pendingOpenSessionId = "";
+				setNavigationNotice(null);
+				pendingNotification = { ...target, deadline: Date.now() + 12000 };
+				flushNotification();
+			};
+			const noticeProps = {
+				subscribe: (listener) => { noticeListeners.add(listener); return () => noticeListeners.delete(listener); },
+				getNotice: () => navigationNotice,
+				clear: () => setNavigationNotice(null),
+				choose: (id) => {
+					if (!navigationNotice?.choices?.some(item => item.id === id)) return;
+					setNavigationNotice(null);
+					pendingNotification = { sessionId: id, notification: "interrupted", deadline: Date.now() + 12000 };
+					flushNotification();
+				},
+			};
+			ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+				name:"shell.overlay", id:NOTIFICATION_SECTION,
+			}, () => jsx(NotificationNavigationNotice, noticeProps)));
 			const warmedHistoryIds = new Set();
 			const prefetchSessionHistory = (id) => {
 				if (!id || warmedHistoryIds.has(id)) return;
@@ -9426,6 +9663,8 @@
 				if (Number.isSafeInteger(requestId) && requestId > 0) {
 					if (requestId <= latestOpenRequestId) return;
 					latestOpenRequestId = requestId;
+					pendingNotification = null;
+					setNavigationNotice(null);
 				}
 				if (!requestId && fromEvent && lastOpenedSessionId === id && Date.now() - lastOpenedSessionAt < OPEN_SESSION_DEDUPE_MS) {
 					let current = "";
@@ -9451,6 +9690,23 @@
 				window.__DSH_DESKTOP_OPEN_SESSION_PENDING_REQUEST_ID__ = 0;
 				if (id) queueOpenSession(id, false, requestId);
 			};
+			let lastNotificationView = null;
+			let lastNotificationViewAt = 0;
+			const reportNotificationView = () => {
+				if (typeof document === "undefined" || typeof window === "undefined" || !window.__DSH_DESKTOP_CHAT_RUNTIME__) return;
+				const panel = layoutOf()?.panelInfo?.getSnapshot?.();
+				const shell = settingsShell()?.getSnapshot?.();
+				const workspace = ctx.get?.("uiWorkspace") || ctx.uiWorkspace;
+				const canSee = document.hidden !== true && document.hasFocus?.() === true &&
+					panel?.activePanelId === null && shell?.open === false &&
+					!document.querySelector?.("#root[inert], [role=dialog][aria-modal=true], #dsh-desktop-config-dim");
+				const id = canSee ? workspace?.mainReference?.sessionId || "" : "";
+				const now = Date.now();
+				if (id === lastNotificationView && (!id || now - lastNotificationViewAt < 4000)) return;
+				lastNotificationView = id;
+				lastNotificationViewAt = now;
+				void callDesktopRPC(ctx.connection, "reportNotificationView", { sessionId:id }).catch(() => {});
+			};
 			const syncBusy = () => {
 				try {
 					const snap = typeof ctx.sessions?.list?.getSnapshot === "function"
@@ -9468,6 +9724,8 @@
 					});
 					checkAndReportActiveSession();
 					flushPendingOpenSession();
+					flushNotification();
+					reportNotificationView();
 					scheduleWarm(snap);
 				} catch (_) { /* keep last */ }
 			};
@@ -9495,6 +9753,10 @@
 			}
 
 			const handleClaimedOpenSession = (result) => {
+				if (result?.ok && result.value?.notification) {
+					receiveNotification(result.value);
+					return true;
+				}
 				const id = result && result.ok && result.value ? result.value.sessionId : "";
 				if (!id) return false;
 				const requestId = result.value.requestId;
@@ -9526,6 +9788,10 @@
 			};
 			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
 				window.addEventListener(OPEN_SESSION_EVENT, onOpenSession);
+				window[NOTIFICATION_OPEN_GLOBAL] = receiveNotification;
+				window.addEventListener("focus", reportNotificationView);
+				window.addEventListener("blur", reportNotificationView);
+				if (typeof document !== "undefined") document.addEventListener?.("visibilitychange", reportNotificationView);
 				window[OPEN_SESSION_FAST_GLOBAL] = (sessionId, requestId = 0) => {
 					consumeQueuedOpenSession(sessionId);
 					queueOpenSession(sessionId, true, requestId);
@@ -9536,12 +9802,20 @@
 				window.addEventListener("storage", onStorage);
 				let monitorTimer = null;
 				if (typeof setInterval === "function") {
-					monitorTimer = setInterval(checkAndReportActiveSession, 1000);
+					monitorTimer = setInterval(() => {
+						checkAndReportActiveSession();
+						reportNotificationView();
+						flushNotification();
+					}, 1000);
 				}
 				if (typeof ctx.effect === "function") {
 					ctx.effect(() => () => {
 						window.removeEventListener(OPEN_SESSION_EVENT, onOpenSession);
 						window.removeEventListener("storage", onStorage);
+						window.removeEventListener("focus", reportNotificationView);
+						window.removeEventListener("blur", reportNotificationView);
+						if (typeof document !== "undefined") document.removeEventListener?.("visibilitychange", reportNotificationView);
+						if (window[NOTIFICATION_OPEN_GLOBAL] === receiveNotification) delete window[NOTIFICATION_OPEN_GLOBAL];
 						if (window[OPEN_SESSION_FAST_GLOBAL]) window[OPEN_SESSION_FAST_GLOBAL] = undefined;
 						if (monitorTimer !== null) clearInterval(monitorTimer);
 						cancelWarm();

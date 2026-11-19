@@ -44,22 +44,23 @@ type WindowState struct {
 }
 
 type Prefs struct {
-	ConfirmQuitWhenBusy   *bool             `json:"confirmQuitWhenBusy,omitempty"`
-	TrayEnabled           *bool             `json:"trayEnabled,omitempty"`
-	CloseToTray           *bool             `json:"closeToTray,omitempty"`
-	TraySessionLimit      *int              `json:"traySessionLimit,omitempty"`
-	DeleteSessionActions  *bool             `json:"deleteSessionActions,omitempty"`
-	HoverMessageActions   *bool             `json:"hoverMessageActions,omitempty"`
-	ChatContentVisibility *bool             `json:"chatContentVisibility,omitempty"`
-	EyeCareTheme          *bool             `json:"eyeCareTheme,omitempty"`
-	FullAgentPresets      *bool             `json:"fullAgentPresets,omitempty"`
-	PromptOverlayMaxLines *int              `json:"promptOverlayMaxLines,omitempty"`
-	CLIReleaseTag         string            `json:"cliReleaseTag,omitempty"`
-	RestoreLastSession    *bool             `json:"restoreLastSession,omitempty"`
-	RememberWindowSize    *bool             `json:"rememberWindowSize,omitempty"`
-	ThemePreference       *string           `json:"themePreference,omitempty"`
-	Language              *string           `json:"language,omitempty"`
-	Shortcuts             map[string]string `json:"shortcuts,omitempty"`
+	ConfirmQuitWhenBusy   *bool              `json:"confirmQuitWhenBusy,omitempty"`
+	TrayEnabled           *bool              `json:"trayEnabled,omitempty"`
+	CloseToTray           *bool              `json:"closeToTray,omitempty"`
+	TraySessionLimit      *int               `json:"traySessionLimit,omitempty"`
+	DeleteSessionActions  *bool              `json:"deleteSessionActions,omitempty"`
+	HoverMessageActions   *bool              `json:"hoverMessageActions,omitempty"`
+	ChatContentVisibility *bool              `json:"chatContentVisibility,omitempty"`
+	EyeCareTheme          *bool              `json:"eyeCareTheme,omitempty"`
+	FullAgentPresets      *bool              `json:"fullAgentPresets,omitempty"`
+	PromptOverlayMaxLines *int               `json:"promptOverlayMaxLines,omitempty"`
+	CLIReleaseTag         string             `json:"cliReleaseTag,omitempty"`
+	RestoreLastSession    *bool              `json:"restoreLastSession,omitempty"`
+	RememberWindowSize    *bool              `json:"rememberWindowSize,omitempty"`
+	ThemePreference       *string            `json:"themePreference,omitempty"`
+	Language              *string            `json:"language,omitempty"`
+	Shortcuts             map[string]string  `json:"shortcuts,omitempty"`
+	Notifications         *NotificationPrefs `json:"notifications,omitempty"`
 }
 
 type Launch struct {
@@ -192,6 +193,9 @@ func loadUnlocked() (File, error) {
 }
 
 func hasAny(f File) bool {
+	if f.Prefs.Notifications != nil {
+		return true
+	}
 	if f.Prefs.ConfirmQuitWhenBusy != nil || f.Prefs.CloseToTray != nil || f.Prefs.TraySessionLimit != nil || f.Prefs.DeleteSessionActions != nil || f.Prefs.HoverMessageActions != nil || f.Prefs.ChatContentVisibility != nil || f.Prefs.EyeCareTheme != nil || f.Prefs.FullAgentPresets != nil || f.Prefs.PromptOverlayMaxLines != nil || f.Prefs.RestoreLastSession != nil || f.Prefs.RememberWindowSize != nil || f.Prefs.ThemePreference != nil || f.Prefs.Language != nil || len(f.Prefs.Shortcuts) > 0 {
 		return true
 	}

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
@@ -27,7 +28,15 @@ import (
 //go:embed assets/darwin/app-icon.png
 var assets embed.FS
 
-type DSH struct{ *desktop.WailsFacade }
+type DSH struct {
+	*desktop.WailsFacade
+	desktop *desktop.Service
+}
+
+func (d *DSH) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	d.desktop.StartNotifications(ctx)
+	return nil // 通知初始化失败不阻断桌面应用启动。
+}
 
 func main() {
 	if dsh.RunSupervisorIfRequested() {
@@ -50,7 +59,7 @@ func main() {
 
 	icon := appIcon()
 	service := desktop.New(icon)
-	manager := &DSH{WailsFacade: desktop.NewWailsFacade(service)}
+	manager := &DSH{WailsFacade: desktop.NewWailsFacade(service), desktop: service}
 	app := application.New(application.Options{
 		Name:        "Deepseek Harness",
 		Description: i18n.TActive("app.description"),

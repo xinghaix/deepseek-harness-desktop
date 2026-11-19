@@ -66,6 +66,7 @@ type Manager struct {
 	autoRelaunchAttempts int
 	autoRelaunchGen      uint64
 	statusListener       func()
+	processExitListener  func(unexpected bool)
 }
 
 type Options struct {
@@ -538,6 +539,13 @@ func (d *Manager) SetStatusListener(fn func()) {
 	d.mu.Unlock()
 }
 
+// SetProcessExitListener 接收受管进程退出事实。回调不可反向调用 Manager。
+func (d *Manager) SetProcessExitListener(fn func(unexpected bool)) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.processExitListener = fn
+}
+
 func (d *Manager) notifyStatusLocked() {
 	fn := d.statusListener
 	if fn == nil {
@@ -845,6 +853,10 @@ func (d *Manager) finalizeProcess(cmd *exec.Cmd, owner *ownedProcess, processLoc
 		return
 	}
 	wasStarting := d.state == "starting"
+	unexpected := d.state == "running" && !d.userStop && !d.closed
+	if d.processExitListener != nil {
+		d.processExitListener(unexpected)
+	}
 	cancel()
 	markerErr := removeOwnedProcessMarker(d.options.Home, cmd.Process.Pid)
 	if d.state != "stopping" && d.lastError == "" {

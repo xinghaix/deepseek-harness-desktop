@@ -10,7 +10,7 @@ import (
 
 const desktopBridgeDirName = "desktop-bridge"
 
-//go:embed desktopbridge/cordis.patch.yml desktopbridge/package.json desktopbridge/lib/index.js desktopbridge/lib/client.js
+//go:embed desktopbridge/cordis.patch.yml desktopbridge/package.json desktopbridge/lib/index.js desktopbridge/lib/client.js desktopbridge/lib/notifications.js
 var desktopBridgeFiles embed.FS
 
 func writeDesktopBridgeOverlay(desktopDir string) (string, error) {
@@ -26,6 +26,7 @@ func writeDesktopBridgeOverlay(desktopDir string) (string, error) {
 		{"desktopbridge/package.json", "package.json"},
 		{"desktopbridge/lib/index.js", filepath.Join("lib", "index.js")},
 		{"desktopbridge/lib/client.js", filepath.Join("lib", "client.js")},
+		{"desktopbridge/lib/notifications.js", filepath.Join("lib", "notifications.js")},
 	}
 	for _, file := range files {
 		data, err := desktopBridgeFiles.ReadFile(file.embedPath)

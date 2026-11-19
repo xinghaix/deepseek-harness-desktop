@@ -474,6 +474,36 @@ assert.equal(snapshot.current, "A", "fresh same-ID click must not be throttled b
 
 console.log("ok - tray navigation preserves intent across late claims and same-ID clicks");
 
+// 通知跳转不合成 Escape（审批卡消费该键），失效目标不改变当前会话。
+const nativeNotice = window.__DSH_DESKTOP_OPEN_NOTIFICATION__;
+const settingsOpens = [];
+let explicitClose = 0;
+ctx.slots.entries = name => name === "sidebar.settings" ? [{
+  options: { store: {create: () => ({actions: {close: () => explicitClose++, openSection: id => settingsOpens.push(id)}})} },
+}] : [];
+const keysFromNotification = [];
+listeners.set("keydown", event => keysFromNotification.push(event.key));
+selectedPanels.length = 0;
+const navCount = opened.length;
+nativeNotice({ sessionId: "A", requestId: 48, notification: "approval" });
+assert.equal(opened.length, navCount);
+assert.deepEqual(selectedPanels, [null]);
+assert.equal(explicitClose, 1);
+assert.deepEqual(keysFromNotification, []);
+nativeNotice({ sessionId: "B", requestId: 49, notification: "completed" });
+assert.equal(snapshot.current, "B");
+nativeNotice({ sessionId: "A", requestId: 48, notification: "approval" });
+assert.equal(snapshot.current, "B", "迟到的通知不能覆盖较新的导航");
+nativeNotice({ requestId: 50, notification: "test" });
+assert.deepEqual(settingsOpens, ["deepseek-harness-desktop-notifications"]);
+snapshot.phase = "ready";
+workspaceSnapshot.archivedSessionIds = ["A"];
+nativeNotice({ sessionId: "A", requestId: 51, notification: "error" });
+nativeNotice({ sessionId: "deleted", requestId: 52, notification: "error" });
+assert.equal(snapshot.current, "B");
+workspaceSnapshot.archivedSessionIds = [];
+console.log("ok - notification navigation does not dismiss approval and handles stale targets");
+
 // Load both production scripts with the real remote-page shape: NO Wails Call API.
 const chromeSource = fs.readFileSync(new URL("../../desktop/chrome.go", import.meta.url), "utf8")
   .split("const desktopExternalJSTemplate = `")[1].split("\n`")[0];
@@ -593,8 +623,9 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   };
   const jsxTree = (type, props, key) => ({ type, props: props || {}, key });
   const effectCleanups = [];
+  const seededState = [];
   const reactForTheme = {
-    useState: (init) => [typeof init === "function" ? init() : init, () => {}],
+    useState: (init) => [seededState.length ? seededState.shift() : typeof init === "function" ? init() : init, () => {}],
     useRef: (v) => ({ current: v }),
     useCallback: (fn) => fn,
     useEffect: (fn) => {
@@ -673,6 +704,69 @@ assert.match(source, /\.dshDesktopBridgeToggle:checked::before\s*\{\s*background
   assert.equal(ideaDef.tokens["--dsw-alias-label-secondary"], "#b8b8b8");
   assert.equal(ideaDef.tokens["--dsw-alias-label-tertiary"], "#949494");
   assert.equal(ideaDef.tokens["--dsw-alias-brand-primary"], "#366ace");
+
+  const notificationSection = slotRegistrations.find(({options}) =>
+    options.name === "settings.section" && options.id === "deepseek-harness-desktop-notifications"
+  );
+  assert.ok(notificationSection, "设置菜单必须注册通知入口");
+  effectCleanups.length = 0;
+  const notificationElement = notificationSection.component({});
+  const notificationCalls = [];
+  const notificationConnection = {rpc: {call(_channel, method, payload) {
+    notificationCalls.push([method, payload]);
+    return Promise.resolve({ok: true, value: {}});
+  }}};
+  const collect = (node, predicate) => {
+    if (Array.isArray(node)) return node.flatMap(child => collect(child, predicate));
+    if (!node?.props) return [];
+    return [...(predicate(node) ? [node] : []), ...collect(node.props.children, predicate)];
+  };
+  const renderNotificationSettings = (...state) => {
+    seededState.push(...state);
+    const panel = notificationElement.type({...notificationElement.props, connection: notificationConnection});
+    for (const cleanup of effectCleanups.splice(0)) cleanup();
+    return panel;
+  };
+  const notificationPanel = renderNotificationSettings();
+  assert.equal(notificationPanel.type, "section", "选中通知后必须渲染页面而非空白");
+  assert.ok(notificationPanel.props["aria-label"]);
+  assert.equal(collect(notificationPanel, node => node.props.className === "dshDesktopBridgeCard").length, 4);
+  const switches = panel => collect(panel, node => node.props.role === "switch");
+  const loadingSwitches = switches(notificationPanel);
+  assert.equal(loadingSwitches.length, 7, "保留总开关、五个场景和隐私开关");
+  assert.ok(loadingSwitches.every(node => node.type === "input" && node.props.type === "checkbox" &&
+    node.props.className === "dshDesktopBridgeToggle" && node.props.disabled));
+  assert.deepEqual(collect(notificationPanel, node => node.type === "label").map(node => node.props.htmlFor),
+    loadingSwitches.map(node => node.props.id), "每个开关都可通过标签或键盘操作");
+
+  const buttons = panel => collect(panel, node => node.type === "button");
+  const disabledPanel = renderNotificationSettings({enabled: false, system: "available"}, "", null, false);
+  assert.deepEqual(switches(disabledPanel).map(node => node.props.disabled), [false, true, true, true, true, true, true]);
+  assert.ok(buttons(disabledPanel)[0].props.disabled, "总开关关闭时不能发送测试通知");
+  const pendingPermission = renderNotificationSettings({enabled: true, system: "permission"}, "", null, false);
+  assert.deepEqual(buttons(pendingPermission).map(node => node.props.disabled), [false, true], "需授权时保留授权入口且不可发送测试");
+  const availablePanel = renderNotificationSettings({enabled: true, approval: true, system: "available"}, "", null, false);
+  const approvalSwitch = switches(availablePanel).find(node => node.props.id === "dsh-notification-approval");
+  const testButton = buttons(availablePanel)[0];
+  assert.equal(approvalSwitch.props.checked, true);
+  assert.equal(testButton.props.className, "dshDesktopBridgeSelector");
+  assert.equal(testButton.props.disabled, false);
+  approvalSwitch.props.onChange({target: {checked: false}});
+  await flushMicrotasks();
+  buttons(renderNotificationSettings({enabled: true, approval: false, system: "available"}, "", null, false))[0].props.onClick();
+  await flushMicrotasks();
+  assert.deepEqual(notificationCalls.filter(([method]) => ["setNotificationSettings", "notificationAction"].includes(method))
+    .map(([method, payload]) => [method, {...payload}]), [
+    ["setNotificationSettings", {key: "approval", value: false}],
+    ["notificationAction", {action: "test"}],
+  ]);
+
+  const notificationOverlay = slotRegistrations.find(({options}) =>
+    options.name === "shell.overlay" && options.id === "deepseek-harness-desktop-notifications"
+  );
+  const overlayElement = notificationOverlay.component({});
+  assert.equal(overlayElement.type(overlayElement.props), null, "无点击反馈时通知浮层应保持空闲，而不是抛错");
+  for (const cleanup of effectCleanups.splice(0)) cleanup();
 
   const appearanceSlot = slotRegistrations.find(
     (entry) => entry.options?.name === "settings.general.item" && entry.options?.id === "appearance"

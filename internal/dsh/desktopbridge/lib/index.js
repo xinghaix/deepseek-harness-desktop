@@ -1,4 +1,6 @@
 /** Built-in desktop bridge host: authenticated RPC → loopback control plane. */
+import { observeNotifications } from "./notifications.js";
+
 const name = "deepseek-harness-desktop-bridge";
 // Wait for connection (auth fence) + webServer (route table). We register the
 // Cordis RPC prefix ourselves — connection.rpc.handle's owner.webServer path is
@@ -63,8 +65,17 @@ const routes = Object.freeze({
 	reportSessions: Object.freeze({ method: "POST", path: "/v1/report-sessions" }),
 	clearLastSession: Object.freeze({ method: "POST", path: "/v1/clear-last-session" }),
 	claimOpenSession: Object.freeze({ method: "POST", path: "/v1/claim-open-session" }),
+	notificationSettings: Object.freeze({ method: "GET", path: "/v1/notification-settings" }),
+	setNotificationSettings: Object.freeze({ method: "POST", path: "/v1/notification-settings" }),
+	notificationAction: Object.freeze({ method: "POST", path: "/v1/notification-action" }),
+	reportNotificationView: Object.freeze({ method: "POST", path: "/v1/notification-view" }),
 	deleteSession: Object.freeze({ method: "POST", path: "/v1/delete-session" }),
 	writeClipboard: Object.freeze({ method: "POST", path: "/v1/write-clipboard" })
+});
+
+const notificationHostRoutes = Object.freeze({
+	config: Object.freeze({ method: "GET", path: "/v1/notification-config" }),
+	event: Object.freeze({ method: "POST", path: "/v1/notification-event" }),
 });
 
 /** Host-side sticky tray errors (turn/end error|interrupted + api-session/error). */
@@ -102,6 +113,7 @@ function mergeTraySessionErrors(sessions, clearErrors) {
 		out.push({
 			id,
 			title: typeof raw.title === "string" ? raw.title : "",
+			...(raw.explicitTitle === true ? { explicitTitle: true } : {}),
 			updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
 			running,
 			error: !running && (Boolean(raw.error) || stickySessionErrors.has(id)),
@@ -182,7 +194,7 @@ async function resolveConfig(preferred) {
 	return configFromEnv();
 }
 
-async function invoke(config, endpoint, payload, signal) {
+async function invoke(config, endpoint, payload, signal, internal = false) {
 	if (endpoint === "reportSessions" && payload && typeof payload === "object") {
 		const sessions = mergeTraySessionErrors(payload.sessions, payload.clearErrors);
 		lastTraySessions = sessions.map((s) => ({ ...s }));
@@ -203,7 +215,8 @@ async function invoke(config, endpoint, payload, signal) {
 			return { ok: false, error: { code: error?.code || "desktop-bridge/delete-failed", message: error instanceof Error ? error.message : String(error), details: {} } };
 		}
 	}
-	const route = routes[endpoint];
+	const table = internal ? notificationHostRoutes : routes;
+	const route = Object.hasOwn(table, endpoint) ? table[endpoint] : undefined;
 	if (route === undefined) {
 		return {
 			ok: false,
@@ -229,7 +242,8 @@ async function invoke(config, endpoint, payload, signal) {
 		// ("handler failure: AbortError") in connection.rpc.handle / rpcFetchHandler.
 		const init = {
 			method: route.method,
-			headers: { [tokenHeader]: resolved.token }
+			headers: { [tokenHeader]: resolved.token },
+			...(internal ? { signal: AbortSignal.timeout(9000) } : {})
 		};
 		if (route.method === "POST" && payload !== undefined && payload !== null) {
 			init.headers["Content-Type"] = "application/json; charset=utf-8";
@@ -560,7 +574,7 @@ function unwrapConnection(connection) {
 	return connection;
 }
 
-function createRouteHandler(connection, getCached, setCached) {
+function createRouteHandler(connection, getCached, setCached, updateNotificationPrefs) {
 	const host = unwrapConnection(connection);
 	const rejectRequest = (req) => {
 		if (typeof host.requestRejection === "function") return host.requestRejection(req);
@@ -642,10 +656,12 @@ function createRouteHandler(connection, getCached, setCached) {
 					setCached(refreshed);
 					const retry = await invoke(refreshed, endpoint, body.payload, undefined);
 					if (retry.config) setCached(retry.config);
+					if (retry.ok && endpoint === "setNotificationSettings") updateNotificationPrefs?.(retry.value);
 					writeJson(res, 200, serverResponse(rpcId, { ok: retry.ok, value: retry.value, error: retry.error }));
 					return;
 				}
 			}
+			if (result.ok && endpoint === "setNotificationSettings") updateNotificationPrefs?.(result.value);
 			writeJson(res, 200, serverResponse(rpcId, { ok: result.ok, value: result.value, error: result.error }));
 		} catch (error) {
 			const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -665,6 +681,29 @@ function createRouteHandler(connection, getCached, setCached) {
 
 function apply(ctx) {
 	let cached = configFromEnv();
+	let notificationObserver;
+	const invokeHostNotification = async (endpoint, payload) => {
+		let result = await invoke(cached, endpoint, payload, undefined, true);
+		if (!result.ok) {
+			const refreshed = await configFromEndpointFile();
+			if (refreshed && (refreshed.base !== cached?.base || refreshed.token !== cached?.token)) {
+				cached = refreshed;
+				result = await invoke(cached, endpoint, payload, undefined, true);
+			}
+		}
+		if (result.config) cached = result.config;
+		return result.ok ? result.value : undefined;
+	};
+	if (cached && typeof ctx.on === "function" && typeof ctx.effect === "function") {
+		ctx.effect(() => {
+			const observer = observeNotifications(ctx, (event) => invokeHostNotification("event", event), () => invokeHostNotification("config"));
+			notificationObserver = observer;
+			return () => {
+				if (notificationObserver === observer) notificationObserver = undefined;
+				observer.dispose();
+			};
+		}, "desktop-bridge: system notifications");
+	}
 	trayConfigGetter = () => cached;
 	const localDeleteSessionHandler = createDeleteSessionHandler(ctx);
 	deleteSessionHandler = localDeleteSessionHandler;
@@ -679,7 +718,8 @@ function apply(ctx) {
 			() => cached,
 			(next) => {
 				cached = next;
-			}
+			},
+			(prefs) => notificationObserver?.setPrefs(prefs)
 		);
 		rpcCtx.effect(() => {
 			const unregister = rpcCtx.webServer.register({

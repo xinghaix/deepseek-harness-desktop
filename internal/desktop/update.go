@@ -40,6 +40,7 @@ func (s *Service) Close() error {
 			s.stopAuto()
 		}
 		s.destroyTray()
+		s.stopNotifications()
 		s.statusEmitMu.Lock()
 		if s.statusEmitTimer != nil {
 			s.statusEmitTimer.Stop()

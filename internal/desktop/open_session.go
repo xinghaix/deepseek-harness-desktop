@@ -15,7 +15,7 @@ const openChatSessionEvent = "dsh-desktop-open-session"
 
 type pendingOpenSession struct {
 	mu       sync.Mutex
-	id       string
+	request  dsh.OpenSessionRequest
 	sequence uint64
 }
 
@@ -24,18 +24,22 @@ func normalizeSessionID(id string) string {
 }
 
 func (p *pendingOpenSession) set(id string) uint64 {
-	id = normalizeSessionID(id)
+	return p.setRequest(dsh.OpenSessionRequest{SessionID: normalizeSessionID(id)}).RequestID
+}
+
+func (p *pendingOpenSession) setRequest(request dsh.OpenSessionRequest) dsh.OpenSessionRequest {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.sequence++
-	p.id = id
-	return p.sequence
+	request.RequestID = p.sequence
+	p.request = request
+	return request
 }
 
 func (p *pendingOpenSession) peek() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.id
+	return p.request.SessionID
 }
 
 func (p *pendingOpenSession) claim() string {
@@ -45,11 +49,11 @@ func (p *pendingOpenSession) claim() string {
 func (p *pendingOpenSession) claimRequest() dsh.OpenSessionRequest {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.id == "" {
+	if p.request.SessionID == "" && p.request.Notification == "" {
 		return dsh.OpenSessionRequest{}
 	}
-	request := dsh.OpenSessionRequest{SessionID: p.id, RequestID: p.sequence}
-	p.id = ""
+	request := p.request
+	p.request = dsh.OpenSessionRequest{}
 	return request
 }
 
