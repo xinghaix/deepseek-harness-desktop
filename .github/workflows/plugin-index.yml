@@ -1,0 +1,58 @@
+name: Plugin Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugin-index/**'
+      - '.github/workflows/plugin-index.yml'
+  pull_request:
+    paths:
+      - 'plugin-index/**'
+      - '.github/workflows/plugin-index.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-index-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and validate the index
+        working-directory: plugin-index
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run build -- "$RUNNER_TEMP/dsh-plugin-index"
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'xinghaix/deepseek-harness-desktop'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/dsh-plugin-index
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'xinghaix/deepseek-harness-desktop'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

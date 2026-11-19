@@ -84,6 +84,10 @@ Chat **Settings** has a top-level **Desktop settings** entry (same level as Mode
 
 After upgrading, restart the desktop app or reload / reopen Chat if new options are missing.
 
+### Community plugins
+
+The desktop app does not enable this repository’s optional plugins automatically. In DSH, turn on **Plugins → Experimental plugins → Custom plugin indexes**, then open **Discover → Add index source** and paste `https://xinghaix.github.io/deepseek-harness-desktop/index.json`.
+
 ## Privacy & boundaries (user view)
 
 - Only the DSH process started by this app is managed; other `dsh` processes you started in a terminal are left alone.

@@ -1,0 +1,13 @@
+{
+  "name": "dsh-desktop-plugin-index",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.5",
+    "dsh-plugin-market-index-021": "npm:@deepseek-ai/dsh-plugin-market-index@0.2.1-alpha.4"
+  }
+}
